@@ -67,7 +67,7 @@ export default function Hero() {
         <div className="hero-inner">
 
           <div className="hero-delivery-badge">
-            🌍 Доставка в любую точку Мира
+            <span className="badge-globe">🌍</span> Доставка в любую точку Мира
           </div>
 
           <h1 className="hero-title">

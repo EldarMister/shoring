@@ -1,3 +1,29 @@
+const FooterLogoV = () => (
+  <svg
+    className="logo-v-svg"
+    viewBox="0 0 24 26"
+    width="22"
+    height="26"
+    style={{ overflow: 'visible', display: 'block' }}
+  >
+    <defs>
+      <linearGradient id="ftVGold" x1="0.3" y1="0" x2="0.7" y2="1">
+        <stop offset="0%"   stopColor="#a6740a" />
+        <stop offset="20%"  stopColor="#e8b923" />
+        <stop offset="38%"  stopColor="#fff176" />
+        <stop offset="55%"  stopColor="#f5c518" />
+        <stop offset="72%"  stopColor="#fff9a0" />
+        <stop offset="88%"  stopColor="#d4940e" />
+        <stop offset="100%" stopColor="#f7d060" />
+      </linearGradient>
+    </defs>
+    <polygon
+      points="0,4 4,4 11,21 18,0 22,0 13,25 8,25"
+      fill="url(#ftVGold)"
+    />
+  </svg>
+)
+
 const PhoneIcon = () => (
   <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -172,9 +198,9 @@ export default function Footer() {
           <div className="footer-col">
             <div className="footer-brand">
               <div className="footer-logo">
-                <div style={{ display: 'flex', alignItems: 'center', lineHeight: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', lineHeight: 1 }}>
                   <span className="logo-a">A</span>
-                  <span className="logo-v">V</span>
+                  <FooterLogoV />
                   <span className="logo-t">T</span>
                 </div>
                 <span className="logo-sub">Auto V Korea</span>
