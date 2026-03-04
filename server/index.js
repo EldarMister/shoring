@@ -47,7 +47,7 @@ if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '..', 'dist')
   app.use(express.static(distPath))
   // SPA fallback — все остальные маршруты → index.html
-  app.get('*', (_req, res) => {
+  app.get(/.*/, (_req, res) => {
     res.sendFile(path.join(distPath, 'index.html'))
   })
 }
