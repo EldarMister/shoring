@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@900&display=swap');
+@import "tailwindcss";
 
 /* ========= THEME TRANSITION ========= */
 
@@ -118,14 +118,12 @@ body {
   align-items: center;
   flex-shrink: 0;
   user-select: none;
-  background: linear-gradient(135deg, #0d4a2a 0%, #1a6b3c 50%, #0d4a2a 100%);
-  padding: 7px 14px 7px 12px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.08);
-  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
-              box-shadow 0.25s ease;
-  animation: badgePop 0.65s cubic-bezier(0.34,1.56,0.64,1) both,
-             logoPulse 2.5s ease-in-out 1s infinite;
+}
+.header-logo-img {
+  height: 48px;
+  width: auto;
+  display: block;
+  object-fit: contain;
 }
 .header-logo:hover {
   transform: scale(1.07) translateY(-2px);
@@ -162,7 +160,7 @@ body {
 }
 /* V — SVG-галочка: только фильтр-тень, остальное в SVG inline */
 .logo-v-svg {
-  filter: drop-shadow(0 0 6px rgba(245,197,24,0.7)) drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+  filter: drop-shadow(0 0 6px rgba(220,50,50,0.65)) drop-shadow(0 1px 3px rgba(0,0,0,0.5));
   flex-shrink: 0;
 }
 
@@ -191,11 +189,10 @@ body {
   letter-spacing: 0.25em;
   text-transform: uppercase;
   margin-top: 2px;
-  background: linear-gradient(90deg, #c9860a, #fff176, #f5c518, #fff9a0, #c9860a);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 0 4px rgba(245,197,24,0.5));
+  color: rgba(255,255,255,0.9);
+  -webkit-text-fill-color: rgba(255,255,255,0.9);
+  background: none;
+  filter: none;
 }
 /* Dark mode — A и T ярче, больше белого */
 [data-theme="dark"] .logo-a,
@@ -588,6 +585,18 @@ body {
   line-height: 1.15;
   margin: 0;
 }
+.hero-delivery-sub {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #00b894;
+  letter-spacing: 0.03em;
+}
+[data-theme="dark"] .hero-delivery-sub {
+  color: #00c9a7;
+}
+
 .hero-sub {
   margin-top: 16px;
   color: #6b7280;

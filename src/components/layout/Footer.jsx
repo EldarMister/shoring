@@ -1,25 +1,26 @@
 const FooterLogoV = () => (
   <svg
     className="logo-v-svg"
-    viewBox="0 0 24 26"
-    width="22"
-    height="26"
+    viewBox="0 0 30 32"
+    width="26"
+    height="32"
     style={{ overflow: 'visible', display: 'block' }}
   >
     <defs>
-      <linearGradient id="ftVGold" x1="0.3" y1="0" x2="0.7" y2="1">
-        <stop offset="0%"   stopColor="#a6740a" />
-        <stop offset="20%"  stopColor="#e8b923" />
-        <stop offset="38%"  stopColor="#fff176" />
-        <stop offset="55%"  stopColor="#f5c518" />
-        <stop offset="72%"  stopColor="#fff9a0" />
-        <stop offset="88%"  stopColor="#d4940e" />
-        <stop offset="100%" stopColor="#f7d060" />
+      <linearGradient id="ftVRed" x1="0.9" y1="0" x2="0.1" y2="1">
+        <stop offset="0%"   stopColor="#ff5252" />
+        <stop offset="30%"  stopColor="#e53935" />
+        <stop offset="65%"  stopColor="#b71c1c" />
+        <stop offset="100%" stopColor="#7f0000" />
       </linearGradient>
     </defs>
     <polygon
-      points="0,4 4,4 11,21 18,0 22,0 13,25 8,25"
-      fill="url(#ftVGold)"
+      points="0,12 9,32 15,32 24,10 18,10 12,30 6,12"
+      fill="url(#ftVRed)"
+    />
+    <polygon
+      points="13,11 29,11 23,-12"
+      fill="url(#ftVRed)"
     />
   </svg>
 )

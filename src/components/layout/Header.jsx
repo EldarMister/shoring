@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../../hooks/useTheme'
+import logoImg from '../../assets/logo.png'
 
 const SearchIcon = () => (
   <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,42 +42,9 @@ const MoonIcon = () => (
   </svg>
 )
 
-const LogoV = () => (
-  <svg
-    className="logo-v-svg logo-fly logo-fly-2"
-    viewBox="0 0 24 26"
-    width="22"
-    height="26"
-    style={{ overflow: 'visible', display: 'block' }}
-  >
-    <defs>
-      <linearGradient id="hdVGold" x1="0.3" y1="0" x2="0.7" y2="1">
-        <stop offset="0%"   stopColor="#a6740a" />
-        <stop offset="20%"  stopColor="#e8b923" />
-        <stop offset="38%"  stopColor="#fff176" />
-        <stop offset="55%"  stopColor="#f5c518" />
-        <stop offset="72%"  stopColor="#fff9a0" />
-        <stop offset="88%"  stopColor="#d4940e" />
-        <stop offset="100%" stopColor="#f7d060" />
-      </linearGradient>
-    </defs>
-    <polygon
-      points="0,4 4,4 11,21 18,0 22,0 13,25 8,25"
-      fill="url(#hdVGold)"
-    />
-  </svg>
-)
-
 const AVTLogo = () => (
   <Link to="/" className="header-logo">
-    <div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', lineHeight: 1 }}>
-        <span className="logo-a logo-fly">A</span>
-        <LogoV />
-        <span className="logo-t logo-fly logo-fly-3">T</span>
-      </div>
-      <div className="logo-sub">Auto V Korea</div>
-    </div>
+    <img src={logoImg} alt="AVT Auto V Korea" className="header-logo-img" />
   </Link>
 )
 
