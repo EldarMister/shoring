@@ -115,6 +115,7 @@ export async function runScrapeJob(limit = 100) {
         listResult = await fetchCarList(offset, pageLimit)
       } catch (err) {
         state.error(`❌ Ошибка API: ${err.message}`)
+        if (state.stopReq) break
         await sleep(8000)
         continue
       }

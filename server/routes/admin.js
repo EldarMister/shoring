@@ -3,6 +3,17 @@ import pool from '../db.js'
 
 const router = Router()
 
+// POST /api/admin/login — проверка пароля через env
+router.post('/login', (req, res) => {
+  const { password } = req.body || {}
+  const correctPass  = process.env.ADMIN_PASSWORD || 'admin123'
+  if (password === correctPass) {
+    res.json({ ok: true, token: 'adm-ok' })
+  } else {
+    res.status(401).json({ ok: false, error: 'Неверный пароль' })
+  }
+})
+
 // GET /api/admin/filter-options — динамические опции для фильтров
 router.get('/filter-options', async (_req, res) => {
   try {

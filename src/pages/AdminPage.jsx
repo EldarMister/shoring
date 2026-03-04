@@ -31,7 +31,6 @@ const IC = {
     photo: 'M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z',
 }
 
-const PASS = 'admin123'
 const fmtU = n => '$' + Number(n || 0).toLocaleString('ru-RU')
 const fmtK = n => Number(n || 0).toLocaleString('ko-KR') + ' ₩'
 
@@ -597,8 +596,23 @@ function Cars({ toast, initAdd }) {
 
 /* ── Login ── */
 function Login({ onLogin }) {
-    const [pw, setPw] = useState(''); const [err, setErr] = useState('')
-    const go = e => { e.preventDefault(); pw === PASS ? onLogin() : setErr('Неверный пароль') }
+    const [pw, setPw] = useState('')
+    const [err, setErr] = useState('')
+    const [busy, setBusy] = useState(false)
+    const go = async e => {
+        e.preventDefault()
+        setBusy(true); setErr('')
+        try {
+            const r = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pw }),
+            })
+            if (r.ok) { onLogin() }
+            else { setErr('Неверный пароль') }
+        } catch { setErr('Ошибка соединения') }
+        setBusy(false)
+    }
     return (
         <div className="adm-login">
             <div className="adm-login-card">
@@ -608,9 +622,10 @@ function Login({ onLogin }) {
                 <form onSubmit={go} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <input className="adm-input" type="password" placeholder="Пароль" value={pw} autoFocus onChange={e => setPw(e.target.value)} />
                     {err && <div className="adm-err">{err}</div>}
-                    <button className="adm-btn adm-btn-primary" style={{ width: '100%', justifyContent: 'center' }} type="submit">Войти →</button>
+                    <button className="adm-btn adm-btn-primary" style={{ width: '100%', justifyContent: 'center' }} type="submit" disabled={busy}>
+                        {busy ? 'Проверка...' : 'Войти →'}
+                    </button>
                 </form>
-                <div className="adm-login-hint">Пароль: <code>admin123</code></div>
             </div>
         </div>
     )
@@ -618,13 +633,13 @@ function Login({ onLogin }) {
 
 /* ── Root ── */
 export default function AdminPage() {
-    const [auth, setAuth] = useState(() => sessionStorage.getItem('adm') === PASS)
+    const [auth, setAuth] = useState(() => sessionStorage.getItem('adm') === 'ok')
     const [tab, setTab] = useState('dashboard')
     const [sidebar, setSidebar] = useState(true)
     const { list: toasts, add: toast } = useToast()
     const [initAdd, setInitAdd] = useState(false)
 
-    if (!auth) return <Login onLogin={() => { sessionStorage.setItem('adm', PASS); setAuth(true) }} />
+    if (!auth) return <Login onLogin={() => { sessionStorage.setItem('adm', 'ok'); setAuth(true) }} />
 
     const nav = [
         { id: 'dashboard', label: 'Дашборд',     icon: IC.dash },

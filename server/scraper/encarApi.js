@@ -36,15 +36,12 @@ const apiClient = axios.create({
  */
 export async function fetchCarList(offset = 0, limit = 20, retries = 3) {
   const pageLimit = Math.min(limit, 20)
-  const params = new URLSearchParams({
-    count: 'true',
-    q:    '(And.Hidden.N._.SellType.일반.)',
-    sr:   `|RegDate|${offset}|${pageLimit}`,
-  })
+  // Передаём raw query string — URLSearchParams кодирует скобки → 400
+  const qs = `count=true&q=(And.Hidden.N._.SellType.일반.)&sr=|M.UpdateDate|${offset}|${pageLimit}`
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const resp = await apiClient.get(`/search/car/list/premium?${params}`, {
+      const resp = await apiClient.get(`/search/car/list/mobile?${qs}`, {
         headers: { 'User-Agent': nextUA() },
       })
       return {
