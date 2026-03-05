@@ -63,6 +63,11 @@ export default function Hero() {
   return (
     <section>
       {/* ── Hero ── */}
+      {/* ── Video Banner ── */}
+      <div className="hero-video-section">
+        <video src="/hero.mp4" autoPlay muted loop playsInline className="hero-video-banner" />
+      </div>
+
       <div className="hero-section">
         <div className="hero-inner">
 
