@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 const PrevIcon = () => (
   <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,7 +178,7 @@ export default function CarCard({ car }) {
       </div>
 
       <div className="car-card-actions">
-        <a href={car.encarUrl || '#'} className="btn-car-primary">Открыть</a>
+        <Link to={`/catalog/${car.id}`} className="btn-car-primary">Открыть</Link>
         <a href={car.encarUrl || '#'} target="_blank" rel="noreferrer" className="btn-car-outline">
           <NewTabIcon /> В новой вкладке
         </a>

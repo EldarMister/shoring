@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import HomePage from './pages/HomePage'
 import CatalogPage from './pages/CatalogPage'
+import CarDetailsPage from './pages/CarDetailsPage'
 import ContactsPage from './pages/ContactsPage'
 import AdminPage from './pages/AdminPage'
 
@@ -14,6 +15,7 @@ function App() {
         {/* Public — с Layout */}
         <Route path="/" element={<Layout><HomePage /></Layout>} />
         <Route path="/catalog" element={<Layout><CatalogPage /></Layout>} />
+        <Route path="/catalog/:id" element={<Layout><CarDetailsPage /></Layout>} />
         <Route path="/contacts" element={<Layout><ContactsPage /></Layout>} />
       </Routes>
     </BrowserRouter>
