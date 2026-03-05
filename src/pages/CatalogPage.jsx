@@ -6,6 +6,35 @@ import CarCard from '../components/catalog/CarCard'
 const HANGUL_RE = /[\uAC00-\uD7A3]/u
 const encarDetailCache = new Map()
 const encarDetailInFlight = new Map()
+const KO = {
+  diesel: '\uB514\uC824',
+  gasoline: '\uAC00\uC194\uB9B0',
+  gasolineAlt: '\uD718\uBC1C\uC720',
+  hybrid: '\uD558\uC774\uBE0C\uB9AC\uB4DC',
+  electric: '\uC804\uAE30',
+  lpg: '\uC5D8\uD53C\uC9C0',
+  auto: '\uC624\uD1A0',
+  automatic: '\uC790\uB3D9',
+  manual: '\uC218\uB3D9',
+  black: '\uAC80\uC815',
+  blackAlt: '\uD751\uC0C9',
+  white: '\uD770\uC0C9',
+  whiteAlt: '\uBC31\uC0C9',
+  silver: '\uC740\uC0C9',
+  gray: '\uD68C\uC0C9',
+  grayAlt: '\uC950\uC0C9',
+  blue: '\uCCAD\uC0C9',
+  blueAlt: '\uD30C\uB791',
+  red: '\uD64D\uC0C9',
+  redAlt: '\uBE68\uAC15',
+  green: '\uB179\uC0C9',
+  greenAlt: '\uCD08\uB85D',
+  brown: '\uAC08\uC0C9',
+  beige: '\uBCA0\uC774\uC9C0',
+  orange: '\uC8FC\uD669',
+  yellow: '\uB178\uB791',
+  purple: '\uBCF4\uB77C',
+}
 
 function hasHangul(value) {
   return HANGUL_RE.test(String(value || ''))
@@ -16,22 +45,35 @@ function shouldReplaceText(value) {
   return !text || text === '-' || hasHangul(text)
 }
 
+function normalizeDisplayText(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (!hasHangul(text)) return text
+  return text.replace(/[\uAC00-\uD7A3]+/gu, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function hasAnyToken(value, tokens) {
+  const src = String(value || '')
+  return tokens.some((token) => src.includes(token))
+}
+
 function normalizeTagLabel(value) {
   const text = String(value || '').trim()
   if (!text) return ''
   const low = text.toLowerCase()
 
-  if (low.includes('diesel') || text.includes('디젤')) return 'Дизель'
-  if (low.includes('gasoline') || text.includes('가솔린') || text.includes('휘발유')) return 'Бензин'
-  if (low.includes('hybrid') || text.includes('하이브리드')) return 'Бензин (гибрид)'
-  if (low.includes('electric') || text.includes('전기')) return 'Электро'
-  if (low.includes('lpg') || text.includes('엘피지')) return 'Газ (LPG)'
-  if (low.includes('auto') || text.includes('오토') || text.includes('자동')) return 'Автомат'
-  if (low.includes('manual') || text.includes('수동')) return 'Механика'
+  if (low.includes('diesel') || low.includes('\u0434\u0438\u0437\u0435\u043b') || hasAnyToken(text, [KO.diesel])) return '\u0414\u0438\u0437\u0435\u043b\u044c'
+  if (low.includes('gasoline') || low.includes('\u0431\u0435\u043d\u0437') || hasAnyToken(text, [KO.gasoline, KO.gasolineAlt])) return '\u0411\u0435\u043d\u0437\u0438\u043d'
+  if (low.includes('hybrid') || low.includes('\u0433\u0438\u0431\u0440\u0438\u0434') || hasAnyToken(text, [KO.hybrid])) return '\u0411\u0435\u043d\u0437\u0438\u043d (\u0433\u0438\u0431\u0440\u0438\u0434)'
+  if (low.includes('electric') || low.includes('\u044d\u043b\u0435\u043a\u0442\u0440\u043e') || hasAnyToken(text, [KO.electric])) return '\u042d\u043b\u0435\u043a\u0442\u0440\u043e'
+  if (low.includes('lpg') || low.includes('\u0433\u0430\u0437') || hasAnyToken(text, [KO.lpg])) return '\u0413\u0430\u0437 (LPG)'
+  if (low.includes('auto') || low.includes('\u0430\u0432\u0442\u043e\u043c\u0430\u0442') || hasAnyToken(text, [KO.auto, KO.automatic])) return '\u0410\u0432\u0442\u043e\u043c\u0430\u0442'
+  if (low.includes('manual') || low.includes('\u043c\u0435\u0445\u0430\u043d') || hasAnyToken(text, [KO.manual])) return '\u041c\u0435\u0445\u0430\u043d\u0438\u043a\u0430'
   if (low.includes('cvt')) return 'CVT'
-  if (low.includes('dct') || low.includes('dual')) return 'Робот'
+  if (low.includes('dct') || low.includes('dual') || low.includes('\u0440\u043e\u0431\u043e\u0442')) return '\u0420\u043e\u0431\u043e\u0442'
 
-  return text
+  if (hasHangul(text)) return ''
+  return normalizeDisplayText(text)
 }
 
 function normalizeTags(tags) {
@@ -56,20 +98,26 @@ function normalizeColorLabel(value) {
   const low = text.toLowerCase()
   const compact = low.replace(/[\s_-]/g, '')
 
-  if (low.includes('black') || /^(geomeunsaek|geomjeongsaek|heugsaek)$/.test(compact)) return 'Черный'
-  if (low.includes('white') || /^(baegsaek|huinsaek)$/.test(compact)) return 'Белый'
-  if (low.includes('silver') || /^(eunsaek)$/.test(compact)) return 'Серебристый'
-  if (low.includes('gray') || low.includes('grey') || /^(hoesaek|jwisaek)$/.test(compact)) return 'Серый'
-  if (low.includes('blue') || /^(cheongsaek|parangsaek)$/.test(compact)) return 'Синий'
-  if (low.includes('red') || /^(ppalgangsaek|hongsaek)$/.test(compact)) return 'Красный'
-  if (low.includes('green') || /^(noksaek|choroksaek)$/.test(compact)) return 'Зеленый'
-  if (low.includes('brown') || /^(galsaek)$/.test(compact)) return 'Коричневый'
-  if (low.includes('beige') || /^(beijisaek)$/.test(compact)) return 'Бежевый'
-  if (low.includes('yellow') || /^(norangsaek)$/.test(compact)) return 'Желтый'
-  if (low.includes('orange') || /^(juhwangsaek)$/.test(compact)) return 'Оранжевый'
-  if (low.includes('purple') || low.includes('violet') || /^(borasaek)$/.test(compact)) return 'Фиолетовый'
+  if (low.includes('black') || /^(geomeunsaek|geomjeongsaek|heugsaek)$/.test(compact) || hasAnyToken(text, [KO.black, KO.blackAlt])) return '\u0427\u0435\u0440\u043d\u044b\u0439'
+  if (low.includes('white') || /^(baegsaek|huinsaek)$/.test(compact) || hasAnyToken(text, [KO.white, KO.whiteAlt])) return '\u0411\u0435\u043b\u044b\u0439'
+  if (low.includes('silver') || /^(eunsaek)$/.test(compact) || hasAnyToken(text, [KO.silver])) return '\u0421\u0435\u0440\u0435\u0431\u0440\u0438\u0441\u0442\u044b\u0439'
+  if (low.includes('gray') || low.includes('grey') || /^(hoesaek|jwisaek)$/.test(compact) || hasAnyToken(text, [KO.gray, KO.grayAlt])) return '\u0421\u0435\u0440\u044b\u0439'
+  if (low.includes('blue') || /^(cheongsaek|parangsaek)$/.test(compact) || hasAnyToken(text, [KO.blue, KO.blueAlt])) return '\u0421\u0438\u043d\u0438\u0439'
+  if (low.includes('red') || /^(ppalgangsaek|hongsaek)$/.test(compact) || hasAnyToken(text, [KO.red, KO.redAlt])) return '\u041a\u0440\u0430\u0441\u043d\u044b\u0439'
+  if (low.includes('green') || /^(noksaek|choroksaek)$/.test(compact) || hasAnyToken(text, [KO.green, KO.greenAlt])) return '\u0417\u0435\u043b\u0435\u043d\u044b\u0439'
+  if (low.includes('brown') || /^(galsaek)$/.test(compact) || hasAnyToken(text, [KO.brown])) return '\u041a\u043e\u0440\u0438\u0447\u043d\u0435\u0432\u044b\u0439'
+  if (low.includes('beige') || /^(beijisaek)$/.test(compact) || hasAnyToken(text, [KO.beige])) return '\u0411\u0435\u0436\u0435\u0432\u044b\u0439'
+  if (low.includes('yellow') || /^(norangsaek)$/.test(compact) || hasAnyToken(text, [KO.yellow])) return '\u0416\u0435\u043b\u0442\u044b\u0439'
+  if (low.includes('orange') || /^(juhwangsaek)$/.test(compact) || hasAnyToken(text, [KO.orange])) return '\u041e\u0440\u0430\u043d\u0436\u0435\u0432\u044b\u0439'
+  if (low.includes('purple') || low.includes('violet') || /^(borasaek)$/.test(compact) || hasAnyToken(text, [KO.purple])) return '\u0424\u0438\u043e\u043b\u0435\u0442\u043e\u0432\u044b\u0439'
 
-  return text
+  if (low.includes('jwiseak') || low.includes('hoesaek')) return '\u0421\u0435\u0440\u044b\u0439'
+  if (low.includes('cheongsaek') || low.includes('parangsaek')) return '\u0421\u0438\u043d\u0438\u0439'
+  if (low.includes('eunsaek')) return '\u0421\u0435\u0440\u0435\u0431\u0440\u0438\u0441\u0442\u044b\u0439'
+  if (low.includes('heugsaek') || low.includes('geomjeongsaek')) return '\u0427\u0435\u0440\u043d\u044b\u0439'
+
+  if (hasHangul(text)) return ''
+  return normalizeDisplayText(text)
 }
 
 function shouldReplaceColor(value) {
@@ -118,7 +166,8 @@ function needsEncarEnrichment(car) {
     hasUntranslatedTags(car.tags) ||
     shouldReplaceColor(car.bodyColor) ||
     shouldReplaceColor(car.interiorColor) ||
-    shouldReplaceText(car.location)
+    shouldReplaceText(car.location) ||
+    shouldReplaceText(car.vin)
   )
 }
 
@@ -133,16 +182,16 @@ async function fetchEncarDetail(encarId) {
       const res = await fetch(`/api/encar/${encodeURIComponent(key)}`)
       if (!res.ok) return null
       const detail = await res.json()
-      const detailImages = normalizeImages(detail?.photos?.length ? detail.photos : detail?.images)
       const normalized = {
-        images: detailImages,
-        name: detail?.name || '',
-        model: detail?.model || '',
+        images: normalizeImages(detail?.photos?.length ? detail.photos : detail?.images),
+        name: normalizeDisplayText(detail?.name || ''),
+        model: normalizeDisplayText(detail?.model || ''),
         fuelType: normalizeTagLabel(detail?.fuel_type || ''),
         transmission: normalizeTagLabel(detail?.transmission || ''),
-        bodyColor: detail?.body_color || '',
-        interiorColor: detail?.interior_color || '',
-        location: detail?.location || '',
+        bodyColor: normalizeColorLabel(detail?.body_color || ''),
+        interiorColor: normalizeColorLabel(detail?.interior_color || ''),
+        location: normalizeDisplayText(detail?.location || ''),
+        vin: String(detail?.vin || detail?.vehicle_no || '').trim(),
       }
       encarDetailCache.set(key, normalized)
       return normalized
@@ -195,8 +244,6 @@ const WaGroupIcon = () => (
   </svg>
 )
 
-
-// Маппинг из snake_case (БД) в camelCase (CarCard)
 function mapCar(c) {
   const priceUSD = Number(c.price_usd) || 0
   const commission = Number(c.commission ?? 200) || 200
@@ -206,11 +253,16 @@ function mapCar(c) {
   const storage = Number(c.storage ?? 310) || 310
   const vatRefund = Number(c.vat_refund) || Math.round(priceUSD * 0.07)
   const total = Number(c.total) || Math.round(priceUSD + commission + delivery + loading + unloading + storage - vatRefund)
+  const images = normalizeImages(c.images)
+
+  const normalizedName = normalizeDisplayText(c.name || '')
+  const normalizedModel = normalizeDisplayText(c.model || '')
+  const normalizedLocation = normalizeDisplayText(c.location || '\u041a\u043e\u0440\u0435\u044f')
 
   return {
     id: c.id,
-    name: c.name,
-    model: c.model,
+    name: normalizedName || normalizedModel || '\u0410\u0432\u0442\u043e\u043c\u043e\u0431\u0438\u043b\u044c',
+    model: normalizedModel || normalizedName || '-',
     year: c.year,
     mileage: c.mileage || 0,
     tags: normalizeTags(c.tags || []),
@@ -218,8 +270,8 @@ function mapCar(c) {
     bodyColorDots: c.body_color_dots || [],
     interiorColor: normalizeColorLabel(c.interior_color || c.body_color || '-'),
     interiorColorDots: c.interior_color_dots || [],
-    location: c.location || 'Корея',
-    vin: c.vin,
+    location: normalizedLocation || '\u041a\u043e\u0440\u0435\u044f',
+    vin: String(c.vin || c.vehicle_no || '').trim() || '-',
     priceKRW: Number(c.price_krw) || 0,
     priceUSD,
     commission,
@@ -232,8 +284,8 @@ function mapCar(c) {
     encarUrl: c.encar_url,
     encarId: c.encar_id || '-',
     canNegotiate: c.can_negotiate,
-    imageCount: normalizeImages(c.images).length || 1,
-    images: normalizeImages(c.images),
+    imageCount: images.length || 1,
+    images,
   }
 }
 
@@ -251,15 +303,11 @@ export default function CatalogPage() {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({
-        sort,
-        page,
-        limit: 20,
-        ...filters,
-      })
+      const params = new URLSearchParams({ sort, page, limit: 20, ...filters })
       const res = await fetch(`/api/cars?${params}`)
       if (!res.ok) throw new Error('Ошибка загрузки')
       const data = await res.json()
+
       const mappedCars = data.cars.map(mapCar)
       setCars(mappedCars)
       setMeta({ total: data.total, page: data.page, pages: data.pages })
@@ -281,9 +329,10 @@ export default function CatalogPage() {
               if (detailTags.length) next.tags = detailTags
             }
             if (hasWeakImages(car) && detail.images.length) next.images = detail.images
-            if (shouldReplaceColor(car.bodyColor) && detail.bodyColor) next.bodyColor = normalizeColorLabel(detail.bodyColor)
-            if (shouldReplaceColor(car.interiorColor) && detail.interiorColor) next.interiorColor = normalizeColorLabel(detail.interiorColor)
+            if (shouldReplaceColor(car.bodyColor) && detail.bodyColor) next.bodyColor = detail.bodyColor
+            if (shouldReplaceColor(car.interiorColor) && detail.interiorColor) next.interiorColor = detail.interiorColor
             if (shouldReplaceText(car.location) && detail.location) next.location = detail.location
+            if (shouldReplaceText(car.vin) && detail.vin) next.vin = detail.vin
             next.imageCount = next.images.length || 1
             return next
           })
@@ -303,39 +352,32 @@ export default function CatalogPage() {
     }
   }, [sort, page, filters])
 
-  useEffect(() => { fetchCars() }, [fetchCars])
+  useEffect(() => {
+    fetchCars()
+  }, [fetchCars])
 
   return (
     <div className="catalog-page">
-
-      {/* Breadcrumb */}
       <div className="cat-breadcrumb">
         <div className="cat-breadcrumb-inner">
-          <Link to="/" className="cat-bc-link">
-            <HomeIcon /> Главная
-          </Link>
+          <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>
           <span className="cat-bc-sep"><ChevronRightIcon /></span>
           <span className="cat-bc-current">Каталог</span>
         </div>
       </div>
 
       <div className="cat-layout">
-
-        {/* Sidebar */}
         <aside className={`cat-sidebar${sidebarOpen ? ' cat-sidebar-open' : ''}`}>
           <FilterSidebar
             filters={filters}
-            onFiltersChange={f => { setFilters(f); setPage(1); }}
+            onFiltersChange={(f) => { setFilters(f); setPage(1) }}
             onClose={() => setSidebarOpen(false)}
           />
         </aside>
 
-        {sidebarOpen && (
-          <div className="cat-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-        )}
+        {sidebarOpen && <div className="cat-sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
         <main className="cat-main">
-
           <button className="cat-filter-btn" onClick={() => setSidebarOpen(true)}>
             <FilterIcon /> Фильтры
           </button>
@@ -361,11 +403,7 @@ export default function CatalogPage() {
             </div>
             <div className="cat-sort-wrap">
               <SortIcon />
-              <select
-                className="cat-sort"
-                value={sort}
-                onChange={e => { setSort(e.target.value); setPage(1) }}
-              >
+              <select className="cat-sort" value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }}>
                 <option value="newest">Новые объявления</option>
                 <option value="price_asc">Цена ↑</option>
                 <option value="price_desc">Цена ↓</option>
@@ -389,31 +427,20 @@ export default function CatalogPage() {
           ) : (
             <>
               <div className="cars-list">
-                {cars.length === 0 ? (
-                  <div className="cat-empty">Автомобили не найдены. Измените фильтры.</div>
-                ) : (
-                  cars.map(car => <CarCard key={car.id} car={car} />)
-                )}
+                {cars.length === 0
+                  ? <div className="cat-empty">Автомобили не найдены. Измените фильтры.</div>
+                  : cars.map((car) => <CarCard key={car.id} car={car} />)}
               </div>
 
               {meta.pages > 1 && (
                 <div className="cat-pagination">
-                  <button
-                    className="cat-page-btn"
-                    disabled={meta.page <= 1}
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                  >← Назад</button>
+                  <button className="cat-page-btn" disabled={meta.page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>← Назад</button>
                   <span className="cat-page-info">Стр. {meta.page} / {meta.pages}</span>
-                  <button
-                    className="cat-page-btn"
-                    disabled={meta.page >= meta.pages}
-                    onClick={() => setPage(p => Math.min(meta.pages, p + 1))}
-                  >Вперёд →</button>
+                  <button className="cat-page-btn" disabled={meta.page >= meta.pages} onClick={() => setPage((p) => Math.min(meta.pages, p + 1))}>Вперёд →</button>
                 </div>
               )}
             </>
           )}
-
         </main>
       </div>
     </div>

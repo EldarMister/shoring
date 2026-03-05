@@ -3,14 +3,173 @@ import pool from '../db.js'
 
 const router = Router()
 
-// GET /api/cars — список с фильтрами, сортировкой, пагинацией
+const KO = {
+  kia: '\uAE30\uC544',
+  hyundai: '\uD604\uB300',
+  genesis: '\uC81C\uB124\uC2DC\uC2A4',
+  chevrolet: '\uC250\uBCF4\uB808',
+  renault: '\uB974\uB178',
+  samsung: '\uC0BC\uC131',
+  ssangyong: '\uC30D\uC6A9',
+  kgMobility: '\uBAA8\uBE4C\uB9AC\uD2F0',
+  diesel: '\uB514\uC824',
+  gasoline: '\uAC00\uC194\uB9B0',
+  gasolineAlt: '\uD718\uBC1C\uC720',
+  hybrid: '\uD558\uC774\uBE0C\uB9AC\uB4DC',
+  electric: '\uC804\uAE30',
+  lpg: '\uC5D8\uD53C\uC9C0',
+  fwd: '\uC804\uB95C',
+  rwd: '\uD6C4\uB95C',
+  awd4wd: '\uC0AC\uB95C',
+  sedan: '\uC138\uB2E8',
+  hatchback: '\uD574\uCE58\uBC31',
+  wagon: '\uC65C\uAC74',
+  minivan: '\uBBF8\uB2C8\uBC34',
+  van: '\uBC34',
+  coupe: '\uCFE0\uD398',
+  truck: '\uD2B8\uB7ED',
+  cargo: '\uD654\uBB3C',
+  crossover: '\uD06C\uB85C\uC2A4\uC624\uBC84',
+  black: '\uAC80\uC815',
+  blackAlt: '\uD751\uC0C9',
+  white: '\uD770\uC0C9',
+  whiteAlt: '\uBC31\uC0C9',
+  silver: '\uC740\uC0C9',
+  gray: '\uD68C\uC0C9',
+  grayAlt: '\uC950\uC0C9',
+  blue: '\uCCAD\uC0C9',
+  blueAlt: '\uD30C\uB791',
+  red: '\uD64D\uC0C9',
+  redAlt: '\uBE68\uAC15',
+  green: '\uB179\uC0C9',
+  greenAlt: '\uCD08\uB85D',
+  brown: '\uAC08\uC0C9',
+  beige: '\uBCA0\uC774\uC9C0',
+  orange: '\uC8FC\uD669',
+  yellow: '\uB178\uB791',
+  purple: '\uBCF4\uB77C',
+}
+
+function uniqPatterns(patterns) {
+  return [...new Set(patterns.filter(Boolean))]
+}
+
+function rawPattern(value) {
+  const term = String(value || '').trim()
+  if (!term) return []
+  return [`%${term}%`]
+}
+
+function brandPatterns(value) {
+  const low = String(value || '').toLowerCase().trim()
+  if (!low) return []
+
+  if (low.includes('kia')) return ['%kia%', `%${KO.kia}%`]
+  if (low.includes('hyundai')) return ['%hyundai%', `%${KO.hyundai}%`]
+  if (low.includes('genesis')) return ['%genesis%', `%${KO.genesis}%`]
+  if (low.includes('chevrolet')) return ['%chevrolet%', `%${KO.chevrolet}%`]
+  if (low.includes('renault')) return ['%renault%', `%${KO.renault}%`, `%${KO.samsung}%`]
+  if (low.includes('ssang') || low.includes('kg mobility') || low.includes('kgmobilriti')) {
+    return ['%ssangyong%', '%kg mobility%', '%kgmobilriti%', `%${KO.ssangyong}%`, `%${KO.kgMobility}%`]
+  }
+
+  return rawPattern(value)
+}
+
+function fuelPatterns(value) {
+  const low = String(value || '').toLowerCase().trim()
+  if (!low) return []
+
+  if (low.includes('дизел') || low.includes('diesel')) return ['%дизел%', '%diesel%', `%${KO.diesel}%`]
+  if (low.includes('электро') || low.includes('electric')) return ['%электро%', '%electric%', `%${KO.electric}%`]
+  if (low.includes('газ') || low.includes('lpg')) return ['%газ%', '%lpg%', `%${KO.lpg}%`]
+  if (low.includes('гибрид') || low.includes('hybrid')) return ['%гибрид%', '%hybrid%', `%${KO.hybrid}%`]
+  if (low.includes('бенз') || low.includes('gasoline')) return ['%бенз%', '%gasoline%', `%${KO.gasoline}%`, `%${KO.gasolineAlt}%`]
+
+  return rawPattern(value)
+}
+
+function drivePatterns(value) {
+  const low = String(value || '').toLowerCase().trim()
+  if (!low) return []
+
+  if (low.includes('fwd') || low.includes('перед')) return ['%fwd%', '%перед%', `%${KO.fwd}%`]
+  if (low.includes('awd')) return ['%awd%', '%полный (awd)%']
+  if (low.includes('4wd') || low.includes('полный')) return ['%4wd%', '%полный (4wd)%', `%${KO.awd4wd}%`]
+  if (low.includes('rwd') || low.includes('задн')) return ['%rwd%', '%задн%', `%${KO.rwd}%`]
+
+  return rawPattern(value)
+}
+
+function bodyPatterns(value) {
+  const low = String(value || '').toLowerCase().trim()
+  if (!low) return []
+
+  if (low.includes('кроссов') || low.includes('внедорож') || low.includes('suv')) {
+    return ['%suv%', '%внедорож%', '%кроссов%', `%${KO.crossover}%`, '%rv%']
+  }
+  if (low.includes('седан') || low.includes('sedan')) return ['%sedan%', '%седан%', `%${KO.sedan}%`]
+  if (low.includes('хэтч') || low.includes('hatch')) return ['%hatch%', '%хэтч%', `%${KO.hatchback}%`]
+  if (low.includes('универсал') || low.includes('wagon')) return ['%wagon%', '%универсал%', `%${KO.wagon}%`]
+  if (low.includes('минивэн') || low.includes('van')) return ['%van%', '%minivan%', '%минивэн%', `%${KO.minivan}%`, `%${KO.van}%`]
+  if (low.includes('купе') || low.includes('спорт') || low.includes('coupe')) return ['%coupe%', '%купе%', '%спорт%', `%${KO.coupe}%`]
+  if (low.includes('груз') || low.includes('truck')) return ['%truck%', '%груз%', `%${KO.truck}%`, `%${KO.cargo}%`]
+
+  return rawPattern(value)
+}
+
+function colorPatterns(value) {
+  const low = String(value || '').toLowerCase().trim()
+  const compact = low.replace(/[\s_-]/g, '')
+  if (!low) return []
+
+  if (low.includes('черн') || low.includes('black') || /^(geomeunsaek|geomjeongsaek|heugsaek)$/.test(compact)) {
+    return ['%черн%', '%black%', `%${KO.black}%`, `%${KO.blackAlt}%`]
+  }
+  if (low.includes('бел') || low.includes('white') || /^(baegsaek|huinsaek)$/.test(compact)) {
+    return ['%бел%', '%white%', `%${KO.white}%`, `%${KO.whiteAlt}%`]
+  }
+  if (low.includes('сереб') || low.includes('silver') || /^(eunsaek)$/.test(compact)) {
+    return ['%сереб%', '%silver%', `%${KO.silver}%`]
+  }
+  if (low.includes('сер') || low.includes('gray') || low.includes('grey') || /^(hoesaek|jwisaek)$/.test(compact)) {
+    return ['%сер%', '%gray%', '%grey%', `%${KO.gray}%`, `%${KO.grayAlt}%`, '%jwiseak%', '%hoesaek%']
+  }
+  if (low.includes('син') || low.includes('blue') || /^(cheongsaek|parangsaek)$/.test(compact)) {
+    return ['%син%', '%blue%', `%${KO.blue}%`, `%${KO.blueAlt}%`, '%cheongsaek%', '%parangsaek%']
+  }
+  if (low.includes('крас') || low.includes('red') || /^(ppalgangsaek|hongsaek)$/.test(compact)) {
+    return ['%крас%', '%red%', `%${KO.red}%`, `%${KO.redAlt}%`]
+  }
+  if (low.includes('зел') || low.includes('green') || /^(noksaek|choroksaek)$/.test(compact)) {
+    return ['%зел%', '%green%', `%${KO.green}%`, `%${KO.greenAlt}%`]
+  }
+  if (low.includes('корич') || low.includes('brown') || /^(galsaek)$/.test(compact)) {
+    return ['%корич%', '%brown%', `%${KO.brown}%`]
+  }
+  if (low.includes('беж') || low.includes('beige') || /^(beijisaek)$/.test(compact)) {
+    return ['%беж%', '%beige%', `%${KO.beige}%`]
+  }
+  if (low.includes('оранж') || low.includes('orange') || /^(juhwangsaek)$/.test(compact)) {
+    return ['%оранж%', '%orange%', `%${KO.orange}%`]
+  }
+  if (low.includes('желт') || low.includes('yellow') || /^(norangsaek)$/.test(compact)) {
+    return ['%желт%', '%yellow%', `%${KO.yellow}%`]
+  }
+  if (low.includes('фиолет') || low.includes('purple') || low.includes('violet') || /^(borasaek)$/.test(compact)) {
+    return ['%фиолет%', '%purple%', '%violet%', `%${KO.purple}%`]
+  }
+
+  return rawPattern(value)
+}
+
 router.get('/', async (req, res) => {
   try {
     const {
       brand, minPrice, maxPrice,
       minYear, maxYear,
       minMileage, maxMileage,
-      fuel, drive, body, color,
+      fuel, drive, body, color, interiorColor,
       sort = 'newest',
       page = 1, limit = 20,
     } = req.query
@@ -20,43 +179,78 @@ router.get('/', async (req, res) => {
     let p = 1
 
     if (brand) {
-      conditions.push(`name ILIKE $${p++}`)
-      params.push(`%${brand}%`)
+      const patterns = uniqPatterns(brandPatterns(brand))
+      conditions.push(`(c.name ILIKE ANY($${p}::text[]) OR c.model ILIKE ANY($${p}::text[]))`)
+      params.push(patterns)
+      p++
     }
-    if (minPrice) { conditions.push(`price_usd >= $${p++}`); params.push(Number(minPrice)) }
-    if (maxPrice) { conditions.push(`price_usd <= $${p++}`); params.push(Number(maxPrice)) }
-    if (minYear)  { conditions.push(`year >= $${p++}`);      params.push(minYear) }
-    if (maxYear)  { conditions.push(`year <= $${p++}`);      params.push(maxYear) }
-    if (minMileage) { conditions.push(`mileage >= $${p++}`); params.push(Number(minMileage)) }
-    if (maxMileage) { conditions.push(`mileage <= $${p++}`); params.push(Number(maxMileage)) }
-    if (fuel)  { conditions.push(`$${p++} = ANY(tags)`);  params.push(fuel) }
-    if (drive) { conditions.push(`$${p++} = ANY(tags)`);  params.push(drive) }
-    if (body)  { conditions.push(`$${p++} = ANY(tags)`);  params.push(body) }
-    if (color) { conditions.push(`body_color ILIKE $${p++}`); params.push(`%${color}%`) }
+    if (minPrice) { conditions.push(`c.price_usd >= $${p++}`); params.push(Number(minPrice)) }
+    if (maxPrice) { conditions.push(`c.price_usd <= $${p++}`); params.push(Number(maxPrice)) }
+    if (minYear) { conditions.push(`c.year >= $${p++}`); params.push(String(minYear)) }
+    if (maxYear) { conditions.push(`c.year <= $${p++}`); params.push(String(maxYear)) }
+    if (minMileage) { conditions.push(`c.mileage >= $${p++}`); params.push(Number(minMileage)) }
+    if (maxMileage) { conditions.push(`c.mileage <= $${p++}`); params.push(Number(maxMileage)) }
+
+    if (fuel) {
+      const patterns = uniqPatterns(fuelPatterns(fuel))
+      conditions.push(`(
+        c.fuel_type ILIKE ANY($${p}::text[])
+        OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
+      )`)
+      params.push(patterns)
+      p++
+    }
+
+    if (drive) {
+      const patterns = uniqPatterns(drivePatterns(drive))
+      conditions.push(`EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))`)
+      params.push(patterns)
+      p++
+    }
+
+    if (body) {
+      const patterns = uniqPatterns(bodyPatterns(body))
+      conditions.push(`(
+        EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
+        OR c.model ILIKE ANY($${p}::text[])
+        OR c.name ILIKE ANY($${p}::text[])
+      )`)
+      params.push(patterns)
+      p++
+    }
+
+    if (color) {
+      const patterns = uniqPatterns(colorPatterns(color))
+      conditions.push(`c.body_color ILIKE ANY($${p}::text[])`)
+      params.push(patterns)
+      p++
+    }
+
+    if (interiorColor) {
+      const patterns = uniqPatterns(colorPatterns(interiorColor))
+      conditions.push(`c.interior_color ILIKE ANY($${p}::text[])`)
+      params.push(patterns)
+      p++
+    }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
     const sortMap = {
-      newest:    'c.created_at DESC',
-      oldest:    'c.created_at ASC',
+      newest: 'c.created_at DESC',
+      oldest: 'c.created_at ASC',
       price_asc: 'c.price_usd ASC',
-      price_desc:'c.price_usd DESC',
-      mileage:   'c.mileage ASC',
+      price_desc: 'c.price_usd DESC',
+      mileage: 'c.mileage ASC',
       year_desc: 'c.year DESC',
-      year_asc:  'c.year ASC',
+      year_asc: 'c.year ASC',
     }
     const orderBy = sortMap[sort] || 'c.created_at DESC'
 
     const offset = (Number(page) - 1) * Number(limit)
 
-    // Общее кол-во
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM cars c ${where}`,
-      params
-    )
-    const total = parseInt(countResult.rows[0].count)
+    const countResult = await pool.query(`SELECT COUNT(*) FROM cars c ${where}`, params)
+    const total = parseInt(countResult.rows[0].count, 10)
 
-    // Сами машины + фото
     const carsResult = await pool.query(
       `SELECT c.*,
         COALESCE(
@@ -72,7 +266,7 @@ router.get('/', async (req, res) => {
       [...params, Number(limit), offset]
     )
 
-    res.json({
+    return res.json({
       total,
       page: Number(page),
       limit: Number(limit),
@@ -81,11 +275,10 @@ router.get('/', async (req, res) => {
     })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Ошибка сервера' })
+    return res.status(500).json({ error: 'Ошибка сервера' })
   }
 })
 
-// GET /api/cars/:id — одна машина
 router.get('/:id', async (req, res) => {
   try {
     const result = await pool.query(
@@ -101,14 +294,13 @@ router.get('/:id', async (req, res) => {
       [req.params.id]
     )
     if (!result.rows.length) return res.status(404).json({ error: 'Не найдено' })
-    res.json(result.rows[0])
+    return res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Ошибка сервера' })
+    return res.status(500).json({ error: 'Ошибка сервера' })
   }
 })
 
-// POST /api/cars — создать машину
 router.post('/', async (req, res) => {
   try {
     const {
@@ -139,60 +331,60 @@ router.post('/', async (req, res) => {
         encar_url, encar_id, can_negotiate || false, tags || [],
       ]
     )
-    res.status(201).json(result.rows[0])
+    return res.status(201).json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Ошибка сервера' })
+    return res.status(500).json({ error: 'Ошибка сервера' })
   }
 })
 
-// PUT /api/cars/:id — обновить машину
 router.put('/:id', async (req, res) => {
   try {
     const fields = [
-      'name','model','year','mileage',
-      'body_color','body_color_dots','interior_color','interior_color_dots',
-      'location','vin','price_krw','price_usd',
-      'commission','delivery','loading','unloading','storage','vat_refund','total',
-      'encar_url','encar_id','can_negotiate','tags',
+      'name', 'model', 'year', 'mileage',
+      'body_color', 'body_color_dots', 'interior_color', 'interior_color_dots',
+      'location', 'vin', 'price_krw', 'price_usd',
+      'commission', 'delivery', 'loading', 'unloading', 'storage', 'vat_refund', 'total',
+      'encar_url', 'encar_id', 'can_negotiate', 'tags',
     ]
+
     const updates = []
     const params = []
     let p = 1
 
-    fields.forEach(f => {
-      if (req.body[f] !== undefined) {
-        updates.push(`${f} = $${p++}`)
-        params.push(req.body[f])
+    for (const field of fields) {
+      if (req.body[field] !== undefined) {
+        updates.push(`${field} = $${p++}`)
+        params.push(req.body[field])
       }
-    })
+    }
 
     if (!updates.length) return res.status(400).json({ error: 'Нет данных для обновления' })
 
-    updates.push(`updated_at = NOW()`)
+    updates.push('updated_at = NOW()')
     params.push(req.params.id)
 
     const result = await pool.query(
       `UPDATE cars SET ${updates.join(', ')} WHERE id = $${p} RETURNING *`,
       params
     )
+
     if (!result.rows.length) return res.status(404).json({ error: 'Не найдено' })
-    res.json(result.rows[0])
+    return res.json(result.rows[0])
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Ошибка сервера' })
+    return res.status(500).json({ error: 'Ошибка сервера' })
   }
 })
 
-// DELETE /api/cars/:id — удалить машину
 router.delete('/:id', async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM cars WHERE id=$1 RETURNING id', [req.params.id])
     if (!result.rows.length) return res.status(404).json({ error: 'Не найдено' })
-    res.json({ deleted: result.rows[0].id })
+    return res.json({ deleted: result.rows[0].id })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Ошибка сервера' })
+    return res.status(500).json({ error: 'Ошибка сервера' })
   }
 })
 

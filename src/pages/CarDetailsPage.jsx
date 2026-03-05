@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 const HomeIcon = () => (
@@ -103,6 +103,42 @@ function shouldReplaceText(value) {
   return !text || text === '-' || hasHangulText(text)
 }
 
+function normalizeDisplayText(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (!hasHangulText(text)) return text
+  return text.replace(/[\uAC00-\uD7A3]+/gu, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function normalizeTagLabel(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const low = text.toLowerCase()
+
+  if (low.includes('diesel') || low.includes('дизел') || text.includes('\uB514\uC824')) return 'Дизель'
+  if (low.includes('gasoline') || low.includes('бенз') || text.includes('\uAC00\uC194\uB9B0') || text.includes('\uD718\uBC1C\uC720')) return 'Бензин'
+  if (low.includes('hybrid') || low.includes('гибрид') || text.includes('\uD558\uC774\uBE0C\uB9AC\uB4DC')) return 'Бензин (гибрид)'
+  if (low.includes('electric') || low.includes('электро') || text.includes('\uC804\uAE30')) return 'Электро'
+  if (low.includes('lpg') || low.includes('газ') || text.includes('\uC5D8\uD53C\uC9C0')) return 'Газ (LPG)'
+  if (low.includes('auto') || low.includes('автомат') || text.includes('\uC624\uD1A0') || text.includes('\uC790\uB3D9')) return 'Автомат'
+  if (low.includes('manual') || low.includes('механ') || text.includes('\uC218\uB3D9')) return 'Механика'
+  if (low.includes('cvt')) return 'CVT'
+  if (low.includes('dct') || low.includes('dual') || low.includes('робот')) return 'Робот'
+
+  return hasHangulText(text) ? '' : normalizeDisplayText(text)
+}
+
+function normalizeTags(tags) {
+  if (!Array.isArray(tags)) return []
+  const out = []
+  for (const tag of tags) {
+    const normalized = normalizeTagLabel(tag)
+    if (!normalized) continue
+    if (!out.includes(normalized)) out.push(normalized)
+  }
+  return out
+}
+
 function normalizeColorLabel(value) {
   const text = String(value || '').trim()
   if (!text) return ''
@@ -168,21 +204,24 @@ function mapCar(c) {
   const vatRefund = Number(c.vat_refund) || Math.round(priceUSD * 0.07)
   const total = Number(c.total) || Math.round(priceUSD + commission + delivery + loading + unloading + storage - vatRefund)
   const images = normalizeImages(c.images)
-  const tags = Array.isArray(c.tags) ? c.tags : []
+  const tags = normalizeTags(Array.isArray(c.tags) ? c.tags : [])
+  const normalizedName = normalizeDisplayText(c.name || '')
+  const normalizedModel = normalizeDisplayText(c.model || '')
+  const normalizedLocation = normalizeDisplayText(c.location || 'Корея')
 
   return {
     id: c.id,
-    name: c.name || 'Автомобиль',
-    model: c.model || '',
+    name: normalizedName || normalizedModel || 'Автомобиль',
+    model: normalizedModel || normalizedName || '',
     year: c.year || '-',
     yearNum: parseYear(c.year),
     mileage: Number(c.mileage || 0),
     bodyColor: normalizeColorLabel(c.body_color || '-'),
     interiorColor: normalizeColorLabel(c.interior_color || c.body_color || '-'),
-    location: c.location || 'Корея',
-    vin: c.vin || '-',
+    location: normalizedLocation || 'Корея',
+    vin: c.vin || c.vehicle_no || '-',
     tags,
-    fuelType: c.fuel_type || '',
+    fuelType: normalizeTagLabel(c.fuel_type || ''),
     priceKRW: Number(c.price_krw) || 0,
     priceUSD,
     commission,
@@ -198,7 +237,7 @@ function mapCar(c) {
     encarId: c.encar_id || '-',
     createdAt: c.created_at,
     updatedAt: c.updated_at,
-    bodyType: '-',
+    bodyType: normalizeDisplayText(c.body_type || '-') || '-',
     transmission: tags.find((t) => /автомат|механика|робот|cvt/i.test(String(t))) || '-',
     seatCount: null,
     displacement: 0,
@@ -217,21 +256,27 @@ function mergeCarWithEncar(baseCar, detail) {
 
   return {
     ...baseCar,
-    name: shouldReplaceText(baseCar.name) ? (detail?.name || baseCar.name) : baseCar.name,
-    model: shouldReplaceText(baseCar.model) ? (detail?.model || baseCar.model) : baseCar.model,
+    name: shouldReplaceText(baseCar.name) ? (normalizeDisplayText(detail?.name || '') || baseCar.name) : baseCar.name,
+    model: shouldReplaceText(baseCar.model) ? (normalizeDisplayText(detail?.model || '') || baseCar.model) : baseCar.model,
     year,
     yearNum: parseYear(year),
     mileage: baseCar.mileage || Number(detail?.mileage || 0),
     bodyColor: shouldReplaceColor(baseCar.bodyColor) ? normalizeColorLabel(detail?.body_color || baseCar.bodyColor || '-') : baseCar.bodyColor,
     interiorColor: shouldReplaceColor(baseCar.interiorColor) ? normalizeColorLabel(detail?.interior_color || baseCar.interiorColor || '-') : baseCar.interiorColor,
-    location: (baseCar.location === 'Корея' || shouldReplaceText(baseCar.location)) ? (detail?.location || baseCar.location) : baseCar.location,
+    location: (baseCar.location === 'Корея' || shouldReplaceText(baseCar.location))
+      ? (normalizeDisplayText(detail?.location || '') || baseCar.location)
+      : baseCar.location,
     vin: baseCar.vin === '-' ? (detail?.vin || detail?.vehicle_no || '-') : baseCar.vin,
-    fuelType: shouldReplaceText(baseCar.fuelType) ? (detail?.fuel_type || baseCar.fuelType || '') : baseCar.fuelType,
+    fuelType: shouldReplaceText(baseCar.fuelType) ? (normalizeTagLabel(detail?.fuel_type || '') || baseCar.fuelType || '') : baseCar.fuelType,
     images,
     createdAt: detail?.manage?.firstAdvertisedDateTime || baseCar.createdAt,
     updatedAt: detail?.manage?.modifyDateTime || baseCar.updatedAt,
-    bodyType: shouldReplaceText(baseCar.bodyType) ? (detail?.body_type || baseCar.bodyType || '-') : baseCar.bodyType,
-    transmission: shouldReplaceText(baseCar.transmission) ? (detail?.transmission || baseCar.transmission || '-') : baseCar.transmission,
+    bodyType: shouldReplaceText(baseCar.bodyType)
+      ? (normalizeDisplayText(detail?.body_type || '') || baseCar.bodyType || '-')
+      : baseCar.bodyType,
+    transmission: shouldReplaceText(baseCar.transmission)
+      ? (normalizeTagLabel(detail?.transmission || '') || baseCar.transmission || '-')
+      : baseCar.transmission,
     seatCount: Number(detail?.seat_count) || baseCar.seatCount || null,
     displacement: Number(detail?.displacement) || baseCar.displacement || 0,
     vehicleNo: detail?.vehicle_no || baseCar.vehicleNo || '-',

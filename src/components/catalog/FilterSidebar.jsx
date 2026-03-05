@@ -109,6 +109,26 @@ const COLOR_MAP = {
   'оранжевый': { color: '#f97316' },
   'коричневый': { color: '#92400e' },
   'фиолетовый': { color: '#7c3aed' },
+  'black': { color: '#1a1a1a' },
+  'white': { color: '#f0f0f0', border: '#d1d5db' },
+  'gray': { color: '#6b7280' },
+  'grey': { color: '#6b7280' },
+  'silver': { color: '#d1d5db', border: '#9ca3af' },
+  'blue': { color: '#1d4ed8' },
+  'red': { color: '#dc2626' },
+  'green': { color: '#16a34a' },
+  'brown': { color: '#92400e' },
+  'beige': { color: '#d4a96a' },
+  'orange': { color: '#f97316' },
+  'yellow': { color: '#eab308' },
+  'purple': { color: '#7c3aed' },
+  'jwiseak': { color: '#6b7280' },
+  'hoesaek': { color: '#6b7280' },
+  'eunsaek': { color: '#d1d5db', border: '#9ca3af' },
+  'cheongsaek': { color: '#1d4ed8' },
+  'parangsaek': { color: '#1d4ed8' },
+  'heugsaek': { color: '#1a1a1a' },
+  'geomjeongsaek': { color: '#1a1a1a' },
 }
 
 function getColorStyle(name) {
@@ -272,6 +292,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose }) {
     if (local.drive.length) out.drive = local.drive[0]
     if (local.body.length) out.body = local.body[0]
     if (local.bodyColor.length) out.color = local.bodyColor[0]
+    if (local.interiorColor.length) out.interiorColor = local.interiorColor[0]
     onFiltersChange(out)
     onClose?.()
   }

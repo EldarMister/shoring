@@ -3,7 +3,7 @@
 
 /* ========= THEME TRANSITION ========= */
 
-/* Отключаем дефолтный кросс-фейд — используем clip-path ripple */
+/* РћС‚РєР»СЋС‡Р°РµРј РґРµС„РѕР»С‚РЅС‹Р№ РєСЂРѕСЃСЃ-С„РµР№Рґ вЂ” РёСЃРїРѕР»СЊР·СѓРµРј clip-path ripple */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
@@ -18,8 +18,8 @@
   z-index: 1;
 }
 
-/* Во время view transition отключаем все element-level transitions
-   чтобы не было двойной анимации и "лагов" */
+/* Р’Рѕ РІСЂРµРјСЏ view transition РѕС‚РєР»СЋС‡Р°РµРј РІСЃРµ element-level transitions
+   С‡С‚РѕР±С‹ РЅРµ Р±С‹Р»Рѕ РґРІРѕР№РЅРѕР№ Р°РЅРёРјР°С†РёРё Рё "Р»Р°РіРѕРІ" */
 html:has(::view-transition) *,
 html:has(::view-transition) *::before,
 html:has(::view-transition) *::after {
@@ -79,9 +79,9 @@ body {
   background-color: #ffffff;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    HEADER
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .site-header {
   background-color: rgba(255, 255, 255, 0.15);
@@ -155,14 +155,14 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-/* На зелёном фоне A и T — светлые */
+/* РќР° Р·РµР»С‘РЅРѕРј С„РѕРЅРµ A Рё T вЂ” СЃРІРµС‚Р»С‹Рµ */
 .header-logo .logo-a,
 .header-logo .logo-t {
   color: #e8ecf0;
   -webkit-text-fill-color: #e8ecf0;
 }
 
-/* Тёмная тема — убираем зелёный фон */
+/* РўС‘РјРЅР°СЏ С‚РµРјР° вЂ” СѓР±РёСЂР°РµРј Р·РµР»С‘РЅС‹Р№ С„РѕРЅ */
 [data-theme="dark"] .header-logo {
   background: none;
   box-shadow: none;
@@ -174,7 +174,7 @@ body {
   transform: none;
 }
 
-/* A и T — Barlow Condensed Black, тёмно-стальной в светлой теме */
+/* A Рё T вЂ” Barlow Condensed Black, С‚С‘РјРЅРѕ-СЃС‚Р°Р»СЊРЅРѕР№ РІ СЃРІРµС‚Р»РѕР№ С‚РµРјРµ */
 .logo-a,
 .logo-t {
   font-family: 'Barlow Condensed', sans-serif;
@@ -186,13 +186,13 @@ body {
   background: none;
 }
 
-/* V — SVG-галочка: только фильтр-тень, остальное в SVG inline */
+/* V вЂ” SVG-РіР°Р»РѕС‡РєР°: С‚РѕР»СЊРєРѕ С„РёР»СЊС‚СЂ-С‚РµРЅСЊ, РѕСЃС‚Р°Р»СЊРЅРѕРµ РІ SVG inline */
 .logo-v-svg {
   filter: drop-shadow(0 0 6px rgba(220, 50, 50, 0.65)) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   flex-shrink: 0;
 }
 
-/* V — сияющее золото */
+/* V вЂ” СЃРёСЏСЋС‰РµРµ Р·РѕР»РѕС‚Рѕ */
 .logo-v {
   font-weight: 900;
   font-size: 24px;
@@ -223,7 +223,7 @@ body {
   filter: none;
 }
 
-/* Dark mode — A и T ярче, больше белого */
+/* Dark mode вЂ” A Рё T СЏСЂС‡Рµ, Р±РѕР»СЊС€Рµ Р±РµР»РѕРіРѕ */
 [data-theme="dark"] .logo-a,
 [data-theme="dark"] .logo-t {
   background: linear-gradient(180deg,
@@ -245,7 +245,7 @@ body {
   filter: drop-shadow(0 0 5px rgba(245, 197, 24, 0.6));
 }
 
-/* Desktop nav — hidden on mobile */
+/* Desktop nav вЂ” hidden on mobile */
 .header-nav {
   display: none;
   align-items: center;
@@ -277,7 +277,7 @@ body {
   font-weight: 600;
 }
 
-/* Search — limited width, centered via auto margins */
+/* Search вЂ” limited width, centered via auto margins */
 .header-search {
   display: none;
   flex: 1;
@@ -324,7 +324,7 @@ body {
   box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.15);
 }
 
-/* Desktop theme toggle — hidden on mobile */
+/* Desktop theme toggle вЂ” hidden on mobile */
 .header-row>.theme-toggle {
   display: none;
 }
@@ -335,7 +335,7 @@ body {
   }
 }
 
-/* Desktop login — hidden on mobile */
+/* Desktop login вЂ” hidden on mobile */
 .header-login {
   display: none;
   align-items: center;
@@ -446,9 +446,9 @@ body {
   border-radius: 0;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    HERO
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .hero-video-section {
   width: 100%;
@@ -496,9 +496,9 @@ body {
   }
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    BUTTONS
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .btn-primary {
   display: inline-flex;
@@ -721,9 +721,9 @@ body {
   margin-right: auto;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    STATS
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .stats-grid {
   margin-top: 40px;
@@ -785,9 +785,9 @@ body {
   margin-top: 4px;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    WHY KOREA
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .why-section {
   background-color: #ffffff;
@@ -898,9 +898,9 @@ body {
   gap: 16px;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    PROCESS STEPS
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .process-section {
   background-color: #f8fafc;
@@ -929,7 +929,7 @@ body {
   font-weight: 500;
 }
 
-/* Steps list — timeline */
+/* Steps list вЂ” timeline */
 .steps-list {
   margin-top: 40px;
   display: flex;
@@ -1028,7 +1028,7 @@ body {
   margin-bottom: 0;
 }
 
-/* Step header: "Шаг N" + badge */
+/* Step header: "РЁР°Рі N" + badge */
 .step-header {
   display: flex;
   align-items: center;
@@ -1133,9 +1133,9 @@ body {
   background-color: #15304f;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    ADVANTAGES
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .advantages-section {
   background-color: #ffffff;
@@ -1219,9 +1219,9 @@ body {
   margin: 0;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    REVIEWS
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .reviews-section {
   background-color: #f8fafc;
@@ -1271,9 +1271,9 @@ body {
   font-style: italic;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    WHATSAPP
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .whatsapp-section {
   background-color: #f8fafc;
@@ -1340,9 +1340,9 @@ body {
   border-color: #1a3c5e;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    FINAL CTA
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .final-cta-section {
   background-color: #ffffff;
@@ -1426,9 +1426,9 @@ body {
   border-color: #1a3c5e;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    FOOTER
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .site-footer {
   background-color: #f8fafc;
@@ -1644,7 +1644,7 @@ body {
   padding: 0;
 }
 
-/* Footer logo — AVT: A и T серебро, V золото */
+/* Footer logo вЂ” AVT: A Рё T СЃРµСЂРµР±СЂРѕ, V Р·РѕР»РѕС‚Рѕ */
 .footer-logo-tlv {
   font-size: 22px;
   font-weight: 900;
@@ -1735,9 +1735,9 @@ body {
   color: #1a3c5e;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    CATALOG PAGE
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .catalog-page {
   background-color: #ffffff;
@@ -1979,9 +1979,9 @@ body {
   gap: 16px;
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    CAR CARD
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .car-card {
   border: 1px solid #e9ecef;
@@ -2514,7 +2514,7 @@ body {
 
 .car-details-price-krw {
   margin-top: 10px;
-  color: #179951;
+  color: #1a3c5e;
   font-size: clamp(30px, 5vw, 46px);
   font-weight: 900;
   letter-spacing: -0.02em;
@@ -2522,7 +2522,7 @@ body {
 
 .car-details-price-usd {
   margin-top: 2px;
-  color: #2563eb;
+  color: #374151;
   font-size: 36px;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -2705,9 +2705,9 @@ body {
   }
 }
 
-/* ══════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    FILTER SIDEBAR
-══════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .filter-sidebar {
   background: #ffffff;
@@ -3441,7 +3441,7 @@ body {
   }
 }
 
-/* Scroll reveal — elements start hidden, become visible via JS */
+/* Scroll reveal вЂ” elements start hidden, become visible via JS */
 .reveal {
   opacity: 0;
   transform: translateY(26px);
@@ -3475,7 +3475,7 @@ body {
 }
 
 /* =====================================================================
-   ENHANCED BUTTONS — hover lift + press + ripple
+   ENHANCED BUTTONS вЂ” hover lift + press + ripple
    ===================================================================== */
 
 /* Primary dark buttons */
@@ -3665,7 +3665,7 @@ body {
   transform: translateY(-1px);
 }
 
-/* Nav links — underline slide */
+/* Nav links вЂ” underline slide */
 .header-nav a {
   position: relative;
 }
@@ -3768,7 +3768,7 @@ body {
 }
 
 /* =====================================================================
-   DARK MODE — COMPREHENSIVE OVERRIDES
+   DARK MODE вЂ” COMPREHENSIVE OVERRIDES
    ===================================================================== */
 
 [data-theme="dark"] body {
@@ -3919,7 +3919,7 @@ body {
   color: #00c9a7;
 }
 
-/* WhatsApp group button — keep green in dark mode too */
+/* WhatsApp group button вЂ” keep green in dark mode too */
 [data-theme="dark"] .btn-wa-group {
   background-color: #1da851;
   color: #ffffff;
@@ -3932,7 +3932,7 @@ body {
   color: #ffffff;
 }
 
-/* Buttons — primary dark */
+/* Buttons вЂ” primary dark */
 [data-theme="dark"] .btn-primary,
 [data-theme="dark"] .btn-process-cta,
 [data-theme="dark"] .btn-wa-primary,
@@ -3951,7 +3951,7 @@ body {
   background-color: #255a8a;
 }
 
-/* Buttons — outline */
+/* Buttons вЂ” outline */
 [data-theme="dark"] .btn-secondary,
 [data-theme="dark"] .btn-wa-secondary,
 [data-theme="dark"] .btn-cta-secondary,
@@ -4483,11 +4483,11 @@ body {
 }
 
 [data-theme="dark"] .car-details-price-krw {
-  color: #22c55e;
+  color: #7a96b0;
 }
 
 [data-theme="dark"] .car-details-price-usd {
-  color: #60a5fa;
+  color: #e2e8f0;
 }
 
 [data-theme="dark"] .car-details-breakdown {
@@ -4673,7 +4673,7 @@ body {
   color: #00c9a7;
 }
 
-/* ── Catalog: loading / error / pagination ── */
+/* в”Ђв”Ђ Catalog: loading / error / pagination в”Ђв”Ђ */
 .cat-loading {
   display: flex;
   flex-direction: column;
@@ -4771,13 +4771,13 @@ body {
   background: #243447;
 }
 
-/* ══════════════════════════════════════════════════════
+/* в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
    ADMIN PANEL
-══════════════════════════════════════════════════════ */
+в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-/* ─── Root layout ─── */
+/* в”Ђв”Ђв”Ђ Root layout в”Ђв”Ђв”Ђ */
 .adm-layout {
   display: flex;
   height: 100vh;
@@ -4787,7 +4787,7 @@ body {
   overflow: hidden;
 }
 
-/* ─── Sidebar ─── */
+/* в”Ђв”Ђв”Ђ Sidebar в”Ђв”Ђв”Ђ */
 .adm-sidebar {
   width: 240px;
   background: linear-gradient(180deg, #0d1526 0%, #0a0f1a 100%);
@@ -4869,7 +4869,7 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* ─── Main wrap ─── */
+/* в”Ђв”Ђв”Ђ Main wrap в”Ђв”Ђв”Ђ */
 .adm-main-wrap {
   flex: 1;
   display: flex;
@@ -4878,7 +4878,7 @@ body {
   overflow: hidden;
 }
 
-/* ─── Topbar ─── */
+/* в”Ђв”Ђв”Ђ Topbar в”Ђв”Ђв”Ђ */
 .adm-topbar {
   display: flex;
   align-items: center;
@@ -4931,7 +4931,7 @@ body {
   text-transform: uppercase;
 }
 
-/* ─── Content area ─── */
+/* в”Ђв”Ђв”Ђ Content area в”Ђв”Ђв”Ђ */
 .adm-content {
   flex: 1;
   overflow-y: auto;
@@ -4953,7 +4953,7 @@ body {
   border-radius: 3px;
 }
 
-/* ─── Section heading ─── */
+/* в”Ђв”Ђв”Ђ Section heading в”Ђв”Ђв”Ђ */
 .adm-section-heading {
   font-size: 22px;
   font-weight: 800;
@@ -4961,7 +4961,7 @@ body {
   margin: 0;
 }
 
-/* ─── Dashboard ─── */
+/* в”Ђв”Ђв”Ђ Dashboard в”Ђв”Ђв”Ђ */
 .adm-dash-header {
   display: flex;
   align-items: center;
@@ -5020,7 +5020,7 @@ body {
   font-weight: 500;
 }
 
-/* ─── Brands chart ─── */
+/* в”Ђв”Ђв”Ђ Brands chart в”Ђв”Ђв”Ђ */
 .adm-brands-chart {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -5072,7 +5072,7 @@ body {
   text-align: right;
 }
 
-/* ─── Cars list ─── */
+/* в”Ђв”Ђв”Ђ Cars list в”Ђв”Ђв”Ђ */
 .adm-cars-header {
   display: flex;
   align-items: center;
@@ -5088,7 +5088,7 @@ body {
   margin-top: 4px;
 }
 
-/* ─── Toolbar ─── */
+/* в”Ђв”Ђв”Ђ Toolbar в”Ђв”Ђв”Ђ */
 .adm-toolbar {
   display: flex;
   align-items: center;
@@ -5156,7 +5156,7 @@ body {
   border-color: rgba(99, 102, 241, 0.5);
 }
 
-/* ─── Buttons ─── */
+/* в”Ђв”Ђв”Ђ Buttons в”Ђв”Ђв”Ђ */
 .adm-btn {
   display: inline-flex;
   align-items: center;
@@ -5248,7 +5248,7 @@ body {
   background: rgba(16, 185, 129, 0.25);
 }
 
-/* ─── Table ─── */
+/* в”Ђв”Ђв”Ђ Table в”Ђв”Ђв”Ђ */
 .adm-table-wrap {
   overflow-x: auto;
   border-radius: 14px;
@@ -5457,7 +5457,7 @@ body {
   border-color: rgba(239, 68, 68, 0.25);
 }
 
-/* ─── Pagination ─── */
+/* в”Ђв”Ђв”Ђ Pagination в”Ђв”Ђв”Ђ */
 .adm-pagination {
   display: flex;
   align-items: center;
@@ -5472,7 +5472,7 @@ body {
   margin-left: auto;
 }
 
-/* ─── Modal ─── */
+/* в”Ђв”Ђв”Ђ Modal в”Ђв”Ђв”Ђ */
 .adm-modal-overlay {
   position: fixed;
   inset: 0;
@@ -5567,7 +5567,7 @@ body {
   scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
 }
 
-/* ─── Form ─── */
+/* в”Ђв”Ђв”Ђ Form в”Ђв”Ђв”Ђ */
 
 .adm-section-title {
   font-size: 12px;
@@ -5746,7 +5746,7 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* ─── Image Manager ─── */
+/* в”Ђв”Ђв”Ђ Image Manager в”Ђв”Ђв”Ђ */
 
 .adm-imgmgr-upload {
   border: 2px dashed rgba(99, 102, 241, 0.3);
@@ -5854,7 +5854,7 @@ body {
   font-size: 13px;
 }
 
-/* ─── Loading & Empty ─── */
+/* в”Ђв”Ђв”Ђ Loading & Empty в”Ђв”Ђв”Ђ */
 .adm-loading {
   display: flex;
   align-items: center;
@@ -5884,7 +5884,7 @@ body {
   font-size: 14px;
 }
 
-/* ─── Toast ─── */
+/* в”Ђв”Ђв”Ђ Toast в”Ђв”Ђв”Ђ */
 .adm-toast {
   display: flex;
   align-items: center;
@@ -5929,7 +5929,7 @@ body {
   border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
-/* ─── Login screen ─── */
+/* в”Ђв”Ђв”Ђ Login screen в”Ђв”Ђв”Ђ */
 .adm-login-screen {
   min-height: 100vh;
   display: flex;
@@ -5999,7 +5999,7 @@ body {
   font-size: 12px;
 }
 
-/* ─── Filter sidebar improvements ─── */
+/* в”Ђв”Ђв”Ђ Filter sidebar improvements в”Ђв”Ђв”Ђ */
 .filter-actions {
   display: flex;
   gap: 10px;
@@ -6049,7 +6049,7 @@ body {
   color: #374151;
 }
 
-/* ── Admin v2 overrides & new components ── */
+/* в”Ђв”Ђ Admin v2 overrides & new components в”Ђв”Ђ */
 .adm-sidebar-col {
   width: 64px;
 }
@@ -6646,7 +6646,7 @@ body {
   background: rgba(16, 185, 129, .25);
 }
 
-/* Quick action color fix — use static bg since CSS custom props from style don't work in :hover */
+/* Quick action color fix вЂ” use static bg since CSS custom props from style don't work in :hover */
 .adm-qa-btn:hover {
   background: rgba(99, 102, 241, .12);
   color: #e2e8f0;
