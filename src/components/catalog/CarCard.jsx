@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 const PrevIcon = () => (
   <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,6 +50,7 @@ const TAG_STYLES = [
 ]
 
 export default function CarCard({ car }) {
+  const navigate = useNavigate()
   const [imgIdx, setImgIdx] = useState(0)
   const [imgFailed, setImgFailed] = useState(false)
 
@@ -62,9 +63,29 @@ export default function CarCard({ car }) {
   const prev = () => setImgIdx((i) => Math.max(0, i - 1))
   const next = () => setImgIdx((i) => Math.min(imageCount - 1, i + 1))
   const onImgError = () => setImgFailed(true)
+  const openDetails = () => navigate(`/catalog/${car.id}`)
+
+  const onCardClick = (e) => {
+    if (e.defaultPrevented) return
+    if (e.target.closest('a, button, input, select, textarea, label')) return
+    openDetails()
+  }
+
+  const onCardKeyDown = (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    if (e.target.closest('a, button, input, select, textarea, label')) return
+    e.preventDefault()
+    openDetails()
+  }
 
   return (
-    <div className="car-card">
+    <div
+      className="car-card car-card-clickable"
+      role="link"
+      tabIndex={0}
+      onClick={onCardClick}
+      onKeyDown={onCardKeyDown}
+    >
       <div className="car-card-top">
         <div className="car-img-wrap">
           {hasImage ? (

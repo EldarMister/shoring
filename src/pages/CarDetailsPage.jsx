@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 const HomeIcon = () => (
@@ -50,9 +50,9 @@ function detectFuel(car) {
   const explicit = String(car.fuel_type || '').toLowerCase()
   const tags = Array.isArray(car.tags) ? car.tags.join(' ').toLowerCase() : ''
   const mixed = `${explicit} ${tags}`
-  if (mixed.includes('дизел')) return 'diesel'
-  if (mixed.includes('электро')) return 'electric'
-  if (mixed.includes('газ')) return 'lpg'
+  if (mixed.includes('дизел') || mixed.includes('diesel') || mixed.includes('디젤')) return 'diesel'
+  if (mixed.includes('электро') || mixed.includes('electric') || mixed.includes('전기')) return 'electric'
+  if (mixed.includes('газ') || mixed.includes('lpg')) return 'lpg'
   return 'gasoline'
 }
 
@@ -94,6 +94,17 @@ function formatDate(value) {
   return d.toLocaleDateString('ru-RU')
 }
 
+function normalizeImages(rawImages) {
+  if (!Array.isArray(rawImages)) return []
+  return rawImages
+    .map((img, idx) => {
+      if (!img) return null
+      if (typeof img === 'string') return { id: `img-${idx}`, url: img }
+      return { id: img.id ?? `img-${idx}`, url: img.url }
+    })
+    .filter((img) => img?.url)
+}
+
 function mapCar(c) {
   const priceUSD = Number(c.price_usd) || 0
   const commission = Number(c.commission ?? 200) || 200
@@ -103,15 +114,7 @@ function mapCar(c) {
   const storage = Number(c.storage ?? 310) || 310
   const vatRefund = Number(c.vat_refund) || Math.round(priceUSD * 0.07)
   const total = Number(c.total) || Math.round(priceUSD + commission + delivery + loading + unloading + storage - vatRefund)
-  const images = Array.isArray(c.images)
-    ? c.images
-      .map((img, idx) => {
-        if (!img) return null
-        if (typeof img === 'string') return { id: `img-${idx}`, url: img }
-        return { id: img.id ?? `img-${idx}`, url: img.url }
-      })
-      .filter((img) => img?.url)
-    : []
+  const images = normalizeImages(c.images)
   const tags = Array.isArray(c.tags) ? c.tags : []
 
   return {
@@ -142,6 +145,45 @@ function mapCar(c) {
     encarId: c.encar_id || '-',
     createdAt: c.created_at,
     updatedAt: c.updated_at,
+    bodyType: '-',
+    transmission: tags.find((t) => /автомат|механика|робот|cvt/i.test(String(t))) || '-',
+    seatCount: null,
+    displacement: 0,
+    vehicleNo: '-',
+    detailFlags: {},
+    detailCondition: {},
+    detailManage: {},
+  }
+}
+
+function mergeCarWithEncar(baseCar, detail) {
+  const detailImages = normalizeImages(detail?.photos?.length ? detail.photos : detail?.images)
+  const images = baseCar.images.length ? baseCar.images : detailImages
+  const year = baseCar.year === '-' && detail?.year ? detail.year : baseCar.year
+
+  return {
+    ...baseCar,
+    name: baseCar.name || detail?.name || baseCar.name,
+    model: baseCar.model || detail?.model || baseCar.model,
+    year,
+    yearNum: parseYear(year),
+    mileage: baseCar.mileage || Number(detail?.mileage || 0),
+    bodyColor: baseCar.bodyColor === '-' ? (detail?.body_color || '-') : baseCar.bodyColor,
+    interiorColor: baseCar.interiorColor === '-' ? (detail?.interior_color || '-') : baseCar.interiorColor,
+    location: baseCar.location === 'Корея' ? (detail?.location || baseCar.location) : baseCar.location,
+    vin: baseCar.vin === '-' ? (detail?.vin || detail?.vehicle_no || '-') : baseCar.vin,
+    fuelType: baseCar.fuelType || detail?.fuel_type || '',
+    images,
+    createdAt: detail?.manage?.firstAdvertisedDateTime || baseCar.createdAt,
+    updatedAt: detail?.manage?.modifyDateTime || baseCar.updatedAt,
+    bodyType: detail?.body_type || baseCar.bodyType || '-',
+    transmission: detail?.transmission || baseCar.transmission || '-',
+    seatCount: Number(detail?.seat_count) || baseCar.seatCount || null,
+    displacement: Number(detail?.displacement) || baseCar.displacement || 0,
+    vehicleNo: detail?.vehicle_no || baseCar.vehicleNo || '-',
+    detailFlags: detail?.flags || {},
+    detailCondition: detail?.condition || {},
+    detailManage: detail?.manage || {},
   }
 }
 
@@ -157,27 +199,49 @@ export default function CarDetailsPage() {
   useEffect(() => {
     let active = true
 
-    fetch(`/api/cars/${id}`)
-      .then(async (res) => {
+    const run = async () => {
+      try {
+        const res = await fetch(`/api/cars/${id}`)
         if (!res.ok) throw new Error(res.status === 404 ? 'Машина не найдена' : 'Ошибка загрузки карточки')
-        return res.json()
-      })
-      .then((data) => {
+
+        const data = await res.json()
         if (!active) return
+
         const mapped = mapCar(data)
         const fuel = detectFuel(data)
         setCar(mapped)
+        setImgIdx(0)
         setError('')
         setCalc({ year: mapped.yearNum, engine: inferEngineLiters(mapped.model), fuel })
-      })
-      .catch((e) => {
+
+        if (mapped.encarId && mapped.encarId !== '-') {
+          try {
+            const detailRes = await fetch(`/api/encar/${mapped.encarId}`)
+            if (!detailRes.ok) return
+            const detail = await detailRes.json()
+            if (!active) return
+
+            setCar((prev) => (prev ? mergeCarWithEncar(prev, detail) : prev))
+            setImgIdx(0)
+            setCalc((prev) => ({
+              ...prev,
+              year: parseYear(detail?.year || mapped.year),
+              engine: detail?.displacement ? Number((Number(detail.displacement) / 1000).toFixed(1)) : prev.engine,
+              fuel: detectFuel({ fuel_type: detail?.fuel_type || mapped.fuelType, tags: mapped.tags }),
+            }))
+          } catch {
+            // Ignore detail enrichment errors, base card remains available.
+          }
+        }
+      } catch (e) {
         if (!active) return
         setError(e.message || 'Ошибка загрузки карточки')
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false)
-      })
+      }
+    }
 
+    run()
     return () => { active = false }
   }, [id])
 
@@ -185,15 +249,12 @@ export default function CarDetailsPage() {
   const boundedIdx = Math.min(imgIdx, imageCount - 1)
   const imageSrc = car?.images?.[boundedIdx]?.url || ''
 
-  const customsDuty = useMemo(
-    () => estimateCustomsDuty(calc),
-    [calc]
-  )
+  const customsDuty = useMemo(() => estimateCustomsDuty(calc), [calc])
 
   const customsNote = useMemo(() => {
     const age = Math.max(0, new Date().getFullYear() - Number(calc.year || new Date().getFullYear()))
     if (calc.fuel === 'electric') return 'Электромобили считаются по отдельной льготной сетке.'
-    if (age > 5 && Number(calc.engine) > 2) return 'Автомобили старше 5 лет с объёмом > 2.0 обычно считают по повышенной ставке.'
+    if (age > 5 && Number(calc.engine) > 2) return 'Автомобили старше 5 лет с объемом > 2.0 обычно считают по повышенной ставке.'
     if (age <= 3) return 'Для авто до 3 лет применяется базовая ставка.'
     return 'Расчет оценочный. Точную сумму подтвердит брокер.'
   }, [calc])
@@ -227,9 +288,7 @@ export default function CarDetailsPage() {
     <div className="catalog-page">
       <div className="cat-breadcrumb">
         <div className="cat-breadcrumb-inner">
-          <Link to="/" className="cat-bc-link">
-            <HomeIcon /> Главная
-          </Link>
+          <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>
           <span className="cat-bc-sep"><ChevronRightIcon /></span>
           <Link to="/catalog" className="cat-bc-link">Каталог</Link>
           <span className="cat-bc-sep"><ChevronRightIcon /></span>
@@ -238,9 +297,7 @@ export default function CarDetailsPage() {
       </div>
 
       <div className="car-details-wrap">
-        <button className="car-details-back" onClick={() => navigate(-1)}>
-          <BackIcon /> Назад
-        </button>
+        <button className="car-details-back" onClick={() => navigate(-1)}><BackIcon /> Назад</button>
 
         <div className="car-details-grid">
           <section className="car-details-left">
@@ -254,20 +311,8 @@ export default function CarDetailsPage() {
 
                 {imageCount > 1 && (
                   <>
-                    <button
-                      className="car-img-btn car-img-btn-prev"
-                      onClick={() => setImgIdx((i) => Math.max(0, i - 1))}
-                      disabled={boundedIdx === 0}
-                    >
-                      <PrevIcon />
-                    </button>
-                    <button
-                      className="car-img-btn car-img-btn-next"
-                      onClick={() => setImgIdx((i) => Math.min(imageCount - 1, i + 1))}
-                      disabled={boundedIdx === imageCount - 1}
-                    >
-                      <NextIcon />
-                    </button>
+                    <button className="car-img-btn car-img-btn-prev" onClick={() => setImgIdx((i) => Math.max(0, i - 1))} disabled={boundedIdx === 0}><PrevIcon /></button>
+                    <button className="car-img-btn car-img-btn-next" onClick={() => setImgIdx((i) => Math.min(imageCount - 1, i + 1))} disabled={boundedIdx === imageCount - 1}><NextIcon /></button>
                   </>
                 )}
                 <span className="car-img-counter">{boundedIdx + 1} / {imageCount}</span>
@@ -276,11 +321,7 @@ export default function CarDetailsPage() {
               {car.images.length > 1 && (
                 <div className="car-details-thumbs">
                   {car.images.map((img, i) => (
-                    <button
-                      key={img.id || `${img.url}-${i}`}
-                      className={`car-details-thumb${i === boundedIdx ? ' car-details-thumb-active' : ''}`}
-                      onClick={() => setImgIdx(i)}
-                    >
+                    <button key={img.id || `${img.url}-${i}`} className={`car-details-thumb${i === boundedIdx ? ' car-details-thumb-active' : ''}`} onClick={() => setImgIdx(i)}>
                       <img src={img.url} alt={`${car.name} ${i + 1}`} loading="lazy" />
                     </button>
                   ))}
@@ -296,18 +337,11 @@ export default function CarDetailsPage() {
                 <div><span className="car-details-meta-label">Год</span><strong>{car.year || '-'}</strong></div>
                 <div><span className="car-details-meta-label">Пробег</span><strong>{car.mileage.toLocaleString()} км</strong></div>
                 <div><span className="car-details-meta-label">Местоположение</span><strong>{car.location || '-'}</strong></div>
-                <div><span className="car-details-meta-label">VIN</span><strong>{car.vin || '-'}</strong></div>
+                <div><span className="car-details-meta-label">VIN / Номер</span><strong>{(car.vin && car.vin !== '-') ? car.vin : (car.vehicleNo || '-')}</strong></div>
               </div>
 
               <div className="car-details-actions">
-                <a
-                  href={`https://wa.me/996705188088?text=Хочу заказать: ${car.name} (${car.year}), VIN: ${car.vin || '-'}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-car-green"
-                >
-                  Заказать
-                </a>
+                <a href={`https://wa.me/996705188088?text=Хочу заказать: ${car.name} (${car.year}), VIN: ${car.vin || '-'}`} target="_blank" rel="noreferrer" className="btn-car-green">Заказать</a>
                 <a href={car.encarUrl || '#'} target="_blank" rel="noreferrer" className="btn-car-outline">На Encar</a>
               </div>
             </div>
@@ -339,27 +373,15 @@ export default function CarDetailsPage() {
               <div className="car-details-customs-grid">
                 <label>
                   <span>Год выпуска</span>
-                  <input
-                    type="number"
-                    value={calc.year}
-                    onChange={(e) => setCalc((p) => ({ ...p, year: Number(e.target.value) || p.year }))}
-                  />
+                  <input type="number" value={calc.year} onChange={(e) => setCalc((p) => ({ ...p, year: Number(e.target.value) || p.year }))} />
                 </label>
                 <label>
                   <span>Объем двигателя (л)</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={calc.engine}
-                    onChange={(e) => setCalc((p) => ({ ...p, engine: Number(e.target.value) || p.engine }))}
-                  />
+                  <input type="number" step="0.1" value={calc.engine} onChange={(e) => setCalc((p) => ({ ...p, engine: Number(e.target.value) || p.engine }))} />
                 </label>
                 <label>
                   <span>Тип топлива</span>
-                  <select
-                    value={calc.fuel}
-                    onChange={(e) => setCalc((p) => ({ ...p, fuel: e.target.value }))}
-                  >
+                  <select value={calc.fuel} onChange={(e) => setCalc((p) => ({ ...p, fuel: e.target.value }))}>
                     <option value="gasoline">Бензин</option>
                     <option value="diesel">Дизель</option>
                     <option value="lpg">Газ</option>
@@ -367,10 +389,7 @@ export default function CarDetailsPage() {
                   </select>
                 </label>
               </div>
-              <div className="car-details-customs-result">
-                <span>Пошлина по сетке (оценка)</span>
-                <strong>${customsDuty.toLocaleString()}</strong>
-              </div>
+              <div className="car-details-customs-result"><span>Пошлина по сетке (оценка)</span><strong>${customsDuty.toLocaleString()}</strong></div>
               <div className="car-details-customs-meta">
                 <span>Год: {calc.year}</span>
                 <span>Объем: {Number(calc.engine).toFixed(1)} л</span>
@@ -383,12 +402,14 @@ export default function CarDetailsPage() {
               <h3 className="car-details-card-title">Основные характеристики</h3>
               <div className="car-details-specs-grid">
                 <div><span>Топливо</span><strong>{car.fuelType || fuelLabel(calc.fuel)}</strong></div>
-                <div><span>Трансмиссия</span><strong>{car.tags.find((t) => /Автомат|Механика|Робот|CVT/i.test(t)) || '-'}</strong></div>
+                <div><span>Трансмиссия</span><strong>{car.transmission || '-'}</strong></div>
                 <div><span>Цвет кузова</span><strong>{car.bodyColor || '-'}</strong></div>
                 <div><span>Цвет салона</span><strong>{car.interiorColor || '-'}</strong></div>
                 <div><span>Пробег</span><strong>{car.mileage.toLocaleString()} км</strong></div>
                 <div><span>Местоположение</span><strong>{car.location || '-'}</strong></div>
-                <div><span>ID объявления</span><strong>{car.id}</strong></div>
+                <div><span>Тип кузова</span><strong>{car.bodyType || '-'}</strong></div>
+                <div><span>Мест</span><strong>{car.seatCount || '-'}</strong></div>
+                <div><span>Объем двигателя</span><strong>{car.displacement ? `${car.displacement} cc` : '-'}</strong></div>
                 <div><span>Encar ID</span><strong>{car.encarId || '-'}</strong></div>
                 <div><span>Дата добавления</span><strong>{formatDate(car.createdAt)}</strong></div>
                 <div><span>Последнее изменение</span><strong>{formatDate(car.updatedAt)}</strong></div>
@@ -400,7 +421,8 @@ export default function CarDetailsPage() {
         <section className="car-details-card car-details-bottom-card">
           <h3 className="car-details-card-title">Инспекция и диагностика автомобиля</h3>
           <p className="car-details-muted">
-            Полный отчет доступен на Encar. Если нужен перевод и разбор отчета, менеджер подготовит его для вас.
+            Диагностика Encar: {car.detailFlags?.diagnosis ? 'доступна' : 'данные ограничены'}.
+            Просмотры: {Number(car.detailManage?.viewCount || 0).toLocaleString()} • Подписки: {Number(car.detailManage?.subscribeCount || 0).toLocaleString()}.
           </p>
           <div className="car-details-actions">
             <a href={car.encarUrl || '#'} target="_blank" rel="noreferrer" className="btn-car-primary">Открыть в Encar</a>
@@ -411,12 +433,12 @@ export default function CarDetailsPage() {
         <section className="car-details-card car-details-bottom-card">
           <h3 className="car-details-card-title">История регистрации</h3>
           <div className="car-details-history-grid">
-            <div><span>Назначение</span><strong>Общий</strong></div>
             <div><span>Год</span><strong>{car.year || '-'}</strong></div>
-            <div><span>Номер авто</span><strong>{car.vin && car.vin !== '-' ? car.vin : '—'}</strong></div>
-            <div><span>Тип автомобиля</span><strong>Легковой</strong></div>
-            <div><span>Дата добавления</span><strong>{formatDate(car.createdAt)}</strong></div>
-            <div><span>Последнее изменение</span><strong>{formatDate(car.updatedAt)}</strong></div>
+            <div><span>Номер авто</span><strong>{car.vehicleNo || '—'}</strong></div>
+            <div><span>VIN</span><strong>{car.vin || '—'}</strong></div>
+            <div><span>Ограничения</span><strong>{Number(car.detailCondition?.seizingCount || 0)}</strong></div>
+            <div><span>Залог</span><strong>{Number(car.detailCondition?.pledgeCount || 0)}</strong></div>
+            <div><span>Аварийная история</span><strong>{car.detailCondition?.accidentRecordView ? 'Есть запись' : 'Нет данных'}</strong></div>
           </div>
         </section>
       </div>

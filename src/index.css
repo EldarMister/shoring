@@ -1991,6 +1991,15 @@ body {
   transition: box-shadow 0.2s;
 }
 
+.car-card-clickable {
+  cursor: pointer;
+}
+
+.car-card-clickable:focus-visible {
+  outline: 2px solid #1a3c5e;
+  outline-offset: 2px;
+}
+
 .car-card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
