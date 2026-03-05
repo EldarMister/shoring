@@ -30,6 +30,7 @@ export async function downloadImage(url, carId) {
     const resp = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 20000,
+      proxy: false,
       maxContentLength: 25 * 1024 * 1024, // 25 MB max per image
       headers: {
         'User-Agent':  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

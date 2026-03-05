@@ -100,6 +100,8 @@ export async function runScrapeJob(limit = 100) {
 
   state.info(`🚀 Запуск парсера — лимит ${limit} машин`)
 
+  const sourceMode = process.env.ENCAR_PROXY_URL ? 'Vercel proxy' : 'direct Encar API'
+  state.info(`Source mode: ${sourceMode}`)
   let offset    = 0
   let processed = 0
   let addedThisRun = 0

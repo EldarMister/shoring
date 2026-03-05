@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
+export function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)) }
 
 export function jitter(min = 1500, max = 3500) {
   return sleep(min + Math.random() * (max - min))
@@ -17,9 +17,13 @@ const USER_AGENTS = [
 let uaIdx = 0
 function nextUA() { return USER_AGENTS[uaIdx++ % USER_AGENTS.length] }
 
+const ENCAR_PROXY_URL = (process.env.ENCAR_PROXY_URL || '').trim().replace(/\/$/, '')
+const ENCAR_DEFAULT_QUERY = '(And.Hidden.N._.CarType.Y.)'
+
 const apiClient = axios.create({
   baseURL: 'https://api.encar.com',
   timeout: 25000,
+  proxy: false,
   headers: {
     Accept: 'application/json, text/plain, */*',
     'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -28,27 +32,68 @@ const apiClient = axios.create({
   },
 })
 
+function asListResult(data) {
+  return {
+    total: Number(data?.Count) || 0,
+    cars: Array.isArray(data?.SearchResults) ? data.SearchResults : [],
+  }
+}
+
+async function fetchListViaProxy(offset, pageLimit) {
+  const resp = await axios.get(ENCAR_PROXY_URL, {
+    timeout: 25000,
+    proxy: false,
+    params: {
+      endpoint: 'list',
+      offset,
+      limit: pageLimit,
+    },
+    headers: {
+      'User-Agent': nextUA(),
+      Accept: 'application/json, text/plain, */*',
+    },
+  })
+
+  return asListResult(resp.data)
+}
+
+async function fetchListDirect(offset, pageLimit) {
+  const resp = await apiClient.get('/search/car/list/premium', {
+    params: {
+      count: true,
+      q: ENCAR_DEFAULT_QUERY,
+      sr: `|ModifiedDate|${offset}|${pageLimit}`,
+    },
+    headers: { 'User-Agent': nextUA() },
+  })
+  return asListResult(resp.data)
+}
+
+function withProxyHint(err) {
+  const status = err?.response?.status
+  if (status === 407) {
+    err.message = `Proxy auth required (407). Set ENCAR_PROXY_URL=https://<your-vercel-domain>/api/proxy. ${err.message}`
+  }
+  return err
+}
+
 /**
- * Fetch paginated car list from Encar public API
+ * Fetch paginated car list from Encar API (via Vercel proxy if ENCAR_PROXY_URL is set)
  * @param {number} offset
- * @param {number} limit  max 20 per page
+ * @param {number} limit max 20 per page
+ * @param {number} retries
  * @returns {{ total: number, cars: object[] }}
  */
 export async function fetchCarList(offset = 0, limit = 20, retries = 3) {
   const pageLimit = Math.min(limit, 20)
-  // Передаём raw query string — URLSearchParams кодирует скобки → 400
-  const qs = `count=true&q=(And.Hidden.N._.SellType.일반.)&sr=|M.UpdateDate|${offset}|${pageLimit}`
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const resp = await apiClient.get(`/search/car/list/mobile?${qs}`, {
-        headers: { 'User-Agent': nextUA() },
-      })
-      return {
-        total: resp.data.Count || 0,
-        cars:  resp.data.SearchResults || [],
-      }
+      return ENCAR_PROXY_URL
+        ? await fetchListViaProxy(offset, pageLimit)
+        : await fetchListDirect(offset, pageLimit)
     } catch (err) {
+      withProxyHint(err)
       if (attempt === retries) throw err
       await sleep(3000 * attempt)
     }
@@ -64,8 +109,8 @@ export function buildPhotoUrls(carId, maxPhotos = 12) {
   if (id.length < 6) return []
 
   const prefix = id.substring(0, 2)
-  const mid    = id.substring(2, 5)
-  const urls   = []
+  const mid = id.substring(2, 5)
+  const urls = []
 
   for (let i = 1; i <= maxPhotos; i++) {
     const num = String(i).padStart(3, '0')
@@ -79,7 +124,7 @@ export function buildPhotoUrls(carId, maxPhotos = 12) {
  * Returns only valid ones (up to maxPhotos)
  */
 export async function probePhotoUrls(carId, maxPhotos = 8) {
-  const urls  = buildPhotoUrls(carId, maxPhotos + 4)
+  const urls = buildPhotoUrls(carId, maxPhotos + 4)
   const valid = []
 
   for (const url of urls) {
@@ -87,17 +132,18 @@ export async function probePhotoUrls(carId, maxPhotos = 8) {
     try {
       const resp = await axios.head(url, {
         timeout: 6000,
+        proxy: false,
         headers: {
           'User-Agent': nextUA(),
           Referer: 'https://www.encar.com/',
         },
-        validateStatus: (s) => s < 500,
+        validateStatus: (status) => status < 500,
       })
       if (resp.status === 200) {
         valid.push(url)
-      } else {
-        // After first 404 following a successful photo, stop probing
-        if (valid.length > 0) break
+      } else if (valid.length > 0) {
+        // Stop probing after first miss once at least one real image was found.
+        break
       }
     } catch {
       if (valid.length > 0) break

@@ -16,6 +16,7 @@ router.get('/:encarId', async (req, res) => {
         'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
       },
       timeout: 15000,
+      proxy: false,
     })
 
     const $ = cheerio.load(html)
