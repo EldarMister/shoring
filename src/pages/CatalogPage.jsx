@@ -3,6 +3,91 @@ import { Link } from 'react-router-dom'
 import FilterSidebar from '../components/catalog/FilterSidebar'
 import CarCard from '../components/catalog/CarCard'
 
+const HANGUL_RE = /[\uAC00-\uD7A3]/u
+const encarDetailCache = new Map()
+const encarDetailInFlight = new Map()
+
+function hasHangul(value) {
+  return HANGUL_RE.test(String(value || ''))
+}
+
+function shouldReplaceText(value) {
+  const text = String(value || '').trim()
+  return !text || text === '-' || hasHangul(text)
+}
+
+function toAbsoluteImageUrl(raw) {
+  if (!raw) return ''
+  const url = String(raw).trim()
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  if (url.startsWith('/carpicture') || url.startsWith('carpicture')) {
+    return `https://ci.encar.com${url.startsWith('/') ? '' : '/'}${url}`
+  }
+  return url
+}
+
+function normalizeImages(rawImages) {
+  if (!Array.isArray(rawImages)) return []
+  return rawImages
+    .map((img, idx) => {
+      if (!img) return null
+      if (typeof img === 'string') return { id: `img-${idx}`, url: toAbsoluteImageUrl(img) }
+      return {
+        id: img.id ?? `img-${idx}`,
+        url: toAbsoluteImageUrl(img.url || img.path || img.location || ''),
+      }
+    })
+    .filter((img) => img?.url)
+}
+
+function hasWeakImages(car) {
+  const images = Array.isArray(car.images) ? car.images : []
+  if (!images.length) return true
+  return images.every((img) => String(img?.url || '').startsWith('/uploads/'))
+}
+
+function needsEncarEnrichment(car) {
+  if (!car?.encarId || car.encarId === '-') return false
+  return (
+    hasWeakImages(car) ||
+    shouldReplaceText(car.bodyColor) ||
+    shouldReplaceText(car.interiorColor) ||
+    shouldReplaceText(car.location)
+  )
+}
+
+async function fetchEncarDetail(encarId) {
+  const key = String(encarId || '').trim()
+  if (!key || key === '-') return null
+  if (encarDetailCache.has(key)) return encarDetailCache.get(key)
+  if (encarDetailInFlight.has(key)) return encarDetailInFlight.get(key)
+
+  const promise = (async () => {
+    try {
+      const res = await fetch(`/api/encar/${encodeURIComponent(key)}`)
+      if (!res.ok) return null
+      const detail = await res.json()
+      const detailImages = normalizeImages(detail?.photos?.length ? detail.photos : detail?.images)
+      const normalized = {
+        images: detailImages,
+        bodyColor: detail?.body_color || '',
+        interiorColor: detail?.interior_color || '',
+        location: detail?.location || '',
+      }
+      encarDetailCache.set(key, normalized)
+      return normalized
+    } catch {
+      return null
+    } finally {
+      encarDetailInFlight.delete(key)
+    }
+  })()
+
+  encarDetailInFlight.set(key, promise)
+  return promise
+}
+
 const HomeIcon = () => (
   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -76,9 +161,10 @@ function mapCar(c) {
     vatRefund,
     total,
     encarUrl: c.encar_url,
+    encarId: c.encar_id || '-',
     canNegotiate: c.can_negotiate,
-    imageCount: (c.images || []).length || 1,
-    images: c.images || [],
+    imageCount: normalizeImages(c.images).length || 1,
+    images: normalizeImages(c.images),
   }
 }
 
@@ -105,8 +191,36 @@ export default function CatalogPage() {
       const res = await fetch(`/api/cars?${params}`)
       if (!res.ok) throw new Error('Ошибка загрузки')
       const data = await res.json()
-      setCars(data.cars.map(mapCar))
+      const mappedCars = data.cars.map(mapCar)
+      setCars(mappedCars)
       setMeta({ total: data.total, page: data.page, pages: data.pages })
+
+      const missingDataCars = mappedCars.filter(needsEncarEnrichment)
+      if (missingDataCars.length) {
+        const enrichedCars = await Promise.all(
+          mappedCars.map(async (car) => {
+            if (!needsEncarEnrichment(car)) return car
+
+            const detail = await fetchEncarDetail(car.encarId)
+            if (!detail) return car
+
+            const next = { ...car }
+            if (hasWeakImages(car) && detail.images.length) next.images = detail.images
+            if (shouldReplaceText(car.bodyColor) && detail.bodyColor) next.bodyColor = detail.bodyColor
+            if (shouldReplaceText(car.interiorColor) && detail.interiorColor) next.interiorColor = detail.interiorColor
+            if (shouldReplaceText(car.location) && detail.location) next.location = detail.location
+            next.imageCount = next.images.length || 1
+            return next
+          })
+        )
+
+        setCars((prev) => {
+          const prevIds = prev.map((c) => c.id).join(',')
+          const enrichedIds = enrichedCars.map((c) => c.id).join(',')
+          if (prevIds !== enrichedIds) return prev
+          return enrichedCars
+        })
+      }
     } catch (e) {
       setError(e.message)
     } finally {

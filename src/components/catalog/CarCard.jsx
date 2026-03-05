@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 const PrevIcon = () => (
@@ -52,17 +52,33 @@ const TAG_STYLES = [
 export default function CarCard({ car }) {
   const navigate = useNavigate()
   const [imgIdx, setImgIdx] = useState(0)
-  const [imgFailed, setImgFailed] = useState(false)
+  const [failedUrls, setFailedUrls] = useState([])
 
-  const images = useMemo(() => (Array.isArray(car.images) ? car.images : []), [car.images])
+  const images = useMemo(() => {
+    const base = Array.isArray(car.images) ? car.images : []
+    if (!failedUrls.length) return base
+    return base.filter((img) => img?.url && !failedUrls.includes(img.url))
+  }, [car.images, failedUrls])
   const imageCount = images.length || 1
   const boundedIdx = Math.min(imgIdx, imageCount - 1)
   const imageSrc = images[boundedIdx]?.url || ''
-  const hasImage = Boolean(imageSrc) && !imgFailed
+  const hasImage = Boolean(imageSrc)
+
+  useEffect(() => {
+    setImgIdx(0)
+    setFailedUrls([])
+  }, [car.id, car.images])
 
   const prev = () => setImgIdx((i) => Math.max(0, i - 1))
   const next = () => setImgIdx((i) => Math.min(imageCount - 1, i + 1))
-  const onImgError = () => setImgFailed(true)
+  const onImgError = () => {
+    if (!imageSrc) return
+    setFailedUrls((prevFailed) => {
+      if (prevFailed.includes(imageSrc)) return prevFailed
+      return [...prevFailed, imageSrc]
+    })
+    setImgIdx(0)
+  }
   const openDetails = () => navigate(`/catalog/${car.id}`)
 
   const onCardClick = (e) => {
