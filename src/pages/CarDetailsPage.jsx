@@ -368,6 +368,24 @@ export default function CarDetailsPage() {
               {car.canNegotiate && <div className="car-details-negotiate">Возможен торг</div>}
             </div>
 
+            <div className="car-details-card">
+              <h3 className="car-details-card-title">Основные характеристики</h3>
+              <div className="car-details-specs-grid">
+                <div><span>Топливо</span><strong>{car.fuelType || fuelLabel(calc.fuel)}</strong></div>
+                <div><span>Трансмиссия</span><strong>{car.transmission || '-'}</strong></div>
+                <div><span>Цвет кузова</span><strong>{car.bodyColor || '-'}</strong></div>
+                <div><span>Цвет салона</span><strong>{car.interiorColor || '-'}</strong></div>
+                <div><span>Пробег</span><strong>{car.mileage.toLocaleString()} км</strong></div>
+                <div><span>Местоположение</span><strong>{car.location || '-'}</strong></div>
+                <div><span>Тип кузова</span><strong>{car.bodyType || '-'}</strong></div>
+                <div><span>Мест</span><strong>{car.seatCount || '-'}</strong></div>
+                <div><span>Объем двигателя</span><strong>{car.displacement ? `${car.displacement} cc` : '-'}</strong></div>
+                <div><span>Encar ID</span><strong>{car.encarId || '-'}</strong></div>
+                <div><span>Дата добавления</span><strong>{formatDate(car.createdAt)}</strong></div>
+                <div><span>Последнее изменение</span><strong>{formatDate(car.updatedAt)}</strong></div>
+              </div>
+            </div>
+
             <div className="car-details-card car-details-customs">
               <h3 className="car-details-card-title">Калькулятор растаможки (Кыргызстан)</h3>
               <div className="car-details-customs-grid">
@@ -396,24 +414,6 @@ export default function CarDetailsPage() {
                 <span>Топливо: {fuelLabel(calc.fuel)}</span>
               </div>
               <p className="car-details-customs-note">{customsNote}</p>
-            </div>
-
-            <div className="car-details-card">
-              <h3 className="car-details-card-title">Основные характеристики</h3>
-              <div className="car-details-specs-grid">
-                <div><span>Топливо</span><strong>{car.fuelType || fuelLabel(calc.fuel)}</strong></div>
-                <div><span>Трансмиссия</span><strong>{car.transmission || '-'}</strong></div>
-                <div><span>Цвет кузова</span><strong>{car.bodyColor || '-'}</strong></div>
-                <div><span>Цвет салона</span><strong>{car.interiorColor || '-'}</strong></div>
-                <div><span>Пробег</span><strong>{car.mileage.toLocaleString()} км</strong></div>
-                <div><span>Местоположение</span><strong>{car.location || '-'}</strong></div>
-                <div><span>Тип кузова</span><strong>{car.bodyType || '-'}</strong></div>
-                <div><span>Мест</span><strong>{car.seatCount || '-'}</strong></div>
-                <div><span>Объем двигателя</span><strong>{car.displacement ? `${car.displacement} cc` : '-'}</strong></div>
-                <div><span>Encar ID</span><strong>{car.encarId || '-'}</strong></div>
-                <div><span>Дата добавления</span><strong>{formatDate(car.createdAt)}</strong></div>
-                <div><span>Последнее изменение</span><strong>{formatDate(car.updatedAt)}</strong></div>
-              </div>
             </div>
           </aside>
         </div>
