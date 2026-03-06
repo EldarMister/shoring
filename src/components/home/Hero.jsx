@@ -87,10 +87,9 @@ const stats = [
   {
     value: '🔥',
     label: 'Срочная продажа',
-    valueClass: 'stat-val-hot',
     href: '#whatsapp-sale',
-    extra: <div className="stat-note stat-note-hot">объявления из WhatsApp</div>,
-    cardClass: 'stat-card-clickable stat-card-hot',
+    extra: <div className="stat-note">объявления из WhatsApp</div>,
+    cardClass: 'stat-card-clickable',
   },
 ]
 
