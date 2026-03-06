@@ -86,8 +86,12 @@ const advantages = [
     title: 'Фиксированная комиссия $200',
     desc: (
       <>
-        Комиссия $200. Если сами посмотрите и привезете автомобиль на нашу стоянку, комиссия{' '}
-        <span className="adv-highlight-danger">0%</span>.
+        Комиссия — $200. Без скрытых платежей.
+        <br />
+        <span className="adv-break-line">
+          Самостоятельная проверка и доставка автомобиля на нашу стоянку комиссия —{' '}
+          <span className="adv-highlight-danger">0$</span>
+        </span>
       </>
     ),
   },

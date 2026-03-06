@@ -1271,6 +1271,11 @@ body {
   margin: 0;
 }
 
+.adv-break-line {
+  display: inline-block;
+  margin-top: 8px;
+}
+
 .adv-highlight-danger {
   color: #dc2626;
   font-weight: 800;
