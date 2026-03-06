@@ -306,6 +306,7 @@ function carMatchesSearch(car, query) {
   const haystack = [
     car.name,
     car.model,
+    car.year,
     car.vin,
     car.encarId,
     car.bodyType,
@@ -315,6 +316,8 @@ function carMatchesSearch(car, query) {
     car.bodyColor,
     car.interiorColor,
     car.location,
+    car.engineVolume,
+    car.displacement,
     ...(Array.isArray(car.tags) ? car.tags : []),
   ]
     .map((value) => normalizeSearchText(value))
@@ -555,7 +558,7 @@ export default function CatalogPage() {
   const searchQuery = new URLSearchParams(location.search).get('q')?.trim() || ''
 
   const fetchCarsFallback = useCallback(async () => {
-    const params = new URLSearchParams({ sort, page: 1, limit: 200, ...filters })
+    const params = new URLSearchParams({ sort, page: 1, limit: 1000, ...filters })
     const res = await fetch(`/api/cars?${params}`)
     if (!res.ok) throw new Error('Search fallback failed')
     const data = await res.json()

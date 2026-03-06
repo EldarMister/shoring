@@ -60,6 +60,20 @@ function rawPattern(value) {
   return [`%${term}%`]
 }
 
+function parseListFilter(value) {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => String(item || '').split(','))
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 function brandPatterns(value) {
   const low = String(value || '').toLowerCase().trim()
   if (!low) return []
@@ -206,9 +220,21 @@ function searchPatterns(value) {
 
   const variants = new Set([raw, normalized, normalized.replace(/\s+/g, '')])
   const tokens = tokenizeSearchValue(value)
+  const rawLiters = [...raw.matchAll(/\b(\d(?:\.\d)?)\b/g)]
+
+  for (const match of rawLiters) {
+    const liters = Number(match[1])
+    if (liters >= 0.8 && liters <= 8.0) {
+      variants.add(match[1])
+      variants.add(String(Math.round(liters * 1000)))
+    }
+  }
 
   for (const token of tokens) {
     variants.add(token)
+    if (/^\d(?:\.\d)?$/.test(token)) {
+      variants.add(String(Math.round(Number(token) * 1000)))
+    }
     for (const [, aliases] of SEARCH_ALIASES) {
       if (aliases.some((alias) => normalizeSearchValue(alias).includes(token) || token.includes(normalizeSearchValue(alias)))) {
         aliases.forEach((alias) => variants.add(alias))
@@ -238,6 +264,13 @@ router.get('/', async (req, res) => {
     let p = 1
 
     const qText = String(q || '').trim()
+    const brandValues = parseListFilter(brand)
+    const fuelValues = parseListFilter(fuel)
+    const driveValues = parseListFilter(drive)
+    const bodyValues = parseListFilter(body)
+    const colorValues = parseListFilter(color)
+    const interiorColorValues = parseListFilter(interiorColor)
+    const yearSql = `COALESCE(NULLIF(SUBSTRING(c.year FROM 1 FOR 4), ''), '0')::int`
 
     if (qText) {
       const patterns = uniqPatterns(searchPatterns(qText))
@@ -251,6 +284,12 @@ router.get('/', async (req, res) => {
         OR COALESCE(c.body_type, '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.drive_type, '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.fuel_type, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.transmission, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.body_color, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.interior_color, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.location, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.year, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.displacement::text, '') ILIKE ANY($${p}::text[])
         OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
       )`)
       params.push(patterns)
@@ -265,6 +304,12 @@ router.get('/', async (req, res) => {
           OR COALESCE(c.body_type, '') ILIKE $${p}
           OR COALESCE(c.drive_type, '') ILIKE $${p}
           OR COALESCE(c.fuel_type, '') ILIKE $${p}
+          OR COALESCE(c.transmission, '') ILIKE $${p}
+          OR COALESCE(c.body_color, '') ILIKE $${p}
+          OR COALESCE(c.interior_color, '') ILIKE $${p}
+          OR COALESCE(c.location, '') ILIKE $${p}
+          OR COALESCE(c.year, '') ILIKE $${p}
+          OR COALESCE(c.displacement::text, '') ILIKE $${p}
           OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE $${p})
         )`)
         params.push(`%${token}%`)
@@ -272,31 +317,31 @@ router.get('/', async (req, res) => {
       }
     }
 
-    if (brand) {
-      const patterns = uniqPatterns(brandPatterns(brand))
+    if (brandValues.length) {
+      const patterns = uniqPatterns(brandValues.flatMap(brandPatterns))
       conditions.push(`(c.name ILIKE ANY($${p}::text[]) OR c.model ILIKE ANY($${p}::text[]))`)
       params.push(patterns)
       p++
     }
     if (minPrice) { conditions.push(`c.price_usd >= $${p++}`); params.push(Number(minPrice)) }
     if (maxPrice) { conditions.push(`c.price_usd <= $${p++}`); params.push(Number(maxPrice)) }
-    if (minYear) { conditions.push(`c.year >= $${p++}`); params.push(String(minYear)) }
-    if (maxYear) { conditions.push(`c.year <= $${p++}`); params.push(String(maxYear)) }
+    if (minYear) { conditions.push(`${yearSql} >= $${p++}`); params.push(Number(minYear)) }
+    if (maxYear) { conditions.push(`${yearSql} <= $${p++}`); params.push(Number(maxYear)) }
     if (minMileage) { conditions.push(`c.mileage >= $${p++}`); params.push(Number(minMileage)) }
     if (maxMileage) { conditions.push(`c.mileage <= $${p++}`); params.push(Number(maxMileage)) }
 
-    if (fuel) {
-      const patterns = uniqPatterns(fuelPatterns(fuel))
+    if (fuelValues.length) {
+      const patterns = uniqPatterns(fuelValues.flatMap(fuelPatterns))
       conditions.push(`(
-        c.fuel_type ILIKE ANY($${p}::text[])
+        COALESCE(c.fuel_type, '') ILIKE ANY($${p}::text[])
         OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
       )`)
       params.push(patterns)
       p++
     }
 
-    if (drive) {
-      const patterns = uniqPatterns(drivePatterns(drive))
+    if (driveValues.length) {
+      const patterns = uniqPatterns(driveValues.flatMap(drivePatterns))
       conditions.push(`(
         COALESCE(c.drive_type, '') ILIKE ANY($${p}::text[])
         OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
@@ -305,27 +350,28 @@ router.get('/', async (req, res) => {
       p++
     }
 
-    if (body) {
-      const patterns = uniqPatterns(bodyPatterns(body))
+    if (bodyValues.length) {
+      const patterns = uniqPatterns(bodyValues.flatMap(bodyPatterns))
       conditions.push(`(
-        EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
-        OR c.model ILIKE ANY($${p}::text[])
-        OR c.name ILIKE ANY($${p}::text[])
+        COALESCE(c.body_type, '') ILIKE ANY($${p}::text[])
+        OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
+        OR COALESCE(c.model, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.name, '') ILIKE ANY($${p}::text[])
       )`)
       params.push(patterns)
       p++
     }
 
-    if (color) {
-      const patterns = uniqPatterns(colorPatterns(color))
-      conditions.push(`c.body_color ILIKE ANY($${p}::text[])`)
+    if (colorValues.length) {
+      const patterns = uniqPatterns(colorValues.flatMap(colorPatterns))
+      conditions.push(`COALESCE(c.body_color, '') ILIKE ANY($${p}::text[])`)
       params.push(patterns)
       p++
     }
 
-    if (interiorColor) {
-      const patterns = uniqPatterns(colorPatterns(interiorColor))
-      conditions.push(`c.interior_color ILIKE ANY($${p}::text[])`)
+    if (interiorColorValues.length) {
+      const patterns = uniqPatterns(interiorColorValues.flatMap(colorPatterns))
+      conditions.push(`COALESCE(c.interior_color, '') ILIKE ANY($${p}::text[])`)
       params.push(patterns)
       p++
     }

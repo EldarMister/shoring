@@ -90,6 +90,56 @@ const FALLBACK = {
   ],
 }
 
+const EMPTY_LOCAL_FILTERS = {
+  minPrice: '', maxPrice: '',
+  minYear: '', maxYear: '',
+  minMileage: '', maxMileage: '',
+  brands: [], drive: [], fuel: [], body: [], bodyColor: [], interiorColor: [],
+}
+
+function normalizeArrayFilterValue(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+function buildLocalFilters(filters) {
+  const src = filters || {}
+  return {
+    ...EMPTY_LOCAL_FILTERS,
+    minPrice: String(src.minPrice ?? ''),
+    maxPrice: String(src.maxPrice ?? ''),
+    minYear: String(src.minYear ?? ''),
+    maxYear: String(src.maxYear ?? ''),
+    minMileage: String(src.minMileage ?? ''),
+    maxMileage: String(src.maxMileage ?? ''),
+    brands: normalizeArrayFilterValue(src.brands ?? src.brand),
+    drive: normalizeArrayFilterValue(src.drive),
+    fuel: normalizeArrayFilterValue(src.fuel),
+    body: normalizeArrayFilterValue(src.body),
+    bodyColor: normalizeArrayFilterValue(src.bodyColor ?? src.color),
+    interiorColor: normalizeArrayFilterValue(src.interiorColor),
+  }
+}
+
+function normalizeRangePair(minValue, maxValue) {
+  const min = String(minValue || '').trim()
+  const max = String(maxValue || '').trim()
+  if (!min || !max) return [min, max]
+  return Number(min) <= Number(max) ? [min, max] : [max, min]
+}
+
 /* Цветовая карта для цветов кузова/салона (для отображения кружочков) */
 const COLOR_MAP = {
   'черный': { color: '#1a1a1a' },
@@ -178,6 +228,7 @@ const SHOW_MORE_THRESHOLD = 5
 
 function CheckboxList({ items, selected, onToggle }) {
   const [expanded, setExpanded] = useState(false)
+  const selectedValues = normalizeArrayFilterValue(selected)
   const visible = expanded ? items : items.slice(0, SHOW_MORE_THRESHOLD)
   const hidden = items.length - SHOW_MORE_THRESHOLD
 
@@ -187,7 +238,7 @@ function CheckboxList({ items, selected, onToggle }) {
         <label className="filter-brand-item" key={name + count}>
           <input
             type="checkbox"
-            checked={selected.includes(name)}
+            checked={selectedValues.includes(name)}
             onChange={() => onToggle(name)}
             className="filter-checkbox"
           />
@@ -196,7 +247,7 @@ function CheckboxList({ items, selected, onToggle }) {
         </label>
       ))}
       {items.length > SHOW_MORE_THRESHOLD && (
-        <button className="filter-show-more-btn" onClick={() => setExpanded(e => !e)}>
+        <button type="button" className="filter-show-more-btn" onClick={() => setExpanded(e => !e)}>
           {expanded
             ? <><ChevronUpSmall /> Скрыть</>
             : <><ChevronDownSmall /> Ещё {hidden}</>
@@ -210,6 +261,7 @@ function CheckboxList({ items, selected, onToggle }) {
 /* ── Color grid ── */
 function ColorGrid({ colors, selected, onToggle, showMoreLabel }) {
   const [expanded, setExpanded] = useState(false)
+  const selectedValues = normalizeArrayFilterValue(selected)
   const visible = expanded ? colors : colors.slice(0, 12)
 
   return (
@@ -222,11 +274,11 @@ function ColorGrid({ colors, selected, onToggle, showMoreLabel }) {
           return (
             <label
               key={name + count}
-              className={`filter-color-item${selected.includes(name) ? ' selected' : ''}`}
+              className={`filter-color-item${selectedValues.includes(name) ? ' selected' : ''}`}
             >
               <input
                 type="checkbox"
-                checked={selected.includes(name)}
+                checked={selectedValues.includes(name)}
                 onChange={() => onToggle(name)}
                 style={{ display: 'none' }}
               />
@@ -235,7 +287,7 @@ function ColorGrid({ colors, selected, onToggle, showMoreLabel }) {
                 style={{
                   background: bgColor,
                   border: `2px solid ${borderColor}`,
-                  outline: selected.includes(name) ? '2px solid #1a3c5e' : 'none',
+                  outline: selectedValues.includes(name) ? '2px solid #1a3c5e' : 'none',
                   outlineOffset: '2px',
                 }}
               />
@@ -246,7 +298,7 @@ function ColorGrid({ colors, selected, onToggle, showMoreLabel }) {
         })}
       </div>
       {colors.length > 12 && (
-        <button className="filter-show-more-btn" onClick={() => setExpanded(e => !e)}>
+        <button type="button" className="filter-show-more-btn" onClick={() => setExpanded(e => !e)}>
           {expanded
             ? <><ChevronUpSmall /> Скрыть</>
             : <>+{colors.length - 12} {showMoreLabel || 'цветов'}</>
@@ -256,8 +308,6 @@ function ColorGrid({ colors, selected, onToggle, showMoreLabel }) {
     </>
   )
 }
-
-const YEARS = Array.from({ length: 2026 - 1990 + 1 }, (_, i) => 2026 - i)
 
 function buildLiveColorOptions(cars, field) {
   const acc = new Map()
@@ -288,16 +338,20 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
   const [loadingOpts, setLoadingOpts] = useState(true)
 
   // Local filter state
-  const [local, setLocal] = useState({
-    minPrice: '', maxPrice: '',
-    minYear: '2019', maxYear: '2026',
-    minMileage: '', maxMileage: '',
-    brands: [], drive: [], fuel: [], body: [], bodyColor: [], interiorColor: [],
-    ...(filters || {}),
-  })
+  const [local, setLocal] = useState(() => buildLocalFilters(filters))
 
   const liveBodyColors = useMemo(() => buildLiveColorOptions(catalogCars, 'bodyColor'), [catalogCars])
   const liveInteriorColors = useMemo(() => buildLiveColorOptions(catalogCars, 'interiorColor'), [catalogCars])
+  const years = useMemo(() => {
+    const min = Number(options?.yearRange?.min_year) || 1990
+    const max = Number(options?.yearRange?.max_year) || new Date().getFullYear()
+    const length = Math.max(0, max - min + 1)
+    return Array.from({ length }, (_, i) => max - i)
+  }, [options?.yearRange])
+
+  useEffect(() => {
+    setLocal(buildLocalFilters(filters))
+  }, [filters])
 
   // Fetch filter options from backend
   useEffect(() => {
@@ -327,37 +381,36 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
   const toggleItem = (group, name) => {
     setLocal(s => ({
       ...s,
-      [group]: s[group].includes(name)
-        ? s[group].filter(x => x !== name)
-        : [...s[group], name],
+      [group]: normalizeArrayFilterValue(s[group]).includes(name)
+        ? normalizeArrayFilterValue(s[group]).filter(x => x !== name)
+        : [...normalizeArrayFilterValue(s[group]), name],
     }))
   }
 
   const applyFilters = () => {
     const out = {}
-    if (local.minPrice) out.minPrice = local.minPrice
-    if (local.maxPrice) out.maxPrice = local.maxPrice
-    if (local.minYear) out.minYear = local.minYear
-    if (local.maxYear) out.maxYear = local.maxYear
-    if (local.minMileage) out.minMileage = local.minMileage
-    if (local.maxMileage) out.maxMileage = local.maxMileage
-    if (local.brands.length) out.brand = local.brands[0]
-    if (local.fuel.length) out.fuel = local.fuel[0]
-    if (local.drive.length) out.drive = local.drive[0]
-    if (local.body.length) out.body = local.body[0]
-    if (local.bodyColor.length) out.color = local.bodyColor[0]
-    if (local.interiorColor.length) out.interiorColor = local.interiorColor[0]
+    const [minPrice, maxPrice] = normalizeRangePair(local.minPrice, local.maxPrice)
+    const [minYear, maxYear] = normalizeRangePair(local.minYear, local.maxYear)
+    const [minMileage, maxMileage] = normalizeRangePair(local.minMileage, local.maxMileage)
+
+    if (minPrice) out.minPrice = minPrice
+    if (maxPrice) out.maxPrice = maxPrice
+    if (minYear) out.minYear = minYear
+    if (maxYear) out.maxYear = maxYear
+    if (minMileage) out.minMileage = minMileage
+    if (maxMileage) out.maxMileage = maxMileage
+    if (local.brands.length) out.brand = local.brands.join(',')
+    if (local.fuel.length) out.fuel = local.fuel.join(',')
+    if (local.drive.length) out.drive = local.drive.join(',')
+    if (local.body.length) out.body = local.body.join(',')
+    if (local.bodyColor.length) out.color = local.bodyColor.join(',')
+    if (local.interiorColor.length) out.interiorColor = local.interiorColor.join(',')
     onFiltersChange(out)
     onClose?.()
   }
 
   const resetFilters = () => {
-    const empty = {
-      minPrice: '', maxPrice: '',
-      minYear: '2019', maxYear: '2026',
-      minMileage: '', maxMileage: '',
-      brands: [], drive: [], fuel: [], body: [], bodyColor: [], interiorColor: [],
-    }
+    const empty = { ...EMPTY_LOCAL_FILTERS }
     setLocal(empty)
     onFiltersChange({})
   }
@@ -371,7 +424,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
       <div className="filter-sidebar-hd">
         <span className="filter-sidebar-title">Фильтры</span>
         {onClose && (
-          <button className="filter-close-btn" onClick={onClose} aria-label="Закрыть">
+          <button type="button" className="filter-close-btn" onClick={onClose} aria-label="Закрыть">
             <CloseIcon />
           </button>
         )}
@@ -383,7 +436,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Цена */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('price')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('price')}>
           <span>Цена ($)</span>
           <ChevronIcon open={open.price} />
         </button>
@@ -415,7 +468,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Год */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('year')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('year')}>
           <span>Год</span>
           <ChevronIcon open={open.year} />
         </button>
@@ -425,13 +478,15 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
               <div className="filter-range-col">
                 <label className="filter-label">От</label>
                 <select className="filter-select" value={local.minYear} onChange={e => setL('minYear', e.target.value)}>
-                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                  <option value="">Любой</option>
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
               <div className="filter-range-col">
                 <label className="filter-label">До</label>
                 <select className="filter-select" value={local.maxYear} onChange={e => setL('maxYear', e.target.value)}>
-                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                  <option value="">Любой</option>
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
             </div>
@@ -441,7 +496,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Пробег */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('mileage')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('mileage')}>
           <span>Пробег (км)</span>
           <ChevronIcon open={open.mileage} />
         </button>
@@ -473,7 +528,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Марки */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('brands')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('brands')}>
           <span>Марки</span>
           <ChevronIcon open={open.brands} />
         </button>
@@ -502,7 +557,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Привод */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('drive')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('drive')}>
           <span>Привод</span>
           <ChevronIcon open={open.drive} />
         </button>
@@ -519,7 +574,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Топливо */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('characteristics')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('characteristics')}>
           <span>Характеристики</span>
           <ChevronIcon open={open.characteristics} />
         </button>
@@ -537,7 +592,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Кузов */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('body')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('body')}>
           <span>Кузов</span>
           <ChevronIcon open={open.body} />
         </button>
@@ -554,7 +609,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Цвет кузова */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('bodyColor')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('bodyColor')}>
           <span>Цвет кузова</span>
           <ChevronIcon open={open.bodyColor} />
         </button>
@@ -572,7 +627,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Цвет салона */}
       <div className="filter-section">
-        <button className="filter-section-hd" onClick={() => toggle('interiorColor')}>
+        <button type="button" className="filter-section-hd" onClick={() => toggle('interiorColor')}>
           <span>Цвет салона</span>
           <ChevronIcon open={open.interiorColor} />
         </button>
@@ -590,10 +645,10 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
 
       {/* Apply / Reset buttons */}
       <div className="filter-actions">
-        <button className="filter-reset-btn" onClick={resetFilters}>
+        <button type="button" className="filter-reset-btn" onClick={resetFilters}>
           Сбросить
         </button>
-        <button className="filter-apply-btn" onClick={applyFilters}>
+        <button type="button" className="filter-apply-btn" onClick={applyFilters}>
           Применить
         </button>
       </div>

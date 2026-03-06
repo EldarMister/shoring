@@ -301,6 +301,11 @@ router.get('/filter-options', async (_req, res) => {
       pool.query(`
         SELECT source.name, SUM(source.count)::int AS count
         FROM (
+          SELECT body_type AS name, COUNT(*)::int AS count
+          FROM cars
+          WHERE body_type IS NOT NULL AND body_type != ''
+          GROUP BY body_type
+          UNION ALL
           SELECT tag AS name, COUNT(*)::int AS count
           FROM cars c
           CROSS JOIN LATERAL UNNEST(COALESCE(c.tags, '{}'::text[])) AS tag
