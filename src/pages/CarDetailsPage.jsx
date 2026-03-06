@@ -110,6 +110,45 @@ function normalizeDisplayText(value) {
   return text.replace(/[\uAC00-\uD7A3]+/gu, ' ').replace(/\s+/g, ' ').trim()
 }
 
+const VEHICLE_NAME_FIXES = [
+  [/kgmobilriti\s*\(\s*ssangyong\s*\)/gi, 'KG Mobility (SsangYong)'],
+  [/kgmobilriti/gi, 'KG Mobility'],
+  [/ssangyong/gi, 'SsangYong'],
+  [/rekseuteon/gi, 'Rexton'],
+  [/seupocheu/gi, 'Sports'],
+  [/kaeseupeo/gi, 'Casper'],
+  [/geuraenjejo/gi, 'Grandeur'],
+  [/geuraenjeo/gi, 'Grandeur'],
+  [/mohabi/gi, 'Mohave'],
+  [/ssonata/gi, 'Sonata'],
+  [/\b([2-9])\s*sedae\b/gi, (_, n) => `${n}th Gen`],
+]
+
+const SUSPICIOUS_NAME_PATTERNS = [
+  /kgmobilriti/i,
+  /rekseuteon/i,
+  /seupocheu/i,
+  /kaeseupeo/i,
+  /geuraenjeo/i,
+  /mohabi/i,
+  /\b[2-9]\s*sedae\b/i,
+]
+
+function normalizeVehicleTitle(value) {
+  let text = normalizeDisplayText(value)
+  if (!text) return ''
+  for (const [pattern, replacement] of VEHICLE_NAME_FIXES) {
+    text = text.replace(pattern, replacement)
+  }
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+function shouldUpgradeVehicleTitle(value) {
+  const text = String(value || '').trim()
+  if (shouldReplaceText(text)) return true
+  return SUSPICIOUS_NAME_PATTERNS.some((pattern) => pattern.test(text))
+}
+
 function normalizeTagLabel(value) {
   const text = String(value || '').trim()
   if (!text) return ''
@@ -205,8 +244,8 @@ function mapCar(c) {
   const total = Number(c.total) || Math.round(priceUSD + commission + delivery + loading + unloading + storage - vatRefund)
   const images = normalizeImages(c.images)
   const tags = normalizeTags(Array.isArray(c.tags) ? c.tags : [])
-  const normalizedName = normalizeDisplayText(c.name || '')
-  const normalizedModel = normalizeDisplayText(c.model || '')
+  const normalizedName = normalizeVehicleTitle(c.name || '')
+  const normalizedModel = normalizeVehicleTitle(c.model || '')
   const normalizedLocation = normalizeDisplayText(c.location || 'Корея')
 
   return {
@@ -256,8 +295,8 @@ function mergeCarWithEncar(baseCar, detail) {
 
   return {
     ...baseCar,
-    name: shouldReplaceText(baseCar.name) ? (normalizeDisplayText(detail?.name || '') || baseCar.name) : baseCar.name,
-    model: shouldReplaceText(baseCar.model) ? (normalizeDisplayText(detail?.model || '') || baseCar.model) : baseCar.model,
+    name: shouldUpgradeVehicleTitle(baseCar.name) ? (normalizeVehicleTitle(detail?.name || '') || baseCar.name) : baseCar.name,
+    model: shouldUpgradeVehicleTitle(baseCar.model) ? (normalizeVehicleTitle(detail?.model || '') || baseCar.model) : baseCar.model,
     year,
     yearNum: parseYear(year),
     mileage: baseCar.mileage || Number(detail?.mileage || 0),

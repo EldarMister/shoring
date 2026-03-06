@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 const ChevronIcon = ({ open }) => (
   <svg
@@ -225,8 +225,25 @@ function ColorGrid({ colors, selected, onToggle, showMoreLabel }) {
 
 const YEARS = Array.from({ length: 2026 - 1990 + 1 }, (_, i) => 2026 - i)
 
+function buildLiveColorOptions(cars, field) {
+  const acc = new Map()
+  for (const car of cars || []) {
+    const name = String(car?.[field] || '').trim()
+    if (!name || name === '-') continue
+    acc.set(name, (acc.get(name) || 0) + 1)
+  }
+
+  return [...acc.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({
+      name,
+      count,
+      ...getColorStyle(name),
+    }))
+}
+
 /* ── Main component ── */
-export default function FilterSidebar({ filters, onFiltersChange, onClose }) {
+export default function FilterSidebar({ filters, onFiltersChange, onClose, catalogCars = [] }) {
   const [open, setOpen] = useState({
     price: true, year: true, mileage: true, brands: true,
     drive: true, characteristics: true, body: true,
@@ -507,7 +524,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose }) {
         {open.bodyColor && (
           <div className="filter-section-body">
             <ColorGrid
-              colors={options.bodyColors}
+              colors={liveBodyColors.length ? liveBodyColors : options.bodyColors}
               selected={local.bodyColor}
               onToggle={name => toggleItem('bodyColor', name)}
               showMoreLabel="цветов"
@@ -525,7 +542,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose }) {
         {open.interiorColor && (
           <div className="filter-section-body">
             <ColorGrid
-              colors={options.interiorColors}
+              colors={liveInteriorColors.length ? liveInteriorColors : options.interiorColors}
               selected={local.interiorColor}
               onToggle={name => toggleItem('interiorColor', name)}
               showMoreLabel="цветов"

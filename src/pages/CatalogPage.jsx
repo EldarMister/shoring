@@ -52,6 +52,44 @@ function normalizeDisplayText(value) {
   return text.replace(/[\uAC00-\uD7A3]+/gu, ' ').replace(/\s+/g, ' ').trim()
 }
 
+const VEHICLE_NAME_FIXES = [
+  [/kgmobilriti\s*\(\s*ssangyong\s*\)/gi, 'KG Mobility (SsangYong)'],
+  [/kgmobilriti/gi, 'KG Mobility'],
+  [/ssangyong/gi, 'SsangYong'],
+  [/rekseuteon/gi, 'Rexton'],
+  [/seupocheu/gi, 'Sports'],
+  [/kaeseupeo/gi, 'Casper'],
+  [/geuraenjeo/gi, 'Grandeur'],
+  [/mohabi/gi, 'Mohave'],
+  [/ssonata/gi, 'Sonata'],
+  [/\b([2-9])\s*sedae\b/gi, (_, n) => `${n}th Gen`],
+]
+
+const SUSPICIOUS_NAME_PATTERNS = [
+  /kgmobilriti/i,
+  /rekseuteon/i,
+  /seupocheu/i,
+  /kaeseupeo/i,
+  /geuraenjeo/i,
+  /mohabi/i,
+  /\b[2-9]\s*sedae\b/i,
+]
+
+function normalizeVehicleTitle(value) {
+  let text = normalizeDisplayText(value)
+  if (!text) return ''
+  for (const [pattern, replacement] of VEHICLE_NAME_FIXES) {
+    text = text.replace(pattern, replacement)
+  }
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+function shouldUpgradeVehicleTitle(value) {
+  const text = String(value || '').trim()
+  if (shouldReplaceText(text)) return true
+  return SUSPICIOUS_NAME_PATTERNS.some((pattern) => pattern.test(text))
+}
+
 function hasAnyToken(value, tokens) {
   const src = String(value || '')
   return tokens.some((token) => src.includes(token))
@@ -126,6 +164,23 @@ function shouldReplaceColor(value) {
   return /^[a-z]+saek$/i.test(text.replace(/[\s_-]/g, ''))
 }
 
+function buildCarUpdatePatch(prevCar, nextCar) {
+  const patch = {}
+
+  if (nextCar.name && nextCar.name !== prevCar.name) patch.name = nextCar.name
+  if (nextCar.model && nextCar.model !== prevCar.model) patch.model = nextCar.model
+  if (nextCar.bodyColor && nextCar.bodyColor !== prevCar.bodyColor) patch.body_color = nextCar.bodyColor
+  if (nextCar.interiorColor && nextCar.interiorColor !== prevCar.interiorColor) patch.interior_color = nextCar.interiorColor
+  if (nextCar.location && nextCar.location !== prevCar.location) patch.location = nextCar.location
+  if (nextCar.vin && nextCar.vin !== prevCar.vin) patch.vin = nextCar.vin
+
+  const prevTags = Array.isArray(prevCar.tags) ? prevCar.tags : []
+  const nextTags = Array.isArray(nextCar.tags) ? nextCar.tags : []
+  if (JSON.stringify(nextTags) !== JSON.stringify(prevTags)) patch.tags = nextTags
+
+  return patch
+}
+
 function toAbsoluteImageUrl(raw) {
   if (!raw) return ''
   const url = String(raw).trim()
@@ -161,8 +216,8 @@ function needsEncarEnrichment(car) {
   if (!car?.encarId || car.encarId === '-') return false
   return (
     hasWeakImages(car) ||
-    shouldReplaceText(car.name) ||
-    shouldReplaceText(car.model) ||
+    shouldUpgradeVehicleTitle(car.name) ||
+    shouldUpgradeVehicleTitle(car.model) ||
     hasUntranslatedTags(car.tags) ||
     shouldReplaceColor(car.bodyColor) ||
     shouldReplaceColor(car.interiorColor) ||
@@ -184,8 +239,8 @@ async function fetchEncarDetail(encarId) {
       const detail = await res.json()
       const normalized = {
         images: normalizeImages(detail?.photos?.length ? detail.photos : detail?.images),
-        name: normalizeDisplayText(detail?.name || ''),
-        model: normalizeDisplayText(detail?.model || ''),
+        name: normalizeVehicleTitle(detail?.name || ''),
+        model: normalizeVehicleTitle(detail?.model || ''),
         fuelType: normalizeTagLabel(detail?.fuel_type || ''),
         transmission: normalizeTagLabel(detail?.transmission || ''),
         bodyColor: normalizeColorLabel(detail?.body_color || ''),
@@ -255,8 +310,8 @@ function mapCar(c) {
   const total = Number(c.total) || Math.round(priceUSD + commission + delivery + loading + unloading + storage - vatRefund)
   const images = normalizeImages(c.images)
 
-  const normalizedName = normalizeDisplayText(c.name || '')
-  const normalizedModel = normalizeDisplayText(c.model || '')
+  const normalizedName = normalizeVehicleTitle(c.name || '')
+  const normalizedModel = normalizeVehicleTitle(c.model || '')
   const normalizedLocation = normalizeDisplayText(c.location || '\u041a\u043e\u0440\u0435\u044f')
 
   return {
@@ -314,6 +369,7 @@ export default function CatalogPage() {
 
       const missingDataCars = mappedCars.filter(needsEncarEnrichment)
       if (missingDataCars.length) {
+        const patchesToPersist = []
         const enrichedCars = await Promise.all(
           mappedCars.map(async (car) => {
             if (!needsEncarEnrichment(car)) return car
@@ -322,8 +378,8 @@ export default function CatalogPage() {
             if (!detail) return car
 
             const next = { ...car }
-            if (shouldReplaceText(car.name) && detail.name) next.name = detail.name
-            if (shouldReplaceText(car.model) && detail.model) next.model = detail.model
+            if (shouldUpgradeVehicleTitle(car.name) && detail.name) next.name = detail.name
+            if (shouldUpgradeVehicleTitle(car.model) && detail.model) next.model = detail.model
             if (hasUntranslatedTags(car.tags)) {
               const detailTags = normalizeTags([detail.fuelType, detail.transmission])
               if (detailTags.length) next.tags = detailTags
@@ -334,6 +390,11 @@ export default function CatalogPage() {
             if (shouldReplaceText(car.location) && detail.location) next.location = detail.location
             if (shouldReplaceText(car.vin) && detail.vin) next.vin = detail.vin
             next.imageCount = next.images.length || 1
+
+            const patch = buildCarUpdatePatch(car, next)
+            if (Object.keys(patch).length) {
+              patchesToPersist.push({ id: car.id, patch })
+            }
             return next
           })
         )
@@ -344,6 +405,18 @@ export default function CatalogPage() {
           if (prevIds !== enrichedIds) return prev
           return enrichedCars
         })
+
+        if (patchesToPersist.length) {
+          Promise.allSettled(
+            patchesToPersist.map(({ id, patch }) =>
+              fetch(`/api/cars/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+              })
+            )
+          ).catch(() => {})
+        }
       }
     } catch (e) {
       setError(e.message)
@@ -370,6 +443,7 @@ export default function CatalogPage() {
         <aside className={`cat-sidebar${sidebarOpen ? ' cat-sidebar-open' : ''}`}>
           <FilterSidebar
             filters={filters}
+            catalogCars={cars}
             onFiltersChange={(f) => { setFilters(f); setPage(1) }}
             onClose={() => setSidebarOpen(false)}
           />

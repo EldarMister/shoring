@@ -160,6 +160,19 @@ const MODEL_NAME_MAP = {
   '트레일블레이저': 'Trailblazer',
 }
 
+const VEHICLE_TITLE_FIXES = [
+  [/kgmobilriti\s*\(\s*ssangyong\s*\)/gi, 'KG Mobility (SsangYong)'],
+  [/kgmobilriti/gi, 'KG Mobility'],
+  [/ssangyong/gi, 'SsangYong'],
+  [/rekseuteon/gi, 'Rexton'],
+  [/seupocheu/gi, 'Sports'],
+  [/kaeseupeo/gi, 'Casper'],
+  [/geuraenjeo/gi, 'Grandeur'],
+  [/mohabi/gi, 'Mohave'],
+  [/ssonata/gi, 'Sonata'],
+  [/\b([2-9])\s*sedae\b/gi, (_, n) => `${n}th Gen`],
+]
+
 const HANGUL_RE = /[\uAC00-\uD7A3]/u
 const HANGUL_SEQ_RE = /[\uAC00-\uD7A3]+/gu
 
@@ -205,6 +218,10 @@ export function translateVehicleText(value) {
     if (MODEL_NAME_MAP[chunk]) return MODEL_NAME_MAP[chunk]
     return toTitleCase(romanizeHangulWord(chunk))
   })
+
+  for (const [pattern, replacement] of VEHICLE_TITLE_FIXES) {
+    text = text.replace(pattern, replacement)
+  }
 
   return text.replace(/\s+/g, ' ').trim()
 }
