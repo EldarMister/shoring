@@ -223,7 +223,7 @@ export default function CarCard({ car }) {
           Encar →
         </a>
         <a
-          href={`https://wa.me/996705188088?text=Хочу заказать: ${car.name} (${car.year}), VIN: ${car.vin || '-'}`}
+          href={`https://wa.me/821056650943?text=Хочу заказать: ${car.name} (${car.year}), VIN: ${car.vin || '-'}`}
           target="_blank"
           rel="noreferrer"
           className="btn-car-green"

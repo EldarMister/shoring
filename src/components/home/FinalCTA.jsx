@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 
+const PRIMARY_WHATSAPP_URL = 'https://wa.me/821056650943'
+
 export default function FinalCTA() {
   return (
     <section className="final-cta-section">
@@ -13,9 +15,9 @@ export default function FinalCTA() {
           <Link to="/catalog" className="btn-cta-primary">
             Открыть каталог
           </Link>
-          <Link to="/contacts" className="btn-cta-secondary">
+          <a href={PRIMARY_WHATSAPP_URL} target="_blank" rel="noreferrer" className="btn-cta-secondary">
             Связаться с нами
-          </Link>
+          </a>
         </div>
       </div>
     </section>

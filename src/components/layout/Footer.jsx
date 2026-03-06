@@ -1,5 +1,10 @@
 import logoImg from '../../assets/logo.png'
 
+const PRIMARY_WHATSAPP_URL = 'https://wa.me/821056650943'
+const SECONDARY_WHATSAPP_URL = 'https://wa.me/821065680943'
+const LOCAL_PHONE_URL = 'tel:+996779574444'
+const CONTACT_EMAIL = 'avt.shoring@gmail.com'
+
 const PhoneIcon = () => (
   <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -79,15 +84,27 @@ export default function Footer() {
             <h3 className="footer-col-title">Контакты</h3>
             <ul className="footer-links">
               <li>
-                <a href="https://wa.me/996705188088" className="footer-link">
+                <a href={PRIMARY_WHATSAPP_URL} target="_blank" rel="noreferrer" className="footer-link">
                   <span className="footer-link-icon green"><WhatsAppIcon /></span>
-                  +996 705 18 80 88
+                  +82 10 5665-0943
                 </a>
               </li>
               <li>
-                <a href="mailto:director@tlv-auto.com" className="footer-link">
+                <a href={SECONDARY_WHATSAPP_URL} target="_blank" rel="noreferrer" className="footer-link">
+                  <span className="footer-link-icon green"><WhatsAppIcon /></span>
+                  +82 10 6568-0943
+                </a>
+              </li>
+              <li>
+                <a href={LOCAL_PHONE_URL} className="footer-link">
+                  <span className="footer-link-icon"><PhoneIcon /></span>
+                  +996 779 574 444
+                </a>
+              </li>
+              <li>
+                <a href={`mailto:${CONTACT_EMAIL}`} className="footer-link">
                   <span className="footer-link-icon"><MailIcon /></span>
-                  director@tlv-auto.com
+                  {CONTACT_EMAIL}
                 </a>
               </li>
               <li>
@@ -103,7 +120,7 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#" className="footer-link">
+                <a href={PRIMARY_WHATSAPP_URL} target="_blank" rel="noreferrer" className="footer-link">
                   <span className="footer-link-icon green"><WhatsAppIcon /></span>
                   <span>Канал WhatsApp: <strong>AVT Auto V Korea</strong></span>
                 </a>
@@ -190,9 +207,9 @@ export default function Footer() {
       <div className="footer-bottom">
         <div className="footer-bottom-inner">
           <span className="footer-copy">© 2025 AVT Auto V Korea. Все права защищены.</span>
-          <a href="tel:+996999599600" className="footer-phone-link">
+          <a href={LOCAL_PHONE_URL} className="footer-phone-link">
             <ChatIcon />
-            +996 999 59 96 00
+            +996 779 574 444
           </a>
         </div>
       </div>

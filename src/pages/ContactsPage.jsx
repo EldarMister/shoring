@@ -61,41 +61,65 @@ const PlayIcon = () => (
   </svg>
 )
 
+const PRIMARY_WHATSAPP_URL = 'https://wa.me/821056650943'
+const SECONDARY_WHATSAPP_URL = 'https://wa.me/821065680943'
+const LOCAL_PHONE = '+996 779 574 444'
+const LOCAL_PHONE_URL = 'tel:+996779574444'
+const CONTACT_EMAIL = 'avt.shoring@gmail.com'
+
 const CONTACT_CARDS = [
   {
     icon: <WhatsAppIcon size={22} />,
     title: 'WhatsApp',
-    desc: 'Написать, заказать, позвонить',
-    value: '+996 705 18 80 88',
+    desc: '\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043d\u043e\u043c\u0435\u0440 \u0432 \u041a\u043e\u0440\u0435\u0435',
+    value: '+82 10 5665-0943',
     valueClass: 'cnt-val-teal',
-    sub: 'Ответим в течение 5 минут',
-    href: 'https://wa.me/996705188088',
+    sub: '\u0411\u044b\u0441\u0442\u0440\u044b\u0439 \u043e\u0442\u0432\u0435\u0442 \u0432 WhatsApp',
+    href: PRIMARY_WHATSAPP_URL,
+  },
+  {
+    icon: <WhatsAppIcon size={22} />,
+    title: 'WhatsApp 2',
+    desc: '\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0439 \u043d\u043e\u043c\u0435\u0440 \u0432 \u041a\u043e\u0440\u0435\u0435',
+    value: '+82 10 6568-0943',
+    valueClass: 'cnt-val-teal',
+    sub: '\u0420\u0435\u0437\u0435\u0440\u0432\u043d\u044b\u0439 \u043a\u043e\u043d\u0442\u0430\u043a\u0442',
+    href: SECONDARY_WHATSAPP_URL,
+  },
+  {
+    icon: <PhoneIcon />,
+    title: '\u0422\u0435\u043b\u0435\u0444\u043e\u043d KG',
+    desc: '\u0421\u0432\u044f\u0437\u044c \u0432 \u041a\u044b\u0440\u0433\u044b\u0437\u0441\u0442\u0430\u043d\u0435',
+    value: LOCAL_PHONE,
+    valueClass: 'cnt-val-dark',
+    sub: '\u0417\u0432\u043e\u043d\u043a\u0438 \u0438 \u043c\u0435\u0441\u0442\u043d\u0430\u044f \u0441\u0432\u044f\u0437\u044c',
+    href: LOCAL_PHONE_URL,
   },
   {
     icon: <EmailIcon />,
     title: 'Email',
-    desc: 'Письменные обращения',
-    value: 'director@tlv-auto.com',
+    desc: '\u041f\u0438\u0441\u044c\u043c\u0435\u043d\u043d\u044b\u0435 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u044f',
+    value: CONTACT_EMAIL,
     valueClass: 'cnt-val-dark',
-    sub: 'Ответ в течение 2 часов',
-    href: 'mailto:director@tlv-auto.com',
+    sub: '\u041e\u0442\u0432\u0435\u0442 \u0432 \u0442\u0435\u0447\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0447\u0435\u0433\u043e \u0434\u043d\u044f',
+    href: `mailto:${CONTACT_EMAIL}`,
   },
   {
     icon: <InstagramIcon />,
     title: 'Instagram',
-    desc: 'Instagram консультации',
+    desc: 'Instagram \u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0438\u0438',
     value: '@tlv_auto_korea',
     valueClass: 'cnt-val-blue',
-    sub: 'Прямая связь с менеджером',
+    sub: '\u041f\u0440\u044f\u043c\u0430\u044f \u0441\u0432\u044f\u0437\u044c \u0441 \u043c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u043e\u043c',
     href: 'https://instagram.com/tlv_auto_korea',
   },
   {
     icon: <YouTubeIcon />,
     title: 'YouTube',
-    desc: 'Видео обзоры и контент',
+    desc: '\u0412\u0438\u0434\u0435\u043e \u043e\u0431\u0437\u043e\u0440\u044b \u0438 \u043a\u043e\u043d\u0442\u0435\u043d\u0442',
     value: '@tlvauto1',
     valueClass: 'cnt-val-blue',
-    sub: 'Обзоры автомобилей и процесс доставки',
+    sub: '\u041e\u0431\u0437\u043e\u0440\u044b \u0430\u0432\u0442\u043e\u043c\u043e\u0431\u0438\u043b\u0435\u0439 \u0438 \u043f\u0440\u043e\u0446\u0435\u0441\u0441 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438',
     href: 'https://youtube.com/@tlvauto1',
   },
 ]
@@ -104,26 +128,26 @@ const OFFICES = [
   {
     city: 'Бишкек',
     address: 'ул. Бакаева 140/1, БЦ SKY PLAZA, 5 этаж, 505 кабинет',
-    phone: '+996 705 18 80 88',
-    email: 'director@tlv-auto.com',
+    phone: LOCAL_PHONE,
+    email: CONTACT_EMAIL,
   },
   {
     city: 'Бишкек',
     address: 'ул. Турусбекова 109/3, БЦ Максимум, офис 208',
-    phone: '+996 705 18 80 88',
-    email: 'director@tlv-auto.com',
+    phone: LOCAL_PHONE,
+    email: CONTACT_EMAIL,
   },
   {
     city: 'Ош',
     address: 'ул. Аскар Шакиров 30, БЦ MAHCOM, 5 этаж 9 кабинет',
-    phone: '+996 705 18 80 88',
-    email: 'director@tlv-auto.com',
+    phone: LOCAL_PHONE,
+    email: CONTACT_EMAIL,
   },
   {
     city: 'Корея',
     address: 'Сеул (офис в Корее — уточняйте у менеджера)',
-    phone: '+996 705 18 80 88',
-    email: 'director@tlv-auto.com',
+    phone: LOCAL_PHONE,
+    email: CONTACT_EMAIL,
   },
 ]
 
@@ -164,14 +188,14 @@ export default function ContactsPage() {
             <p className="cnt-quick-text">Нужна быстрая консультация? Выберите удобный способ связи:</p>
             <div className="cnt-quick-btns">
               <a
-                href="https://wa.me/996705188088"
+                href={PRIMARY_WHATSAPP_URL}
                 target="_blank"
                 rel="noreferrer"
                 className="cnt-btn-primary"
               >
                 <ChatIcon /> Написать в WhatsApp
               </a>
-              <a href="tel:+996705188088" className="cnt-btn-outline">
+              <a href={LOCAL_PHONE_URL} className="cnt-btn-outline">
                 <PhoneIcon /> Позвонить сейчас
               </a>
             </div>
@@ -252,7 +276,7 @@ export default function ContactsPage() {
               <WhatsAppIcon size={17} /> Присоединиться к группе
             </a>
             <a
-              href="https://wa.me/996705188088"
+              href={PRIMARY_WHATSAPP_URL}
               target="_blank" rel="noreferrer"
               className="cnt-btn-outline"
             >

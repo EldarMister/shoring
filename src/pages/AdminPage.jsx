@@ -273,7 +273,7 @@ function Calculator() {
 
 /* ── Settings ── */
 function Settings({ toast }) {
-    const [settings, setSettings] = useState({ comm: 200, delivery: 1750, unloading: 100, storage: 310, vat: 6.3, rate: 0.00073, wh: '996705188088' })
+    const [settings, setSettings] = useState({ comm: 200, delivery: 1750, unloading: 100, storage: 310, vat: 6.3, rate: 0.00073, wh: '821056650943' })
     const save = () => { localStorage.setItem('adm_settings', JSON.stringify(settings)); toast('Настройки сохранены', 'success') }
     useEffect(() => { try { const s = JSON.parse(localStorage.getItem('adm_settings') || '{}'); setSettings(p => ({ ...p, ...s })) } catch { } }, [])
     return (

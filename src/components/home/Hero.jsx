@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 
+const PRIMARY_WHATSAPP_URL = 'https://wa.me/821056650943'
+
 const CarIcon = () => (
   <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
     <path
@@ -133,10 +135,10 @@ export default function Hero() {
               <CarIcon />
               Посмотреть каталог
             </Link>
-            <Link to="/contacts" className="btn-secondary">
+            <a href={PRIMARY_WHATSAPP_URL} target="_blank" rel="noreferrer" className="btn-secondary">
               Связаться с нами
               <ArrowIcon />
-            </Link>
+            </a>
           </div>
 
           <div className="stats-grid">
