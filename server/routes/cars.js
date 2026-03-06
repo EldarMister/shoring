@@ -163,6 +163,65 @@ function colorPatterns(value) {
   return rawPattern(value)
 }
 
+const SEARCH_ALIASES = [
+  ['kia', ['kia', 'киа', KO.kia]],
+  ['hyundai', ['hyundai', 'хендэ', 'хундай', KO.hyundai]],
+  ['genesis', ['genesis', 'дженезис', KO.genesis]],
+  ['chevrolet', ['chevrolet', 'chevy', 'шевроле', KO.chevrolet]],
+  ['renault', ['renault', 'reno', 'рено', KO.renault, KO.samsung]],
+  ['samsung', ['samsung', 'самсунг', KO.samsung]],
+  ['ssangyong', ['ssangyong', 'сангйонг', 'ссангйонг', KO.ssangyong, 'kg mobility', 'kgmobilriti', KO.kgMobility]],
+  ['kg mobility', ['kg mobility', 'kgmobilriti', 'kg', KO.kgMobility, KO.ssangyong]],
+  ['rexton', ['rexton', 'рекстон', 'rekseuteon', '렉스턴']],
+  ['sports', ['sports', 'спорт', 'seupocheu', '스포츠']],
+  ['sorento', ['sorento', 'соренто', '쏘렌토']],
+  ['grandeur', ['grandeur', 'azera', 'granger', '그랜저', 'geuraenjeo']],
+  ['sonata', ['sonata', 'соната', '쏘나타', 'ssonata']],
+  ['casper', ['casper', 'каспер', '캐스퍼', 'kaeseupeo']],
+  ['mohave', ['mohave', 'мохаве', '모하비', 'mohabi']],
+  ['carnival', ['carnival', 'карнивал', '카니발']],
+  ['staria', ['staria', 'стария', '스타리아']],
+  ['tucson', ['tucson', 'туксон', '투싼']],
+]
+
+function normalizeSearchValue(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function tokenizeSearchValue(value) {
+  return normalizeSearchValue(value)
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
+}
+
+function searchPatterns(value) {
+  const raw = String(value || '').trim()
+  const normalized = normalizeSearchValue(value)
+  if (!normalized) return []
+
+  const variants = new Set([raw, normalized, normalized.replace(/\s+/g, '')])
+  const tokens = tokenizeSearchValue(value)
+
+  for (const token of tokens) {
+    variants.add(token)
+    for (const [, aliases] of SEARCH_ALIASES) {
+      if (aliases.some((alias) => normalizeSearchValue(alias).includes(token) || token.includes(normalizeSearchValue(alias)))) {
+        aliases.forEach((alias) => variants.add(alias))
+      }
+    }
+  }
+
+  return [...variants]
+    .map((variant) => String(variant || '').trim())
+    .filter(Boolean)
+    .map((variant) => `%${variant}%`)
+}
+
 router.get('/', async (req, res) => {
   try {
     const {
@@ -178,15 +237,37 @@ router.get('/', async (req, res) => {
     const params = []
     let p = 1
 
-    if (q) {
+    const qText = String(q || '').trim()
+
+    if (qText) {
+      const patterns = uniqPatterns(searchPatterns(qText))
+      const tokens = tokenizeSearchValue(qText)
+
       conditions.push(`(
-        c.name ILIKE $${p}
-        OR c.model ILIKE $${p}
-        OR COALESCE(c.vin, '') ILIKE $${p}
-        OR COALESCE(c.encar_id, '') ILIKE $${p}
+        c.name ILIKE ANY($${p}::text[])
+        OR c.model ILIKE ANY($${p}::text[])
+        OR COALESCE(c.vin, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.encar_id, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.body_type, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.fuel_type, '') ILIKE ANY($${p}::text[])
+        OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
       )`)
-      params.push(`%${String(q).trim()}%`)
+      params.push(patterns)
       p++
+
+      for (const token of tokens) {
+        conditions.push(`(
+          c.name ILIKE $${p}
+          OR c.model ILIKE $${p}
+          OR COALESCE(c.vin, '') ILIKE $${p}
+          OR COALESCE(c.encar_id, '') ILIKE $${p}
+          OR COALESCE(c.body_type, '') ILIKE $${p}
+          OR COALESCE(c.fuel_type, '') ILIKE $${p}
+          OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE $${p})
+        )`)
+        params.push(`%${token}%`)
+        p++
+      }
     }
 
     if (brand) {
@@ -245,6 +326,7 @@ router.get('/', async (req, res) => {
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const filterParams = [...params]
 
     const sortMap = {
       newest: 'c.created_at DESC',
@@ -256,10 +338,27 @@ router.get('/', async (req, res) => {
       year_asc: 'c.year ASC',
     }
     const orderBy = sortMap[sort] || 'c.created_at DESC'
+    let orderBySql = orderBy
+
+    if (qText) {
+      const exactLower = qText.toLowerCase()
+      const prefix = `${qText}%`
+      orderBySql = `CASE
+        WHEN LOWER(COALESCE(c.encar_id, '')) = $${p} THEN 0
+        WHEN LOWER(COALESCE(c.vin, '')) = $${p} THEN 1
+        WHEN c.name ILIKE $${p + 1} THEN 2
+        WHEN c.model ILIKE $${p + 1} THEN 3
+        WHEN c.name ILIKE $${p + 2} THEN 4
+        WHEN c.model ILIKE $${p + 2} THEN 5
+        ELSE 6
+      END, ${orderBy}`
+      params.push(exactLower, prefix, `%${qText}%`)
+      p += 3
+    }
 
     const offset = (Number(page) - 1) * Number(limit)
 
-    const countResult = await pool.query(`SELECT COUNT(*) FROM cars c ${where}`, params)
+    const countResult = await pool.query(`SELECT COUNT(*) FROM cars c ${where}`, filterParams)
     const total = parseInt(countResult.rows[0].count, 10)
 
     const carsResult = await pool.query(
@@ -272,7 +371,7 @@ router.get('/', async (req, res) => {
        LEFT JOIN car_images ci ON ci.car_id = c.id
        ${where}
        GROUP BY c.id
-       ORDER BY ${orderBy}
+       ORDER BY ${orderBySql}
        LIMIT $${p++} OFFSET $${p++}`,
       [...params, Number(limit), offset]
     )

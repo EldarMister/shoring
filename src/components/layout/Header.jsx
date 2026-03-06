@@ -109,7 +109,7 @@ export default function Header() {
           </span>
           <input
             type="text"
-            placeholder="Марка / VIN / Encar ID"
+            placeholder="Марка / модель / VIN / Encar ID"
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -161,7 +161,7 @@ export default function Header() {
             <input
               autoFocus
               type="text"
-              placeholder="Марка / VIN / Encar ID"
+              placeholder="Марка / модель / VIN / Encar ID"
               className="search-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

@@ -125,6 +125,30 @@ function normalizeTags(tags) {
   return out
 }
 
+function pickFuelFromTags(tags) {
+  return tags.find((tag) => /бензин|дизель|электро|газ|гибрид/i.test(String(tag))) || ''
+}
+
+function pickTransmissionFromTags(tags) {
+  return tags.find((tag) => /автомат|механика|робот|cvt/i.test(String(tag))) || ''
+}
+
+function normalizeBodyTypeLabel(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const low = text.toLowerCase()
+
+  if (low.includes('truck') || low.includes('cargo') || low.includes('\u0433\u0440\u0443\u0437') || hasAnyToken(text, [KO.truck, KO.cargo])) return '\u0413\u0440\u0443\u0437\u043e\u0432\u0438\u043a'
+  if (low.includes('suv') || low.includes('\u0432\u043d\u0435\u0434\u043e\u0440\u043e\u0436') || low.includes('\u043a\u0440\u043e\u0441\u0441') || hasAnyToken(text, [KO.crossover])) return 'SUV'
+  if (low.includes('sedan') || low.includes('\u0441\u0435\u0434\u0430\u043d') || hasAnyToken(text, [KO.sedan])) return '\u0421\u0435\u0434\u0430\u043d'
+  if (low.includes('hatch') || low.includes('\u0445\u044d\u0442\u0447') || hasAnyToken(text, [KO.hatchback])) return '\u0425\u044d\u0442\u0447\u0431\u0435\u043a'
+  if (low.includes('wagon') || low.includes('\u0443\u043d\u0438\u0432\u0435\u0440\u0441') || hasAnyToken(text, [KO.wagon])) return '\u0423\u043d\u0438\u0432\u0435\u0440\u0441\u0430\u043b'
+  if (low.includes('van') || low.includes('minivan') || low.includes('\u0432\u044d\u043d') || low.includes('\u043c\u0438\u043d\u0438\u0432') || hasAnyToken(text, [KO.minivan, KO.van])) return '\u0412\u044d\u043d'
+  if (low.includes('coupe') || low.includes('\u043a\u0443\u043f\u0435') || hasAnyToken(text, [KO.coupe])) return '\u041a\u0443\u043f\u0435'
+
+  return normalizeDisplayText(text)
+}
+
 function hasUntranslatedTags(tags) {
   if (!Array.isArray(tags) || !tags.length) return true
   return tags.some((tag) => shouldReplaceText(tag))
@@ -243,10 +267,13 @@ async function fetchEncarDetail(encarId) {
         model: normalizeVehicleTitle(detail?.model || ''),
         fuelType: normalizeTagLabel(detail?.fuel_type || ''),
         transmission: normalizeTagLabel(detail?.transmission || ''),
+        bodyType: normalizeBodyTypeLabel(detail?.body_type || ''),
         bodyColor: normalizeColorLabel(detail?.body_color || ''),
         interiorColor: normalizeColorLabel(detail?.interior_color || ''),
         location: normalizeDisplayText(detail?.location || ''),
         vin: String(detail?.vin || detail?.vehicle_no || '').trim(),
+        flags: detail?.flags || {},
+        inspectionFormats: detail?.condition?.inspectionFormats || [],
       }
       encarDetailCache.set(key, normalized)
       return normalized
@@ -313,6 +340,10 @@ function mapCar(c) {
   const normalizedName = normalizeVehicleTitle(c.name || '')
   const normalizedModel = normalizeVehicleTitle(c.model || '')
   const normalizedLocation = normalizeDisplayText(c.location || '\u041a\u043e\u0440\u0435\u044f')
+  const tags = normalizeTags(c.tags || [])
+  const fuelType = normalizeTagLabel(c.fuel_type || '') || pickFuelFromTags(tags) || '-'
+  const transmission = pickTransmissionFromTags(tags) || '-'
+  const bodyType = normalizeBodyTypeLabel(c.body_type || '') || '-'
 
   return {
     id: c.id,
@@ -320,7 +351,10 @@ function mapCar(c) {
     model: normalizedModel || normalizedName || '-',
     year: c.year,
     mileage: c.mileage || 0,
-    tags: normalizeTags(c.tags || []),
+    tags,
+    fuelType,
+    transmission,
+    bodyType,
     bodyColor: normalizeColorLabel(c.body_color || '-'),
     bodyColorDots: c.body_color_dots || [],
     interiorColor: normalizeColorLabel(c.interior_color || c.body_color || '-'),
@@ -341,6 +375,8 @@ function mapCar(c) {
     canNegotiate: c.can_negotiate,
     imageCount: images.length || 1,
     images,
+    detailFlags: {},
+    inspectionFormats: [],
   }
 }
 
@@ -387,11 +423,16 @@ export default function CatalogPage() {
               const detailTags = normalizeTags([detail.fuelType, detail.transmission])
               if (detailTags.length) next.tags = detailTags
             }
+            if ((!car.fuelType || car.fuelType === '-') && detail.fuelType) next.fuelType = detail.fuelType
+            if ((!car.transmission || car.transmission === '-') && detail.transmission) next.transmission = detail.transmission
+            if ((!car.bodyType || car.bodyType === '-') && detail.bodyType) next.bodyType = detail.bodyType
             if (hasWeakImages(car) && detail.images.length) next.images = detail.images
             if (shouldReplaceColor(car.bodyColor) && detail.bodyColor) next.bodyColor = detail.bodyColor
             if (shouldReplaceColor(car.interiorColor) && detail.interiorColor) next.interiorColor = detail.interiorColor
             if (shouldReplaceText(car.location) && detail.location) next.location = detail.location
             if (shouldReplaceText(car.vin) && detail.vin) next.vin = detail.vin
+            next.detailFlags = detail.flags || next.detailFlags
+            next.inspectionFormats = detail.inspectionFormats || next.inspectionFormats
             next.imageCount = next.images.length || 1
 
             const patch = buildCarUpdatePatch(car, next)

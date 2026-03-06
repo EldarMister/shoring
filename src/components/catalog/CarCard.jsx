@@ -14,7 +14,7 @@ const NextIcon = () => (
 )
 
 const PinIcon = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -42,12 +42,108 @@ const NewTabIcon = () => (
   </svg>
 )
 
+const BodyIcon = () => (
+  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 15l1.5-4.5A2 2 0 017.4 9H16.6a2 2 0 011.9 1.5L20 15M6 15h12M7 18h.01M17 18h.01M7 18a1 1 0 11-2 0 1 1 0 012 0zm12 0a1 1 0 11-2 0 1 1 0 012 0z" />
+  </svg>
+)
+
+const GearIcon = () => (
+  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.983 5.5a1.5 1.5 0 013 0l.13.892a1.5 1.5 0 001.196 1.24l.9.18a1.5 1.5 0 011.1 2.39l-.567.716a1.5 1.5 0 000 1.864l.567.716a1.5 1.5 0 01-1.1 2.39l-.9.18a1.5 1.5 0 00-1.195 1.24l-.131.892a1.5 1.5 0 01-3 0l-.13-.892a1.5 1.5 0 00-1.196-1.24l-.9-.18a1.5 1.5 0 01-1.1-2.39l.567-.716a1.5 1.5 0 000-1.864l-.567-.716a1.5 1.5 0 011.1-2.39l.9-.18a1.5 1.5 0 001.196-1.24l.13-.892z" />
+    <circle cx="12" cy="12" r="3" strokeWidth={2} />
+  </svg>
+)
+
+const FuelIcon = () => (
+  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h6v16H8zM14 7h2l2 2v7a2 2 0 01-2 2" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h6" />
+  </svg>
+)
+
+const PulseIcon = () => (
+  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h4l2-5 4 10 2-5h6" />
+  </svg>
+)
+
+const ShieldIcon = () => (
+  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+  </svg>
+)
+
+const CameraIcon = () => (
+  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h3l2-2h6l2 2h3v10H4z" />
+    <circle cx="12" cy="13" r="3" strokeWidth={2} />
+  </svg>
+)
+
 const TAG_STYLES = [
   { bg: '#ede9fe', color: '#6d28d9' },
   { bg: '#dbeafe', color: '#1d4ed8' },
   { bg: '#fef3c7', color: '#92400e' },
   { bg: '#d1fae5', color: '#065f46' },
 ]
+
+const SERVICE_BADGE_STYLES = {
+  blue: { bg: '#dbeafe', color: '#1d4ed8' },
+  green: { bg: '#dcfce7', color: '#166534' },
+  amber: { bg: '#fef3c7', color: '#92400e' },
+}
+
+const COLOR_SWATCHES = {
+  Черный: '#101010',
+  Белый: '#f8fafc',
+  Серый: '#6b7280',
+  Серебристый: '#cbd5e1',
+  Синий: '#2563eb',
+  Красный: '#dc2626',
+  Зеленый: '#16a34a',
+  Коричневый: '#7c4a1d',
+  Бежевый: '#d6c1a1',
+  Желтый: '#eab308',
+  Оранжевый: '#f97316',
+  Фиолетовый: '#7c3aed',
+}
+
+function formatMileage(value) {
+  return `${Number(value || 0).toLocaleString()} км`
+}
+
+function colorToSwatch(label) {
+  return COLOR_SWATCHES[String(label || '').trim()] || '#cbd5e1'
+}
+
+function buildFeatureItems(car) {
+  const items = []
+  if (car.bodyType && car.bodyType !== '-') {
+    items.push({ key: 'body', label: car.bodyType, icon: <BodyIcon /> })
+  }
+  if (car.transmission && car.transmission !== '-') {
+    items.push({ key: 'transmission', label: car.transmission, icon: <GearIcon /> })
+  }
+  if (car.fuelType && car.fuelType !== '-') {
+    items.push({ key: 'fuel', label: car.fuelType, icon: <FuelIcon /> })
+  }
+  return items
+}
+
+function buildServiceBadges(car) {
+  const badges = []
+  if (car.detailFlags?.diagnosis) {
+    badges.push({ key: 'diagnosis', label: 'Диагностика', tone: 'blue', icon: <PulseIcon /> })
+  }
+  if (Array.isArray(car.inspectionFormats) && car.inspectionFormats.length) {
+    badges.push({ key: 'report', label: 'Отчет инспекции', tone: 'green', icon: <ShieldIcon /> })
+  }
+  if ((Array.isArray(car.images) ? car.images.length : 0) >= 10) {
+    badges.push({ key: 'photos', label: `${car.images.length} фото`, tone: 'amber', icon: <CameraIcon /> })
+  }
+  return badges
+}
 
 export default function CarCard({ car }) {
   const navigate = useNavigate()
@@ -59,10 +155,13 @@ export default function CarCard({ car }) {
     if (!failedUrls.length) return base
     return base.filter((img) => img?.url && !failedUrls.includes(img.url))
   }, [car.images, failedUrls])
+
   const imageCount = images.length || 1
   const boundedIdx = Math.min(imgIdx, imageCount - 1)
   const imageSrc = images[boundedIdx]?.url || ''
   const hasImage = Boolean(imageSrc)
+  const featureItems = useMemo(() => buildFeatureItems(car), [car])
+  const serviceBadges = useMemo(() => buildServiceBadges(car), [car])
 
   useEffect(() => {
     setImgIdx(0)
@@ -71,6 +170,7 @@ export default function CarCard({ car }) {
 
   const prev = () => setImgIdx((i) => Math.max(0, i - 1))
   const next = () => setImgIdx((i) => Math.min(imageCount - 1, i + 1))
+
   const onImgError = () => {
     if (!imageSrc) return
     setFailedUrls((prevFailed) => {
@@ -79,6 +179,7 @@ export default function CarCard({ car }) {
     })
     setImgIdx(0)
   }
+
   const openDetails = () => navigate(`/catalog/${car.id}`)
 
   const onCardClick = (e) => {
@@ -131,11 +232,7 @@ export default function CarCard({ car }) {
               <button className="car-img-btn car-img-btn-prev" onClick={prev} disabled={boundedIdx === 0}>
                 <PrevIcon />
               </button>
-              <button
-                className="car-img-btn car-img-btn-next"
-                onClick={next}
-                disabled={boundedIdx === imageCount - 1}
-              >
+              <button className="car-img-btn car-img-btn-next" onClick={next} disabled={boundedIdx === imageCount - 1}>
                 <NextIcon />
               </button>
             </>
@@ -148,65 +245,109 @@ export default function CarCard({ car }) {
         <div className="car-info">
           <h3 className="car-name">{car.name}</h3>
           <span className="car-model">{car.model}</span>
+
           <div className="car-meta">
             <span>{car.year}</span>
             <span className="car-meta-sep">•</span>
-            <span>{Number(car.mileage || 0).toLocaleString()} км</span>
+            <span>{formatMileage(car.mileage)}</span>
           </div>
 
-          <div className="car-tags">
-            {(car.tags || []).map((tag, i) => (
-              <span
-                key={`${tag}-${i}`}
-                className="car-tag"
-                style={{
-                  backgroundColor: TAG_STYLES[i % TAG_STYLES.length].bg,
-                  color: TAG_STYLES[i % TAG_STYLES.length].color,
-                }}
-              >
-                {tag}
-              </span>
-            ))}
+          {!!car.tags?.length && (
+            <div className="car-tags">
+              {car.tags.map((tag, i) => (
+                <span
+                  key={`${tag}-${i}`}
+                  className="car-tag"
+                  style={{
+                    backgroundColor: TAG_STYLES[i % TAG_STYLES.length].bg,
+                    color: TAG_STYLES[i % TAG_STYLES.length].color,
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {!!serviceBadges.length && (
+            <div className="car-service-badges">
+              {serviceBadges.map((badge) => (
+                <span
+                  key={badge.key}
+                  className="car-service-badge"
+                  style={{
+                    backgroundColor: SERVICE_BADGE_STYLES[badge.tone].bg,
+                    color: SERVICE_BADGE_STYLES[badge.tone].color,
+                  }}
+                >
+                  {badge.icon}
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {!!featureItems.length && (
+            <div className="car-feature-row">
+              {featureItems.map((item) => (
+                <span key={item.key} className="car-feature-pill">
+                  {item.icon}
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="car-color-row">
+            <div className="car-detail">
+              <span className="car-detail-label">Кузов:</span>
+              <span className="car-color-dot" style={{ backgroundColor: colorToSwatch(car.bodyColor) }} />
+              <span className="car-detail-value">{car.bodyColor || '-'}</span>
+            </div>
+            <div className="car-detail">
+              <span className="car-detail-label">Салон:</span>
+              <span className="car-color-dot" style={{ backgroundColor: colorToSwatch(car.interiorColor) }} />
+              <span className="car-detail-value">{car.interiorColor || '-'}</span>
+            </div>
           </div>
 
-          <div className="car-detail">
-            <span className="car-detail-label">Кузов:</span>
-            <span className="car-detail-value">{car.bodyColor || '-'}</span>
-          </div>
-          <div className="car-detail">
-            <span className="car-detail-label">Салон:</span>
-            <span className="car-detail-value">{car.interiorColor || '-'}</span>
-          </div>
           <div className="car-location">
             <PinIcon />
             <span>{car.location || '-'}</span>
           </div>
-          <div className="car-vin">VIN: <span>{car.vin || '-'}</span></div>
         </div>
 
         <div className="car-price-col">
           <div className="car-price-krw">{Number(car.priceKRW || 0).toLocaleString()} ₩</div>
           <div className="car-price-usd">${Number(car.priceUSD || 0).toLocaleString()}</div>
+
           <div className="car-price-breakdown">
             <div className="car-price-row">
-              <span>Комиссия:</span><span>${Number(car.commission || 0).toLocaleString()}</span>
+              <span>Комиссия:</span>
+              <span>${Number(car.commission || 0).toLocaleString()}</span>
             </div>
             <div className="car-price-row">
-              <span>Доставка:</span><span>${Number(car.delivery || 0).toLocaleString()}</span>
+              <span>Доставка:</span>
+              <span>${Number(car.delivery || 0).toLocaleString()}</span>
             </div>
             <div className="car-price-row">
-              <span>Погрузка:</span><span>${Number(car.loading || 0).toLocaleString()}</span>
+              <span>Погрузка:</span>
+              <span>${Number(car.loading || 0).toLocaleString()}</span>
             </div>
             <div className="car-price-row">
-              <span>Выгрузка:</span><span>${Number(car.unloading || 0).toLocaleString()}</span>
+              <span>Выгрузка:</span>
+              <span>${Number(car.unloading || 0).toLocaleString()}</span>
             </div>
             <div className="car-price-row">
-              <span>Стоянка:</span><span>${Number(car.storage || 0).toLocaleString()}</span>
+              <span>Стоянка:</span>
+              <span>${Number(car.storage || 0).toLocaleString()}</span>
             </div>
             <div className="car-price-row car-price-vat">
-              <span>Возврат НДС (7%):</span><span>-${Number(car.vatRefund || 0).toLocaleString()}</span>
+              <span>Возврат НДС (7%):</span>
+              <span>-${Number(car.vatRefund || 0).toLocaleString()}</span>
             </div>
           </div>
+
           <div className="car-price-total">
             <span>До Бишкека:</span>
             <span>${Number(car.total || 0).toLocaleString()}</span>
@@ -215,7 +356,7 @@ export default function CarCard({ car }) {
       </div>
 
       <div className="car-card-actions">
-        <Link to={`/catalog/${car.id}`} className="btn-car-primary">Открыть</Link>
+        <Link to={`/catalog/${car.id}`} className="btn-car-primary">Открыть детали</Link>
         <a href={car.encarUrl || '#'} target="_blank" rel="noreferrer" className="btn-car-outline">
           <NewTabIcon /> В новой вкладке
         </a>
@@ -223,7 +364,7 @@ export default function CarCard({ car }) {
           Encar →
         </a>
         <a
-          href={`https://wa.me/821056650943?text=Хочу заказать: ${car.name} (${car.year}), VIN: ${car.vin || '-'}`}
+          href={`https://wa.me/821056650943?text=${encodeURIComponent(`Хочу заказать: ${car.name} (${car.year}), VIN: ${car.vin || '-'}`)}`}
           target="_blank"
           rel="noreferrer"
           className="btn-car-green"

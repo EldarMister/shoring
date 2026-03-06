@@ -6701,3 +6701,99 @@ body {
   border-color: rgba(99, 102, 241, .25);
   transform: translateY(-2px);
 }
+
+.car-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.car-service-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.car-service-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.car-feature-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 12px;
+}
+
+.car-feature-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #1e3a5f;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.car-color-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 12px;
+}
+
+.car-color-row .car-detail {
+  margin-top: 0;
+}
+
+.car-color-dot {
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.car-location {
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+.car-price-col {
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.92) 0%, #ffffff 100%);
+}
+
+.car-card-actions {
+  align-items: center;
+}
+
+.btn-car-negotiate {
+  text-decoration: none;
+  background: #eff6ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+[data-theme="dark"] .car-feature-pill {
+  background: #102235;
+  border-color: #1f3952;
+  color: #dbeafe;
+}
+
+[data-theme="dark"] .car-price-col {
+  background: linear-gradient(180deg, rgba(20, 32, 49, 0.98) 0%, rgba(16, 27, 42, 0.98) 100%);
+}
+
+[data-theme="dark"] .btn-car-negotiate {
+  background: rgba(59, 130, 246, 0.12);
+}
