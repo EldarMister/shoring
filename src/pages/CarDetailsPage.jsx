@@ -94,6 +94,86 @@ function formatDate(value) {
   return d.toLocaleDateString('ru-RU')
 }
 
+const INSPECTION_RU_MAP = {
+  'Inspection and diagnostics': 'Инспекция и диагностика',
+  'Inspection photos': 'Фотографии инспекции',
+  'Overall condition': 'Общее состояние',
+  'Repair history': 'История ремонтов',
+  'Body and frame inspection': 'Проверка кузова и силового каркаса',
+  'Detailed technical check': 'Детальная техническая проверка',
+  'Inspector comments': 'Комментарии инспектора',
+  'Signatures and confirmation': 'Подписи и подтверждение',
+  'Open in Encar': 'Открыть в Encar',
+  'Open inspection': 'Открыть инспекцию',
+  'Report date': 'Дата отчета',
+  'Photo': 'Фото',
+  'Diagnosis Encar: available.': 'Диагностика Encar: доступна.',
+  'Diagnosis Encar: limited.': 'Диагностика Encar: ограничена.',
+  'Views': 'Просмотры',
+  'Subscribers': 'Подписчики',
+  'Full Encar inspection report is not available for this car right now.': 'Полный отчет инспекции Encar сейчас недоступен для этого автомобиля.',
+  'Нет': 'Нет',
+  'Есть': 'Есть',
+  'Нормально': 'Нормально',
+  'Нормальный': 'Нормально',
+  'Не применяется': 'Не применяется',
+  'Неисправно': 'Неисправно',
+  'Незначительная течь': 'Незначительная течь',
+  'Утечка': 'Утечка',
+  'Течь': 'Течь',
+  'Разрешено': 'Разрешено',
+  'Высокий': 'Высокий',
+  'Низкий': 'Низкий',
+  'Нейтральный': 'Нейтральный',
+  'Цветной': 'Цветной',
+  '한국자동차진단보증협회김기웅 (인)': 'Корейская ассоциация диагностики автомобилей: Ким Ки Ун',
+  '주식회사 케이아우토 (인)': 'K-Auto Co., Ltd.',
+}
+
+function formatInspectionDate(value) {
+  const text = String(value || '').trim()
+  if (!text) return '-'
+
+  const ko = text.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/)
+  if (ko) {
+    const [, year, month, day] = ko
+    return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`
+  }
+
+  return text
+}
+
+function translateInspectionText(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text === '-') return '-'
+  if (INSPECTION_RU_MAP[text]) return INSPECTION_RU_MAP[text]
+
+  if (/^Inspection\s+\d+$/i.test(text)) return `Инспекция ${text.match(/\d+/)?.[0] || ''}`.trim()
+  if (/^Photo\s+\d+$/i.test(text)) return `Фото ${text.match(/\d+/)?.[0] || ''}`.trim()
+  if (/^([A-Z]|\d+)\s*랭크$/i.test(text)) return `${text.replace(/랭크/gi, '').trim()} ранг`
+
+  if (text === '없음') return 'Нет'
+  if (text === '있음') return 'Есть'
+  if (text === '정상' || text === '양호' || text === '보통' || text === '정상작동' || text === '정상동작') return 'Нормально'
+  if (text === '불량') return 'Неисправно'
+  if (text === '해당없음') return 'Не применяется'
+  if (text === '미세누유' || text === '미세누수') return 'Незначительная течь'
+  if (text === '누유' || text === '누수') return 'Утечка'
+  if (text === '전면') return 'Передняя часть'
+  if (text === '후면') return 'Задняя часть'
+
+  if (text.includes('비금속(FRP 플라스틱)의 탈부착 가능 부품은 점검사항에서 제외되며')) {
+    return 'Съемные неметаллические детали, например из FRP-пластика, не входят в перечень проверки. Для подержанного автомобиля допустимы локальные кузовные работы, подкрасы и естественная коррозия из-за возраста.'
+  }
+
+  if (text.includes('본 차량의 진단 결과 외부 패널의 교환이 없는 차량입니다')) {
+    return 'По результатам диагностики у этого автомобиля нет замененных внешних панелей. Съемные неметаллические детали не входят в проверку, а для подержанных авто возможны локальные ремонты, подкрасы и естественная коррозия.'
+  }
+
+  return text
+}
+
 function groupInspectionRows(rows) {
   const groups = new Map()
   for (const row of rows || []) {
@@ -570,15 +650,14 @@ export default function CarDetailsPage() {
         </div>
 
                 <section className="car-details-card car-details-bottom-card">
-          <h3 className="car-details-card-title">Inspection and diagnostics</h3>
+          <h3 className="car-details-card-title">{translateInspectionText('Inspection and diagnostics')}</h3>
           <p className="car-details-muted">
-            Diagnosis Encar: {car.detailFlags?.diagnosis ? 'available' : 'limited'}.
-            Views: {Number(car.detailManage?.viewCount || 0).toLocaleString()} • Subscribers: {Number(car.detailManage?.subscribeCount || 0).toLocaleString()}.
+            {translateInspectionText(`Diagnosis Encar: ${car.detailFlags?.diagnosis ? 'available' : 'limited'}.`)} {translateInspectionText('Views')}: {Number(car.detailManage?.viewCount || 0).toLocaleString()} | {translateInspectionText('Subscribers')}: {Number(car.detailManage?.subscribeCount || 0).toLocaleString()}.
           </p>
           <div className="car-details-actions">
-            <a href={car.encarUrl || '#'} target="_blank" rel="noreferrer" className="btn-car-primary">Open in Encar</a>
+            <a href={car.encarUrl || '#'} target="_blank" rel="noreferrer" className="btn-car-primary">{translateInspectionText('Open in Encar')}</a>
             {car.inspection?.sourceUrl && (
-              <a href={car.inspection.sourceUrl} target="_blank" rel="noreferrer" className="btn-car-green">Open inspection</a>
+              <a href={car.inspection.sourceUrl} target="_blank" rel="noreferrer" className="btn-car-green">{translateInspectionText('Open inspection')}</a>
             )}
           </div>
 
@@ -586,12 +665,12 @@ export default function CarDetailsPage() {
             <div className="car-inspection-stack">
               {!!car.inspection.photos?.length && (
                 <div className="car-inspection-block">
-                  <h4 className="car-inspection-title">Inspection photos</h4>
+                  <h4 className="car-inspection-title">{translateInspectionText('Inspection photos')}</h4>
                   <div className="car-inspection-photos">
                     {car.inspection.photos.map((photo, index) => (
                       <a key={`${photo.url}-${index}`} href={photo.url} target="_blank" rel="noreferrer" className="car-inspection-photo">
-                        <img src={photo.url} alt={photo.label || `Inspection ${index + 1}`} loading="lazy" />
-                        <span>{photo.label || `Photo ${index + 1}`}</span>
+                        <img src={photo.url} alt={translateInspectionText(photo.label || `Inspection ${index + 1}`)} loading="lazy" />
+                        <span>{translateInspectionText(photo.label || `Photo ${index + 1}`)}</span>
                       </a>
                     ))}
                   </div>
@@ -600,13 +679,13 @@ export default function CarDetailsPage() {
 
               {!!car.inspection.summary?.length && (
                 <div className="car-inspection-block">
-                  <h4 className="car-inspection-title">Overall condition</h4>
+                  <h4 className="car-inspection-title">{translateInspectionText('Overall condition')}</h4>
                   <div className="car-inspection-grid">
                     {car.inspection.summary.map((item, index) => (
                       <div key={`${item.label}-${index}`} className="car-inspection-item">
-                        <span>{item.label}</span>
-                        <strong>{item.states?.join(', ') || item.detail || '-'}</strong>
-                        {item.detail && item.states?.join(', ') !== item.detail && <small>{item.detail}</small>}
+                        <span>{translateInspectionText(item.label)}</span>
+                        <strong>{(item.states?.map(translateInspectionText).join(', ')) || translateInspectionText(item.detail) || '-'}</strong>
+                        {item.detail && item.states?.join(', ') !== item.detail && <small>{translateInspectionText(item.detail)}</small>}
                       </div>
                     ))}
                   </div>
@@ -615,12 +694,12 @@ export default function CarDetailsPage() {
 
               {!!car.inspection.repairHistory?.length && (
                 <div className="car-inspection-block">
-                  <h4 className="car-inspection-title">Repair history</h4>
+                  <h4 className="car-inspection-title">{translateInspectionText('Repair history')}</h4>
                   <div className="car-inspection-grid">
                     {car.inspection.repairHistory.map((item, index) => (
                       <div key={`${item.label}-${index}`} className="car-inspection-item">
-                        <span>{item.label}</span>
-                        <strong>{item.value || '-'}</strong>
+                        <span>{translateInspectionText(item.label)}</span>
+                        <strong>{translateInspectionText(item.value || '-')}</strong>
                       </div>
                     ))}
                   </div>
@@ -629,18 +708,18 @@ export default function CarDetailsPage() {
 
               {!!car.inspection.exteriorStatus?.sections?.length && (
                 <div className="car-inspection-block">
-                  <h4 className="car-inspection-title">Body and frame inspection</h4>
+                  <h4 className="car-inspection-title">{translateInspectionText('Body and frame inspection')}</h4>
                   <div className="car-inspection-groups">
                     {car.inspection.exteriorStatus.sections.map((section) => (
                       <div key={section.title} className="car-inspection-group">
-                        <h5>{section.title}</h5>
+                        <h5>{translateInspectionText(section.title)}</h5>
                         <div className="car-inspection-group-list">
                           {section.ranks.map((rank) => (
                             <div key={`${section.title}-${rank.rank}`} className="car-inspection-line">
                               <div>
-                                <span>{rank.rank}</span>
+                                <span>{translateInspectionText(rank.rank)}</span>
                               </div>
-                              <strong>{rank.items?.join(', ') || '-'}</strong>
+                              <strong>{rank.items?.map(translateInspectionText).join(', ') || '-'}</strong>
                             </div>
                           ))}
                         </div>
@@ -652,19 +731,19 @@ export default function CarDetailsPage() {
 
               {!!inspectionGroups.length && (
                 <div className="car-inspection-block">
-                  <h4 className="car-inspection-title">Detailed technical check</h4>
+                  <h4 className="car-inspection-title">{translateInspectionText('Detailed technical check')}</h4>
                   <div className="car-inspection-groups">
                     {inspectionGroups.map((group) => (
                       <div key={group.title} className="car-inspection-group">
-                        <h5>{group.title}</h5>
+                        <h5>{translateInspectionText(group.title)}</h5>
                         <div className="car-inspection-group-list">
                           {group.items.map((item, index) => (
                             <div key={`${group.title}-${item.label}-${index}`} className="car-inspection-line">
                               <div>
-                                <span>{item.label}</span>
-                                {item.note && <small>{item.note}</small>}
+                                <span>{translateInspectionText(item.label)}</span>
+                                {item.note && <small>{translateInspectionText(item.note)}</small>}
                               </div>
-                              <strong>{item.states?.join(', ') || item.detail || '-'}</strong>
+                              <strong>{(item.states?.map(translateInspectionText).join(', ')) || translateInspectionText(item.detail) || '-'}</strong>
                             </div>
                           ))}
                         </div>
@@ -676,12 +755,12 @@ export default function CarDetailsPage() {
 
               {!!car.inspection.opinion?.length && (
                 <div className="car-inspection-block">
-                  <h4 className="car-inspection-title">Inspector comments</h4>
+                  <h4 className="car-inspection-title">{translateInspectionText('Inspector comments')}</h4>
                   <div className="car-inspection-opinion">
                     {car.inspection.opinion.map((item, index) => (
                       <div key={`${item.label}-${index}`} className="car-inspection-opinion-item">
-                        <span>{item.label}</span>
-                        <p>{item.text || '-'}</p>
+                        <span>{translateInspectionText(item.label)}</span>
+                        <p>{translateInspectionText(item.text || '-')}</p>
                       </div>
                     ))}
                   </div>
@@ -690,18 +769,18 @@ export default function CarDetailsPage() {
 
               {!!car.inspection.signatures?.signers?.length && (
                 <div className="car-inspection-block">
-                  <h4 className="car-inspection-title">Signatures and confirmation</h4>
+                  <h4 className="car-inspection-title">{translateInspectionText('Signatures and confirmation')}</h4>
                   <div className="car-inspection-grid">
                     {car.inspection.signatures.signers.map((item, index) => (
                       <div key={`${item.label}-${index}`} className="car-inspection-item">
-                        <span>{item.label}</span>
-                        <strong>{item.value}</strong>
+                        <span>{translateInspectionText(item.label)}</span>
+                        <strong>{translateInspectionText(item.value)}</strong>
                       </div>
                     ))}
                     {car.inspection.signatures.date && (
                       <div className="car-inspection-item">
-                        <span>Report date</span>
-                        <strong>{car.inspection.signatures.date}</strong>
+                        <span>{translateInspectionText('Report date')}</span>
+                        <strong>{formatInspectionDate(car.inspection.signatures.date)}</strong>
                       </div>
                     )}
                   </div>
@@ -709,7 +788,7 @@ export default function CarDetailsPage() {
               )}
             </div>
           ) : (
-            <div className="car-inspection-empty">Full Encar inspection report is not available for this car right now.</div>
+            <div className="car-inspection-empty">{translateInspectionText('Full Encar inspection report is not available for this car right now.')}</div>
           )}
         </section>
 
