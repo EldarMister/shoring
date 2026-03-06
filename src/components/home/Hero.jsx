@@ -63,9 +63,35 @@ const BadgeIcon = () => (
 )
 
 const stats = [
-  { value: '12-23', label: 'дней доставка', cls: 'stat-val-navy' },
-  { value: '7%', label: 'возврат НДС', cls: 'stat-val-teal' },
-  { value: '$200', label: 'комиссия', cls: 'stat-val-navy' },
+  {
+    value: '12-23',
+    label: 'дней доставка',
+    valueClass: 'stat-val-navy',
+  },
+  {
+    value: '7%',
+    label: 'возврат НДС',
+    valueClass: 'stat-val-teal',
+  },
+  {
+    value: '$200',
+    label: 'комиссия',
+    valueClass: 'stat-val-navy',
+    extra: (
+      <div className="stat-note">
+        <span className="stat-note-green">если привезете сами</span>
+        <span className="stat-note-red">0$</span>
+      </div>
+    ),
+  },
+  {
+    value: '🔥',
+    label: 'Срочная продажа',
+    valueClass: 'stat-val-hot',
+    href: '#whatsapp-sale',
+    extra: <div className="stat-note stat-note-hot">объявления из WhatsApp</div>,
+    cardClass: 'stat-card-clickable stat-card-hot',
+  },
 ]
 
 const advantages = [
@@ -121,12 +147,29 @@ export default function Hero() {
           </div>
 
           <div className="stats-grid">
-            {stats.map(({ value, label, cls }) => (
-              <div key={label} className="stat-card">
-                <div className={`stat-value ${cls}`}>{value}</div>
-                <div className="stat-label">{label}</div>
-              </div>
-            ))}
+            {stats.map(({ value, label, valueClass, extra, href, cardClass = '' }) => {
+              const content = (
+                <>
+                  <div className={`stat-value ${valueClass}`}>{value}</div>
+                  <div className="stat-label">{label}</div>
+                  {extra}
+                </>
+              )
+
+              if (href) {
+                return (
+                  <a key={label} href={href} className={`stat-card ${cardClass}`.trim()}>
+                    {content}
+                  </a>
+                )
+              }
+
+              return (
+                <div key={label} className={`stat-card ${cardClass}`.trim()}>
+                  {content}
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

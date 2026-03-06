@@ -17,7 +17,7 @@ const ChannelIcon = () => (
 
 export default function WhatsAppSection() {
   return (
-    <section className="whatsapp-section">
+    <section id="whatsapp-sale" className="whatsapp-section">
       <div className="section-inner" style={{ textAlign: 'center' }}>
         <h2 className="section-title">Группа и канал WhatsApp</h2>
         <p className="section-subtitle">
