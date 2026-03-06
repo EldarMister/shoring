@@ -246,8 +246,8 @@ router.get('/', async (req, res) => {
       conditions.push(`(
         c.name ILIKE ANY($${p}::text[])
         OR c.model ILIKE ANY($${p}::text[])
-        OR COALESCE(c.vin, '') ILIKE ANY($${p}::text[])
-        OR COALESCE(c.encar_id, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.vin::text, '') ILIKE ANY($${p}::text[])
+        OR COALESCE(c.encar_id::text, '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.body_type, '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.fuel_type, '') ILIKE ANY($${p}::text[])
         OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE ANY($${p}::text[]))
@@ -259,8 +259,8 @@ router.get('/', async (req, res) => {
         conditions.push(`(
           c.name ILIKE $${p}
           OR c.model ILIKE $${p}
-          OR COALESCE(c.vin, '') ILIKE $${p}
-          OR COALESCE(c.encar_id, '') ILIKE $${p}
+          OR COALESCE(c.vin::text, '') ILIKE $${p}
+          OR COALESCE(c.encar_id::text, '') ILIKE $${p}
           OR COALESCE(c.body_type, '') ILIKE $${p}
           OR COALESCE(c.fuel_type, '') ILIKE $${p}
           OR EXISTS (SELECT 1 FROM UNNEST(c.tags) AS t WHERE t ILIKE $${p})
@@ -344,8 +344,8 @@ router.get('/', async (req, res) => {
       const exactLower = qText.toLowerCase()
       const prefix = `${qText}%`
       orderBySql = `CASE
-        WHEN LOWER(COALESCE(c.encar_id, '')) = $${p} THEN 0
-        WHEN LOWER(COALESCE(c.vin, '')) = $${p} THEN 1
+        WHEN LOWER(COALESCE(c.encar_id::text, '')) = $${p} THEN 0
+        WHEN LOWER(COALESCE(c.vin::text, '')) = $${p} THEN 1
         WHEN c.name ILIKE $${p + 1} THEN 2
         WHEN c.model ILIKE $${p + 1} THEN 3
         WHEN c.name ILIKE $${p + 2} THEN 4

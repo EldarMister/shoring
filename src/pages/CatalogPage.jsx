@@ -165,7 +165,7 @@ function normalizeColorLabel(value) {
   if (low.includes('silver') || /^(eunsaek)$/.test(compact) || hasAnyToken(text, [KO.silver])) return '\u0421\u0435\u0440\u0435\u0431\u0440\u0438\u0441\u0442\u044b\u0439'
   if (low.includes('gray') || low.includes('grey') || /^(hoesaek|jwisaek)$/.test(compact) || hasAnyToken(text, [KO.gray, KO.grayAlt])) return '\u0421\u0435\u0440\u044b\u0439'
   if (low.includes('blue') || /^(cheongsaek|parangsaek)$/.test(compact) || hasAnyToken(text, [KO.blue, KO.blueAlt])) return '\u0421\u0438\u043d\u0438\u0439'
-  if (low.includes('red') || /^(ppalgangsaek|hongsaek)$/.test(compact) || hasAnyToken(text, [KO.red, KO.redAlt])) return '\u041a\u0440\u0430\u0441\u043d\u044b\u0439'
+  if (low.includes('red') || /^(ppalgangsaek|ppalgansaek|hongsaek)$/.test(compact) || hasAnyToken(text, [KO.red, KO.redAlt])) return '\u041a\u0440\u0430\u0441\u043d\u044b\u0439'
   if (low.includes('green') || /^(noksaek|choroksaek)$/.test(compact) || hasAnyToken(text, [KO.green, KO.greenAlt])) return '\u0417\u0435\u043b\u0435\u043d\u044b\u0439'
   if (low.includes('brown') || /^(galsaek)$/.test(compact) || hasAnyToken(text, [KO.brown])) return '\u041a\u043e\u0440\u0438\u0447\u043d\u0435\u0432\u044b\u0439'
   if (low.includes('beige') || /^(beijisaek)$/.test(compact) || hasAnyToken(text, [KO.beige])) return '\u0411\u0435\u0436\u0435\u0432\u044b\u0439'
@@ -186,6 +186,41 @@ function shouldReplaceColor(value) {
   const text = String(value || '').trim()
   if (shouldReplaceText(text)) return true
   return /^[a-z]+saek$/i.test(text.replace(/[\s_-]/g, ''))
+}
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function carMatchesSearch(car, query) {
+  const normalizedQuery = normalizeSearchText(query)
+  if (!normalizedQuery) return true
+
+  const haystack = [
+    car.name,
+    car.model,
+    car.vin,
+    car.encarId,
+    car.bodyType,
+    car.fuelType,
+    car.transmission,
+    car.bodyColor,
+    car.interiorColor,
+    car.location,
+    ...(Array.isArray(car.tags) ? car.tags : []),
+  ]
+    .map((value) => normalizeSearchText(value))
+    .filter(Boolean)
+    .join(' ')
+
+  return normalizedQuery
+    .split(' ')
+    .filter(Boolean)
+    .every((token) => haystack.includes(token))
 }
 
 function buildCarUpdatePatch(prevCar, nextCar) {
@@ -392,6 +427,18 @@ export default function CatalogPage() {
   const location = useLocation()
   const searchQuery = new URLSearchParams(location.search).get('q')?.trim() || ''
 
+  const fetchCarsFallback = useCallback(async () => {
+    const params = new URLSearchParams({ sort, page: 1, limit: 200, ...filters })
+    const res = await fetch(`/api/cars?${params}`)
+    if (!res.ok) throw new Error('Search fallback failed')
+    const data = await res.json()
+    const mappedCars = data.cars.map(mapCar)
+    const filteredCars = mappedCars.filter((car) => carMatchesSearch(car, searchQuery))
+    setCars(filteredCars)
+    setMeta({ total: filteredCars.length, page: 1, pages: 1 })
+    setError(filteredCars.length ? null : 'Ничего не найдено')
+  }, [sort, filters, searchQuery])
+
   const fetchCars = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -399,10 +446,20 @@ export default function CatalogPage() {
       const params = new URLSearchParams({ sort, page, limit: 20, ...filters })
       if (searchQuery) params.set('q', searchQuery)
       const res = await fetch(`/api/cars?${params}`)
-      if (!res.ok) throw new Error('Ошибка загрузки')
+      if (!res.ok) {
+        if (searchQuery) {
+          await fetchCarsFallback()
+          return
+        }
+        throw new Error('Ошибка загрузки')
+      }
       const data = await res.json()
 
       const mappedCars = data.cars.map(mapCar)
+      if (searchQuery && data.total === 0) {
+        await fetchCarsFallback()
+        return
+      }
       setCars(mappedCars)
       setMeta({ total: data.total, page: data.page, pages: data.pages })
 
@@ -463,11 +520,20 @@ export default function CatalogPage() {
         }
       }
     } catch (e) {
-      setError(e.message)
+      if (searchQuery) {
+        try {
+          await fetchCarsFallback()
+          return
+        } catch {
+          setError(e.message)
+        }
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
-  }, [sort, page, filters, searchQuery])
+  }, [sort, page, filters, searchQuery, fetchCarsFallback])
 
   useEffect(() => {
     fetchCars()

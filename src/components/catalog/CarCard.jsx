@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+const HANGUL_RE = /[\uAC00-\uD7A3]/u
+
 const PrevIcon = () => (
   <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <polyline points="15 18 9 12 15 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
@@ -117,6 +119,22 @@ function colorToSwatch(label) {
   return COLOR_SWATCHES[String(label || '').trim()] || '#cbd5e1'
 }
 
+function shouldHideTopTag(tag, car) {
+  const value = String(tag || '').trim()
+  const low = value.toLowerCase()
+  const normalizedSpecs = [car?.fuelType, car?.transmission, car?.bodyType]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+
+  if (normalizedSpecs.includes(value)) return true
+
+  return (
+    /gasoline|diesel|hybrid|electric|lpg|auto|automatic|manual|cvt|dct|robot/i.test(low) ||
+    /бенз|дизел|гибрид|электро|газ|автомат|механик|робот/i.test(value) ||
+    HANGUL_RE.test(value)
+  )
+}
+
 function buildFeatureItems(car) {
   const items = []
   if (car.bodyType && car.bodyType !== '-') {
@@ -162,6 +180,10 @@ export default function CarCard({ car }) {
   const hasImage = Boolean(imageSrc)
   const featureItems = useMemo(() => buildFeatureItems(car), [car])
   const serviceBadges = useMemo(() => buildServiceBadges(car), [car])
+  const visibleTags = useMemo(
+    () => (Array.isArray(car.tags) ? car.tags.filter((tag) => !shouldHideTopTag(tag, car)) : []),
+    [car]
+  )
 
   useEffect(() => {
     setImgIdx(0)
@@ -252,9 +274,9 @@ export default function CarCard({ car }) {
             <span>{formatMileage(car.mileage)}</span>
           </div>
 
-          {!!car.tags?.length && (
+          {!!visibleTags.length && (
             <div className="car-tags">
-              {car.tags.map((tag, i) => (
+              {visibleTags.map((tag, i) => (
                 <span
                   key={`${tag}-${i}`}
                   className="car-tag"
