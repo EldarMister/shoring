@@ -37,6 +37,9 @@ const SHORT_LOCATION_RULES = [
 ]
 
 const TRIM_REPLACEMENTS = [
+  ['peurimieo', 'Премьер'],
+  ['peurimio', 'Премьер'],
+  ['premier', 'Премьер'],
   ['the essential', 'Р­СЃСЃРµРЅС€Р»'],
   ['essential', 'Р­СЃСЃРµРЅС€Р»'],
   ['calligraphy', 'Каллиграфия'],
@@ -66,6 +69,9 @@ const TRIM_REPLACEMENTS = [
 ]
 
 const TITLE_SAFE_TRIM_SOURCES = [
+  'peurimieo',
+  'peurimio',
+  'premier',
   'calligraphy',
   'prestige',
   'the essential',

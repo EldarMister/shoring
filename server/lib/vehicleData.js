@@ -34,22 +34,12 @@ const SUSPICIOUS_DUPLICATE_INTERIOR_COLORS = new Set([
   'Золотой',
   'Мокрый асфальт',
   'Графитовый',
-  'Р‘РµР»С‹Р№',
-  'РЎРµСЂРµР±СЂРёСЃС‚С‹Р№',
-  'РљСЂР°СЃРЅС‹Р№',
-  'РЎРёРЅРёР№',
-  'Р—РµР»РµРЅС‹Р№',
-  'Р–РµР»С‚С‹Р№',
-  'РћСЂР°РЅР¶РµРІС‹Р№',
-  'Р¤РёРѕР»РµС‚РѕРІС‹Р№',
-  'Р–РµРјС‡СѓР¶РЅРѕ-Р±РµР»С‹Р№',
-  'РЎРЅРµР¶РЅС‹Р№ Р±РµР»С‹Р№',
-  'Р—РѕР»РѕС‚РѕР№',
-  'РњРѕРєСЂС‹Р№ Р°СЃС„Р°Р»СЊС‚',
-  'Р“СЂР°С„РёС‚РѕРІС‹Р№',
 ])
 
 const TRIM_REPLACEMENTS = [
+  ['peurimieo', 'Премьер'],
+  ['peurimio', 'Премьер'],
+  ['premier', 'Премьер'],
   ['the essential', 'Эссеншел'],
   ['essential', 'Эссеншел'],
   ['calligraphy', 'Каллиграфия'],
@@ -79,6 +69,9 @@ const TRIM_REPLACEMENTS = [
 ]
 
 const TITLE_SAFE_TRIM_SOURCES = [
+  'peurimieo',
+  'peurimio',
+  'premier',
   'calligraphy',
   'prestige',
   'the essential',
