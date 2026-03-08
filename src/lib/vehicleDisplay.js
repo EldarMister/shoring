@@ -172,6 +172,7 @@ const WAGON_BODY_HINT_RE = /\b(wagon|estate|touring|shooting\s*brake)\b/i
 const COUPE_BODY_HINT_RE = /\b(coupe|genesis\s+coupe|86|brz)\b/i
 const CABRIO_BODY_HINT_RE = /\b(cabrio|cabriolet|convertible|roadster)\b/i
 const KOREAN_VEHICLE_ORIGIN_RE = /\b(kia|hyundai|genesis|chevrolet|daewoo|renault(?:\s+korea|\s+samsung)?|renault samsung|reunokoria|samsung|samseong|ssangyong|kg\s*mobility|kgmobilriti)\b/i
+const KOREAN_VEHICLE_MODEL_RE = /\b(sm3|sm5|sm6|sm7|qm3|qm5|qm6|xm3|k3|k5|k7|k8|k9|g70|g80|g90|gv60|gv70|gv80|eq900|avante|elantra|sonata|grandeur|azera|santafe|santa\s*fe|tucson|palisade|staria|starex|porter|bongo|casper|morning|ray|carnival|sorento|sportage|seltos|mohave|niro|kona|orlando|trax|malibu|spark|matiz|rexton|korando|tivoli|torres|musso|bolteu|bolt|ioniq|aionik|veloster)\b/i
 
 function normalizeRawBodyLabel(value) {
   const raw = cleanText(value)
@@ -195,7 +196,9 @@ export function classifyVehicleOrigin(...values) {
     .join(' ')
 
   if (!text) return ''
-  if (KOREAN_VEHICLE_ORIGIN_RE.test(text)) return VEHICLE_ORIGIN_LABELS.korean
+  if (KOREAN_VEHICLE_ORIGIN_RE.test(text) || KOREAN_VEHICLE_MODEL_RE.test(text)) {
+    return VEHICLE_ORIGIN_LABELS.korean
+  }
   return VEHICLE_ORIGIN_LABELS.imported
 }
 

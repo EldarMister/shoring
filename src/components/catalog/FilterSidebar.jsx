@@ -499,7 +499,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
     [liveBrands, options.brands]
   )
   const originOptions = useMemo(
-    () => mergeOptionItems(liveOrigins, options.originTypes, ORIGIN_ORDER),
+    () => (options.originTypes?.length ? mergeOptionItems(options.originTypes, liveOrigins, ORIGIN_ORDER) : liveOrigins),
     [liveOrigins, options.originTypes]
   )
   const driveOptions = useMemo(

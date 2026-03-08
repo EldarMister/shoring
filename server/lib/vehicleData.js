@@ -28,6 +28,64 @@ export const KOREAN_VEHICLE_SQL_PATTERNS = Object.freeze([
   '%kg mobility%',
   '%kgmobilriti%',
   '%\uBAA8\uBE4C\uB9AC\uD2F0%',
+  '%avante%',
+  '%elantra%',
+  '%sonata%',
+  '%grandeur%',
+  '%azera%',
+  '%santafe%',
+  '%santa fe%',
+  '%tucson%',
+  '%palisade%',
+  '%staria%',
+  '%starex%',
+  '%porter%',
+  '%bongo%',
+  '%casper%',
+  '%morning%',
+  '%ray%',
+  '%carnival%',
+  '%sorento%',
+  '%sportage%',
+  '%seltos%',
+  '%mohave%',
+  '%niro%',
+  '%kona%',
+  '%orlando%',
+  '%trax%',
+  '%malibu%',
+  '%spark%',
+  '%matiz%',
+  '%rexton%',
+  '%korando%',
+  '%tivoli%',
+  '%torres%',
+  '%musso%',
+  '%bolteu%',
+  '%bolt%',
+  '%ioniq%',
+  '%aionik%',
+  '%veloster%',
+  '%sm3%',
+  '%sm5%',
+  '%sm6%',
+  '%sm7%',
+  '%qm3%',
+  '%qm5%',
+  '%qm6%',
+  '%xm3%',
+  '%k3%',
+  '%k5%',
+  '%k7%',
+  '%k8%',
+  '%k9%',
+  '%g70%',
+  '%g80%',
+  '%g90%',
+  '%gv60%',
+  '%gv70%',
+  '%gv80%',
+  '%eq900%',
 ])
 
 const SPEC_TOKENS = /^(?:gasoline|diesel|hybrid|electric|lpg|turbo|2wd|4wd|awd|fwd|rwd|at|mt|cvt|dct|\d(?:\.\d)?t?)$/i
@@ -302,6 +360,7 @@ export function normalizeManufacturer(value) {
 const LEGACY_RENAULT_SAMSUNG_MODEL_RE = /\b(sm3|sm5|sm6|sm7|qm3|qm5|qm6|xm3)\b/i
 const KOREAN_VEHICLE_ORIGIN_RE = /\b(kia|hyundai|genesis|chevrolet|daewoo|renault(?:\s+korea|\s+samsung)?|reunokoria|samsung|samseong|ssangyong|kg\s*mobility|kgmobilriti)\b/i
 const KOREAN_VEHICLE_ORIGIN_HANGUL_RE = /\uAE30\uC544|\uD604\uB300|\uC81C\uB124\uC2DC\uC2A4|\uC250\uBCF4\uB808|\uB300\uC6B0|\uB974\uB178|\uC0BC\uC131|\uC30D\uC6A9|\uBAA8\uBE4C\uB9AC\uD2F0/u
+const KOREAN_VEHICLE_MODEL_RE = /\b(sm3|sm5|sm6|sm7|qm3|qm5|qm6|xm3|k3|k5|k7|k8|k9|g70|g80|g90|gv60|gv70|gv80|eq900|avante|elantra|sonata|grandeur|azera|santafe|santa\s*fe|tucson|palisade|staria|starex|porter|bongo|casper|morning|ray|carnival|sorento|sportage|seltos|mohave|niro|kona|orlando|trax|malibu|spark|matiz|rexton|korando|tivoli|torres|musso|bolteu|bolt|ioniq|aionik|veloster)\b/i
 
 export function resolveManufacturerDisplayName(manufacturer, ...contextValues) {
   const normalized = normalizeManufacturer(manufacturer)
@@ -331,7 +390,11 @@ export function classifyVehicleOrigin(...values) {
     .join(' ')
 
   if (!text) return ''
-  if (KOREAN_VEHICLE_ORIGIN_RE.test(text) || KOREAN_VEHICLE_ORIGIN_HANGUL_RE.test(text)) {
+  if (
+    KOREAN_VEHICLE_ORIGIN_RE.test(text) ||
+    KOREAN_VEHICLE_ORIGIN_HANGUL_RE.test(text) ||
+    KOREAN_VEHICLE_MODEL_RE.test(text)
+  ) {
     return VEHICLE_ORIGIN_LABELS.korean
   }
 
