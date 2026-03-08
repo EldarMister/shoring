@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from 'firebase/auth'
 import { formatPhoneForDisplay } from '../../lib/authClient'
+import { firebaseAuth, firebaseConfigError, isFirebaseConfigured } from '../../lib/firebase'
 
 const COUNTRY_OPTIONS = [
   { id: 'kg', label: 'Кыргызстан', dialCode: '+996', hint: '555 123 456' },
@@ -10,6 +12,11 @@ const COUNTRY_OPTIONS = [
 ]
 
 const DEFAULT_COUNTRY_ID = 'kg'
+const RESEND_SECONDS = 60
+const CODE_TTL_SECONDS = 300
+const IS_FIREBASE_TEST_MODE = ['1', 'true', 'yes'].includes(
+  String(import.meta.env.VITE_FIREBASE_PHONE_AUTH_TESTING || '').trim().toLowerCase(),
+)
 
 const CloseIcon = () => (
   <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,22 +49,33 @@ function getDigitsLength(value) {
   return normalizePhoneDraft(value).length
 }
 
-function splitPhoneNumber(fullPhone) {
-  const phone = String(fullPhone || '').trim()
-  const matchedCountry = [...COUNTRY_OPTIONS]
-    .sort((left, right) => right.dialCode.length - left.dialCode.length)
-    .find((country) => phone.startsWith(country.dialCode))
-
-  if (!matchedCountry) {
-    return {
-      countryId: DEFAULT_COUNTRY_ID,
-      localPhone: normalizePhoneDraft(phone),
-    }
-  }
-
-  return {
-    countryId: matchedCountry.id,
-    localPhone: normalizePhoneDraft(phone.slice(matchedCountry.dialCode.length)),
+function mapFirebaseError(error, fallbackMessage) {
+  switch (error?.code) {
+    case 'auth/invalid-phone-number':
+      return 'Введите корректный номер телефона в международном формате'
+    case 'auth/missing-phone-number':
+      return 'Введите номер телефона'
+    case 'auth/captcha-check-failed':
+      return 'Подтвердите reCAPTCHA и попробуйте снова'
+    case 'auth/unauthorized-domain':
+      return 'Текущий домен не добавлен в Authorized domains Firebase'
+    case 'auth/operation-not-allowed':
+      return 'Phone Authentication не включен или для проекта не подключен billing'
+    case 'auth/quota-exceeded':
+      return 'Лимит отправки SMS исчерпан. Попробуйте позже'
+    case 'auth/too-many-requests':
+      return 'Слишком много попыток. Попробуйте позже'
+    case 'auth/invalid-app-credential':
+      return 'Не удалось подтвердить приложение. Обновите страницу'
+    case 'auth/invalid-verification-code':
+      return 'Неверный SMS-код'
+    case 'auth/code-expired':
+    case 'auth/session-expired':
+      return 'Срок действия кода истек. Запросите новый код'
+    case 'auth/missing-verification-code':
+      return 'Введите SMS-код'
+    default:
+      return error?.message || fallbackMessage
   }
 }
 
@@ -66,8 +84,7 @@ export default function AuthModal({
   onClose,
   user,
   loading,
-  requestCode,
-  verifyCode,
+  authenticateWithFirebase,
   logout,
 }) {
   const [countryId, setCountryId] = useState(DEFAULT_COUNTRY_ID)
@@ -75,12 +92,75 @@ export default function AuthModal({
   const [requestedPhone, setRequestedPhone] = useState('')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
-  const [devCode, setDevCode] = useState('')
+  const [status, setStatus] = useState('')
   const [submittingRequest, setSubmittingRequest] = useState(false)
   const [submittingVerify, setSubmittingVerify] = useState(false)
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [expiresAt, setExpiresAt] = useState('')
   const [now, setNow] = useState(Date.now())
+  const [recaptchaReady, setRecaptchaReady] = useState(false)
+  const [recaptchaVersion, setRecaptchaVersion] = useState(0)
+  const recaptchaContainerRef = useRef(null)
+  const recaptchaVerifierRef = useRef(null)
+  const confirmationResultRef = useRef(null)
+
+  const selectedCountry = getCountryById(countryId)
+  const composedPhone = composePhoneNumber(countryId, phone)
+  const phoneDigitsLength = getDigitsLength(composedPhone)
+  const resendSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
+  const expiresSeconds = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000)) : 0
+  const hasRequestedCode = Boolean(requestedPhone && expiresSeconds > 0)
+  const shouldShowRecaptcha = !user && isFirebaseConfigured && (!hasRequestedCode || resendSeconds === 0)
+  const canRequestCode = (
+    isFirebaseConfigured
+    && phoneDigitsLength >= 8
+    && phoneDigitsLength <= 15
+    && !submittingRequest
+    && resendSeconds === 0
+    && recaptchaReady
+  )
+  const canVerifyCode = hasRequestedCode && code.trim().length === 6 && !submittingVerify
+  const requestButtonLabel = submittingRequest
+    ? 'Отправка...'
+    : resendSeconds > 0
+      ? `Повтор через ${formatSeconds(resendSeconds)}`
+      : hasRequestedCode
+        ? 'Отправить код повторно'
+        : 'Получить код'
+
+  function clearRecaptcha() {
+    if (recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current.clear()
+      } catch {
+        // Ignore widget cleanup errors.
+      }
+      recaptchaVerifierRef.current = null
+    }
+
+    if (recaptchaContainerRef.current) {
+      recaptchaContainerRef.current.innerHTML = ''
+    }
+  }
+
+  function refreshRecaptcha() {
+    clearRecaptcha()
+    setRecaptchaReady(false)
+    setRecaptchaVersion((version) => version + 1)
+  }
+
+  function resetVerificationState({ preserveStatus = false } = {}) {
+    setRequestedPhone('')
+    setCode('')
+    setExpiresAt('')
+    setError('')
+    if (!preserveStatus) {
+      setStatus('')
+    }
+    setCooldownUntil(0)
+    setNow(Date.now())
+    confirmationResultRef.current = null
+  }
 
   useEffect(() => {
     if (!open) return undefined
@@ -99,6 +179,15 @@ export default function AuthModal({
   }, [onClose, open])
 
   useEffect(() => {
+    if (open) return undefined
+
+    resetVerificationState()
+    clearRecaptcha()
+    setRecaptchaReady(false)
+    return undefined
+  }, [open])
+
+  useEffect(() => {
     if (!open) return undefined
 
     const needsTick = Date.now() < cooldownUntil || (expiresAt && Date.now() < new Date(expiresAt).getTime())
@@ -108,33 +197,45 @@ export default function AuthModal({
     return () => window.clearInterval(timer)
   }, [cooldownUntil, expiresAt, open])
 
-  const selectedCountry = getCountryById(countryId)
-  const composedPhone = composePhoneNumber(countryId, phone)
-  const phoneDigitsLength = getDigitsLength(composedPhone)
-  const resendSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
-  const expiresSeconds = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000)) : 0
-  const hasRequestedCode = Boolean(requestedPhone && expiresSeconds > 0)
-  const canRequestCode = phoneDigitsLength >= 8 && phoneDigitsLength <= 15 && !submittingRequest && resendSeconds === 0
-  const canVerifyCode = hasRequestedCode && code.trim().length === 6 && !submittingVerify
-  const requestButtonLabel = submittingRequest
-    ? 'Отправка...'
-    : resendSeconds > 0
-      ? `Повтор через ${formatSeconds(resendSeconds)}`
-      : hasRequestedCode
-        ? 'Отправить код повторно'
-        : 'Получить код'
+  useEffect(() => {
+    if (!open || !shouldShowRecaptcha || !firebaseAuth || !recaptchaContainerRef.current) {
+      clearRecaptcha()
+      setRecaptchaReady(false)
+      return undefined
+    }
+
+    let cancelled = false
+    clearRecaptcha()
+    setRecaptchaReady(false)
+    setError('')
+
+    firebaseAuth.settings.appVerificationDisabledForTesting = IS_FIREBASE_TEST_MODE
+
+    const verifier = new RecaptchaVerifier(firebaseAuth, recaptchaContainerRef.current, {
+      size: IS_FIREBASE_TEST_MODE ? 'invisible' : 'normal',
+    })
+
+    recaptchaVerifierRef.current = verifier
+
+    verifier.render()
+      .then(() => {
+        if (!cancelled) {
+          setRecaptchaReady(true)
+        }
+      })
+      .catch((renderError) => {
+        if (!cancelled) {
+          setError(mapFirebaseError(renderError, 'Не удалось загрузить reCAPTCHA'))
+        }
+      })
+
+    return () => {
+      cancelled = true
+      clearRecaptcha()
+    }
+  }, [open, shouldShowRecaptcha, recaptchaVersion])
 
   if (!open) return null
-
-  const resetVerificationState = () => {
-    setRequestedPhone('')
-    setCode('')
-    setExpiresAt('')
-    setDevCode('')
-    setError('')
-    setCooldownUntil(0)
-    setNow(Date.now())
-  }
 
   const handlePhoneChange = (value) => {
     setPhone(value)
@@ -152,29 +253,41 @@ export default function AuthModal({
 
   const handleRequestCode = async (event) => {
     event.preventDefault()
+
+    if (!firebaseAuth || !isFirebaseConfigured) {
+      setError(firebaseConfigError || 'Firebase Phone Auth не настроен')
+      return
+    }
+
+    if (!IS_FIREBASE_TEST_MODE && !recaptchaVerifierRef.current) {
+      setError('reCAPTCHA еще не готова. Обновите страницу и попробуйте снова')
+      return
+    }
+
     setSubmittingRequest(true)
     setError('')
+    setStatus('')
 
     try {
-      const payload = await requestCode(composedPhone)
-      const nextPhone = payload.phone || composedPhone
-      const splitPhone = splitPhoneNumber(nextPhone)
+      await signOut(firebaseAuth).catch(() => {})
+      const confirmation = await signInWithPhoneNumber(
+        firebaseAuth,
+        composedPhone,
+        recaptchaVerifierRef.current,
+      )
 
-      setRequestedPhone(nextPhone)
-      setCountryId(splitPhone.countryId)
-      setPhone(splitPhone.localPhone)
-      setExpiresAt(payload.expires_at || '')
-      setCooldownUntil(Date.now() + Number(payload.resend_after || 60) * 1000)
+      confirmationResultRef.current = confirmation
+      setRequestedPhone(composedPhone)
+      setExpiresAt(new Date(Date.now() + CODE_TTL_SECONDS * 1000).toISOString())
+      setCooldownUntil(Date.now() + RESEND_SECONDS * 1000)
       setCode('')
-      setDevCode(payload.dev_code || '')
+      setStatus(`Код отправлен на ${formatPhoneForDisplay(composedPhone)}`)
       setNow(Date.now())
+      clearRecaptcha()
+      setRecaptchaReady(false)
     } catch (requestError) {
-      const retryAfter = Number(requestError?.details?.retry_after || 0)
-      if (retryAfter > 0) {
-        setCooldownUntil(Date.now() + retryAfter * 1000)
-        setNow(Date.now())
-      }
-      setError(requestError.message || 'Не удалось отправить код')
+      setError(mapFirebaseError(requestError, 'Не удалось отправить код'))
+      refreshRecaptcha()
     } finally {
       setSubmittingRequest(false)
     }
@@ -182,14 +295,29 @@ export default function AuthModal({
 
   const handleVerifyCode = async (event) => {
     event.preventDefault()
+
+    if (!confirmationResultRef.current) {
+      setError('Сначала запросите SMS-код')
+      return
+    }
+
     setSubmittingVerify(true)
     setError('')
+    setStatus('')
 
     try {
-      await verifyCode(requestedPhone || composedPhone, code)
+      const credential = await confirmationResultRef.current.confirm(code)
+      const idToken = await credential.user.getIdToken()
+      await authenticateWithFirebase({ idToken, phone: requestedPhone || composedPhone })
+      if (firebaseAuth) {
+        await signOut(firebaseAuth).catch(() => {})
+      }
       resetVerificationState()
     } catch (verifyError) {
-      setError(verifyError.message || 'Не удалось подтвердить код')
+      if (firebaseAuth) {
+        await signOut(firebaseAuth).catch(() => {})
+      }
+      setError(mapFirebaseError(verifyError, 'Не удалось подтвердить код'))
     } finally {
       setSubmittingVerify(false)
     }
@@ -212,7 +340,7 @@ export default function AuthModal({
           <div className="auth-account-card">
             <div className="auth-account-badge">Аккаунт активен</div>
             <div className="auth-account-phone">{formatPhoneForDisplay(user.phone)}</div>
-            <p className="auth-account-sub">Вы уже авторизованы. Этот номер можно использовать для повторного входа через SMS-код.</p>
+            <p className="auth-account-sub">Номер уже подтвержден и привязан к вашему аккаунту.</p>
             <div className="auth-modal-actions">
               <button type="button" className="auth-secondary-btn" onClick={onClose}>
                 Закрыть
@@ -224,6 +352,18 @@ export default function AuthModal({
           </div>
         ) : (
           <div className="auth-modal-body">
+            {!isFirebaseConfigured && (
+              <p className="auth-status auth-status-error">
+                Firebase Phone Auth не настроен. {firebaseConfigError}
+              </p>
+            )}
+
+            {IS_FIREBASE_TEST_MODE && (
+              <p className="auth-status auth-status-info">
+                Включен Firebase test mode. Работают только номера, добавленные в Phone numbers for testing.
+              </p>
+            )}
+
             <form className="auth-form" onSubmit={handleRequestCode}>
               <label className="auth-field">
                 <span>Номер телефона</span>
@@ -233,7 +373,7 @@ export default function AuthModal({
                     <select
                       value={countryId}
                       onChange={(event) => handleCountryChange(event.target.value)}
-                      disabled={submittingRequest || hasRequestedCode}
+                      disabled={submittingRequest}
                     >
                       {COUNTRY_OPTIONS.map((country) => (
                         <option key={country.id} value={country.id}>
@@ -249,11 +389,17 @@ export default function AuthModal({
                     autoComplete="tel-national"
                     placeholder={selectedCountry.hint}
                     value={phone}
-                    disabled={submittingRequest || hasRequestedCode}
+                    disabled={submittingRequest}
                     onChange={(event) => handlePhoneChange(event.target.value)}
                   />
                 </div>
               </label>
+
+              {!hasRequestedCode && shouldShowRecaptcha && (
+                <div className="auth-recaptcha-wrap">
+                  <div ref={recaptchaContainerRef} className="auth-recaptcha" />
+                </div>
+              )}
 
               <button type="submit" className="auth-primary-btn" disabled={!canRequestCode}>
                 {requestButtonLabel}
@@ -264,7 +410,7 @@ export default function AuthModal({
               <form className="auth-form auth-form-verify" onSubmit={handleVerifyCode}>
                 <div className="auth-otp-head">
                   <span className="auth-otp-title">SMS-код</span>
-                  <span className="auth-otp-phone">{requestedPhone}</span>
+                  <span className="auth-otp-phone">{formatPhoneForDisplay(requestedPhone)}</span>
                 </div>
 
                 <label className="auth-field">
@@ -283,8 +429,16 @@ export default function AuthModal({
                   <span className="auth-timer-pill">
                     {resendSeconds > 0 ? `Повторная отправка через ${formatSeconds(resendSeconds)}` : 'Можно отправить код повторно'}
                   </span>
-                  <span className="auth-timer-pill auth-timer-pill-muted">Код активен еще {formatSeconds(expiresSeconds)}</span>
+                  <span className="auth-timer-pill auth-timer-pill-muted">
+                    Код активен еще {formatSeconds(expiresSeconds)}
+                  </span>
                 </div>
+
+                {hasRequestedCode && resendSeconds === 0 && shouldShowRecaptcha && (
+                  <div className="auth-recaptcha-wrap">
+                    <div ref={recaptchaContainerRef} className="auth-recaptcha" />
+                  </div>
+                )}
 
                 <button type="submit" className="auth-primary-btn" disabled={!canVerifyCode}>
                   {submittingVerify ? 'Проверка...' : 'Подтвердить'}
@@ -292,11 +446,11 @@ export default function AuthModal({
               </form>
             )}
 
+            {status && <p className="auth-status auth-status-info">{status}</p>}
             {error && <p className="auth-status auth-status-error">{error}</p>}
-            {devCode && <p className="auth-status auth-status-dev">Тестовый код: {devCode}</p>}
 
             <div className="auth-modal-footnote">
-              Код живет 5 минут. Новый код можно запросить не чаще одного раза в 60 секунд.
+              Новый код можно запросить не чаще одного раза в 60 секунд.
               {loading ? ' Проверяем текущую сессию...' : ''}
             </div>
           </div>

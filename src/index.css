@@ -7687,6 +7687,19 @@ body {
   font-size: 12px;
 }
 
+.auth-recaptcha-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.auth-recaptcha {
+  min-height: 78px;
+}
+
+.auth-recaptcha > div {
+  margin: 0 auto;
+}
+
 .auth-account-card {
   display: grid;
   gap: 14px;
@@ -7745,6 +7758,10 @@ body {
 
   .auth-phone-row {
     grid-template-columns: 1fr;
+  }
+
+  .auth-recaptcha {
+    transform-origin: top center;
   }
 
   .auth-country-field select,

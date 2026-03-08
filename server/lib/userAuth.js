@@ -1,15 +1,8 @@
 import crypto from 'crypto'
-import axios from 'axios'
 
 const DEFAULT_JWT_SECRET = 'dev-only-jwt-secret-change-me'
 const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_JWT_SECRET
 const JWT_EXPIRES_IN_DAYS = clampNumber(process.env.JWT_EXPIRES_IN_DAYS, 30, 1, 365)
-export const OTP_RESEND_SECONDS = clampNumber(process.env.OTP_RESEND_SECONDS, 60, 15, 600)
-export const OTP_TTL_SECONDS = clampNumber(process.env.OTP_TTL_SECONDS, 300, 60, 1800)
-
-const SMS_PROVIDER = String(process.env.SMS_PROVIDER || 'console').trim().toLowerCase()
-const SMS_WEBHOOK_URL = String(process.env.SMS_WEBHOOK_URL || '').trim()
-const SMS_WEBHOOK_TOKEN = String(process.env.SMS_WEBHOOK_TOKEN || '').trim()
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 
 if (JWT_SECRET === DEFAULT_JWT_SECRET && IS_PRODUCTION) {
@@ -38,19 +31,6 @@ export function normalizePhone(value) {
   const digits = String(value || '').replace(/\D/g, '')
   if (digits.length < 8 || digits.length > 15) return ''
   return `+${digits}`
-}
-
-export function formatOtpMessage(code) {
-  const ttlMinutes = Math.max(1, Math.round(OTP_TTL_SECONDS / 60))
-  return `TLV Auto: код подтверждения ${code}. Он действует ${ttlMinutes} мин.`
-}
-
-export function createOtpCode() {
-  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0')
-}
-
-export function isDevSmsFallbackEnabled() {
-  return !IS_PRODUCTION && SMS_PROVIDER === 'console'
 }
 
 export function serializeUser(row) {
@@ -118,30 +98,4 @@ export function extractBearerToken(authHeader) {
   const value = String(authHeader || '')
   if (!value.toLowerCase().startsWith('bearer ')) return ''
   return value.slice(7).trim()
-}
-
-export async function sendOtpSms({ phone, code }) {
-  const message = formatOtpMessage(code)
-
-  if (SMS_PROVIDER === 'webhook') {
-    if (!SMS_WEBHOOK_URL) {
-      throw new Error('SMS webhook URL is not configured')
-    }
-
-    const headers = { 'Content-Type': 'application/json' }
-    if (SMS_WEBHOOK_TOKEN) {
-      headers.Authorization = `Bearer ${SMS_WEBHOOK_TOKEN}`
-    }
-
-    await axios.post(
-      SMS_WEBHOOK_URL,
-      { phone, code, message },
-      { headers, timeout: 15_000 },
-    )
-
-    return { provider: 'webhook' }
-  }
-
-  console.log(`[sms:${SMS_PROVIDER || 'console'}] ${phone} <- ${code}`)
-  return { provider: 'console' }
 }

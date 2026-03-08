@@ -240,7 +240,7 @@ export async function runScrapeJob(limit = 100) {
   state.lastRun = state.startedAt
   state.progress = { done: 0, total: limit, failed: 0, skipped: 0, photos: 0 }
 
-  state.info(`🚀 Запуск парсера — лимит ${limit} машин`)
+  state.info(`🚀 Запуск парсера — лимит ${limit} новых машин`)
 
   const sourceMode = process.env.ENCAR_PROXY_URL ? 'Vercel proxy' : 'direct Encar API'
   state.info(`Source mode: ${sourceMode}`)
@@ -248,12 +248,12 @@ export async function runScrapeJob(limit = 100) {
   const pricingSettings = await getPricingSettings()
 
   let offset = 0
-  let processed = 0
   let addedThisRun = 0
 
   try {
-    while (processed < limit && !state.stopReq) {
-      const pageLimit = Math.min(PAGE_SIZE, limit - processed)
+    while (addedThisRun < limit && !state.stopReq) {
+      const remainingToAdd = limit - addedThisRun
+      const pageLimit = Math.min(PAGE_SIZE, remainingToAdd)
       state.info(`📋 Получаю список (offset=${offset}, count=${pageLimit})...`)
 
       let listResult
@@ -284,7 +284,6 @@ export async function runScrapeJob(limit = 100) {
         if (existId) {
           state.info(`⏭ Пропуск ${car.name} (${car.year}) — уже в базе`)
           state.setProgress({ skipped: state.progress.skipped + 1 })
-          processed++
           continue
         }
 
@@ -307,14 +306,17 @@ export async function runScrapeJob(limit = 100) {
         try {
           const newId = await insertCar(car, photoUrls)
           state.success(`✅ Сохранено: ${car.name} → id=${newId}, фото=${photoUrls.length}`)
-          state.setProgress({ done: state.progress.done + 1 })
           addedThisRun++
+          state.setProgress({ done: state.progress.done + 1 })
         } catch (dbErr) {
           state.error(`❌ БД: ${car.name} — ${dbErr.message}`)
           state.setProgress({ failed: state.progress.failed + 1 })
         }
 
-        processed++
+        if (addedThisRun >= limit) {
+          state.info(`✅ Достигнут лимит новых машин: ${limit}`)
+          break
+        }
       }
 
       offset += cars.length

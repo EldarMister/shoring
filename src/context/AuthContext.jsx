@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { signOut } from 'firebase/auth'
 import AuthModal from '../components/auth/AuthModal'
 import { formatPhoneForDisplay } from '../lib/authClient'
+import { firebaseAuth } from '../lib/firebase'
 
 const AUTH_TOKEN_KEY = 'tlv-user-jwt'
 const AuthContext = createContext(null)
@@ -84,19 +86,11 @@ export function AuthProvider({ children }) {
   const openAuthModal = () => setAuthModalOpen(true)
   const closeAuthModal = () => setAuthModalOpen(false)
 
-  const requestCode = async (phone) => (
-    apiFetchJson('/api/auth/request-code', {
+  const authenticateWithFirebase = async ({ idToken, phone = '' }) => {
+    const payload = await apiFetchJson('/api/auth/firebase', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    })
-  )
-
-  const verifyCode = async (phone, code) => {
-    const payload = await apiFetchJson('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ idToken, phone }),
     })
 
     storeToken(payload.token || '')
@@ -107,6 +101,9 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
+    if (firebaseAuth) {
+      signOut(firebaseAuth).catch(() => {})
+    }
     storeToken('')
     setToken('')
     setUser(null)
@@ -120,8 +117,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(user && token),
     openAuthModal,
     closeAuthModal,
-    requestCode,
-    verifyCode,
+    authenticateWithFirebase,
     logout,
   }), [loading, token, user])
 
@@ -133,8 +129,7 @@ export function AuthProvider({ children }) {
         onClose={closeAuthModal}
         user={user}
         loading={loading}
-        requestCode={requestCode}
-        verifyCode={verifyCode}
+        authenticateWithFirebase={authenticateWithFirebase}
         logout={logout}
       />
     </AuthContext.Provider>
