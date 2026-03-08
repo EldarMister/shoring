@@ -192,6 +192,9 @@ function translateInspectionText(value) {
   if (!text) return ''
   if (text === '-') return '-'
   if (INSPECTION_RU_MAP[text]) return INSPECTION_RU_MAP[text]
+  if (/타이로드\s*엔드|타이로드엔드/u.test(text) && /볼\s*조인트/u.test(text)) {
+    return 'Наконечники рулевых тяг и шаровые опоры'
+  }
 
   if (/^Inspection\s+\d+$/i.test(text)) return `Инспекция ${text.match(/\d+/)?.[0] || ''}`.trim()
   if (/^Photo\s+\d+$/i.test(text)) return `Фото ${text.match(/\d+/)?.[0] || ''}`.trim()

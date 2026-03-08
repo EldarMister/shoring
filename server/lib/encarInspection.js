@@ -150,6 +150,9 @@ function translateText(value) {
   const text = cleanText(value)
   if (!text) return ''
   if (TEXT_MAP.has(text)) return TEXT_MAP.get(text)
+  if (/타이로드\s*엔드|타이로드엔드/u.test(text) && /볼\s*조인트/u.test(text)) {
+    return 'Наконечники рулевых тяг и шаровые опоры'
+  }
   return text
 }
 

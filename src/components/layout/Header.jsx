@@ -58,6 +58,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [searchDirty, setSearchDirty] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
@@ -73,13 +74,47 @@ export default function Header() {
     setSearchTerm(params.get('q') || '')
   }, [location.search])
 
+  useEffect(() => {
+    if (!searchDirty) return
+
+    const currentQuery = new URLSearchParams(location.search).get('q') || ''
+    const nextQuery = searchTerm.trim()
+    if (currentQuery === nextQuery && location.pathname === '/catalog') {
+      setSearchDirty(false)
+      return
+    }
+
+    const timer = setTimeout(() => {
+      if (!nextQuery && location.pathname !== '/catalog' && !currentQuery) {
+        setSearchDirty(false)
+        return
+      }
+
+      const params = new URLSearchParams(location.search)
+      if (nextQuery) params.set('q', nextQuery)
+      else params.delete('q')
+
+      navigate(`/catalog${params.toString() ? `?${params}` : ''}`, { replace: true })
+      setMobileOpen(false)
+      setSearchDirty(false)
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [searchDirty, searchTerm, location.pathname, location.search, navigate])
+
   const submitSearch = (e) => {
     e.preventDefault()
     const query = searchTerm.trim()
     const params = new URLSearchParams()
     if (query) params.set('q', query)
-    navigate(`/catalog${params.toString() ? `?${params}` : ''}`)
+    navigate(`/catalog${params.toString() ? `?${params}` : ''}`, { replace: true })
     setMobileOpen(false)
+    setSearchDirty(false)
+  }
+
+  const handleSearchChange = (value) => {
+    setSearchTerm(value)
+    setSearchDirty(true)
   }
 
   return (
@@ -112,7 +147,7 @@ export default function Header() {
             placeholder="Марка / модель / VIN / Encar ID"
             className="search-input"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </form>
 
@@ -164,7 +199,7 @@ export default function Header() {
               placeholder="Марка / модель / VIN / Encar ID"
               className="search-input"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
           </form>
         </div>
