@@ -5,6 +5,7 @@ import {
   normalizeColorLabel as normalizeVehicleColorLabel,
   VEHICLE_ORIGIN_LABELS,
 } from '../../lib/vehicleDisplay'
+import { normalizeKnownBrandAlias } from '../../../shared/brandAliases'
 
 const ChevronIcon = ({ open }) => (
   <svg
@@ -163,6 +164,14 @@ function normalizeArrayFilterValue(value) {
   return []
 }
 
+function normalizeBrandFilterValue(value) {
+  const normalized = normalizeArrayFilterValue(value)
+    .map((item) => normalizeBrandName(item) || item)
+    .filter(Boolean)
+
+  return [...new Set(normalized)]
+}
+
 function buildLocalFilters(filters) {
   const src = filters || {}
   return {
@@ -174,7 +183,7 @@ function buildLocalFilters(filters) {
     minMileage: String(src.minMileage ?? ''),
     maxMileage: String(src.maxMileage ?? ''),
     origin: normalizeArrayFilterValue(src.origin),
-    brands: normalizeArrayFilterValue(src.brands ?? src.brand),
+    brands: normalizeBrandFilterValue(src.brands ?? src.brand),
     drive: normalizeArrayFilterValue(src.drive),
     fuel: normalizeArrayFilterValue(src.fuel),
     body: normalizeArrayFilterValue(src.body),
@@ -222,12 +231,15 @@ function normalizeBrandName(value) {
   const text = String(value || '').trim()
   if (!text || text === '-') return ''
 
+  const aliased = normalizeKnownBrandAlias(text)
+  if (aliased) return aliased
+
   for (const [pattern, label] of BRAND_RULES) {
     if (pattern.test(text)) return label
   }
 
   const firstToken = text.split(/\s+/).find(Boolean) || ''
-  return firstToken
+  return normalizeKnownBrandAlias(firstToken) || firstToken
 }
 
 function buildLiveOptionCounts(cars, getValue, sortOrder = []) {

@@ -10,6 +10,7 @@ import {
   normalizeTrimLevel,
   VEHICLE_ORIGIN_LABELS,
 } from '../lib/vehicleData.js'
+import { normalizeKnownBrandAlias } from '../../shared/brandAliases.js'
 
 const router = Router()
 const WEAK_BODY_TYPES = new Set(['', '-', 'SUV', 'Вэн', 'Малый класс', 'Компактный класс', 'Средний класс', 'Бизнес-класс'])
@@ -285,9 +286,8 @@ function normalizeBrand(value) {
   if (!src) return ''
   const low = src.toLowerCase()
 
-  if (low.includes('kia') || src.includes(KO.kia)) return 'Kia'
-  if (low.includes('hyundai') || src.includes(KO.hyundai)) return 'Hyundai'
-  if (low.includes('genesis') || src.includes(KO.genesis)) return 'Genesis'
+  const aliased = normalizeKnownBrandAlias(src)
+  if (aliased) return aliased
   if (low.includes('chevrolet') || src.includes(KO.chevrolet)) return 'Chevrolet'
   if (low.includes('renault') || src.includes(KO.renault) || src.includes(KO.samsung)) return 'Renault Korea'
   if (

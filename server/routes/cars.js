@@ -2,6 +2,7 @@ import { Router } from 'express'
 import pool from '../db.js'
 import { DEFAULT_FEES, VAT_REFUND_RATE, computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
+import { getKnownBrandSqlPatterns } from '../../shared/brandAliases.js'
 import {
   extractShortLocation,
   extractTrimLevelFromTitle,
@@ -88,9 +89,8 @@ function brandPatterns(value) {
   const low = String(value || '').toLowerCase().trim()
   if (!low) return []
 
-  if (low.includes('kia')) return ['%kia%', `%${KO.kia}%`]
-  if (low.includes('hyundai')) return ['%hyundai%', `%${KO.hyundai}%`]
-  if (low.includes('genesis')) return ['%genesis%', `%${KO.genesis}%`]
+  const knownPatterns = getKnownBrandSqlPatterns(value)
+  if (knownPatterns.length) return knownPatterns
   if (low.includes('chevrolet')) return ['%chevrolet%', `%${KO.chevrolet}%`]
   if (low.includes('renault')) return ['%renault%', `%${KO.renault}%`, `%${KO.samsung}%`]
   if (low.includes('ssang') || low.includes('kg mobility') || low.includes('kgmobilriti')) {
@@ -199,6 +199,9 @@ function normalizeOriginFilterValue(value) {
 }
 
 const SEARCH_ALIASES = [
+  ['kia-alias', ['kia', 'gia', KO.kia]],
+  ['hyundai-alias', ['hyundai', 'hyeondae', KO.hyundai]],
+  ['genesis-alias', ['genesis', 'jenesiseu', KO.genesis]],
   ['kia', ['kia', 'киа', KO.kia]],
   ['hyundai', ['hyundai', 'хендэ', 'хундай', KO.hyundai]],
   ['genesis', ['genesis', 'дженезис', KO.genesis]],
