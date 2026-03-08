@@ -290,6 +290,18 @@ function cleanText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
+function normalizeRomanizedColorAlias(value) {
+  const low = cleanText(value).toLowerCase()
+  if (!low) return ''
+
+  if (/^(galsaek|galdaesaek)$/.test(low)) return '\u041A\u043E\u0440\u0438\u0447\u043D\u0435\u0432\u044B\u0439'
+  if (/^(borasaek|jajusaek)$/.test(low)) return '\u0424\u0438\u043E\u043B\u0435\u0442\u043E\u0432\u044B\u0439'
+  if (/^haneulsaek$/.test(low)) return '\u0421\u0438\u043D\u0438\u0439'
+  if (/^(dampoksaek|damnoksaek|damnogsaek)$/.test(low)) return '\u0417\u0435\u043B\u0435\u043D\u044B\u0439'
+
+  return ''
+}
+
 function hasKnownTrimKeyword(value) {
   const text = cleanText(value)
   if (!text) return false
@@ -636,6 +648,9 @@ export function normalizeColorName(value) {
   const raw = cleanText(value)
   if (!raw) return ''
   if (GENERIC_COLOR_LABELS.has(raw)) return raw
+
+  const romanizedAlias = normalizeRomanizedColorAlias(raw)
+  if (romanizedAlias) return romanizedAlias
 
   const direct = COLOR_EXACT.get(raw) || COLOR_EXACT.get(raw.toLowerCase())
   if (direct) return direct

@@ -331,7 +331,7 @@ function normalizeFuel(value) {
   }
   if (low.includes('hydrogen') || low.includes('водород') || src.includes(KO.hydrogen)) return 'Водород'
 
-  return HANGUL_RE.test(src) ? '' : src
+  return ''
 }
 
 function normalizeDrive(value) {
