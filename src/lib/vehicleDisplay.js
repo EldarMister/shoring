@@ -139,7 +139,22 @@ const TITLE_SAFE_TRIM_SOURCES = [
   'executive',
   'black edition',
   'elite',
+  'special',
+  'collection',
+  'celebrity',
+  'le blanc',
+  'hi-limousine',
+  'air',
+  'earth',
+  'light',
+  'family',
+  'export',
+  'school bus',
+  'choice',
+  '1 million',
+  '5-door',
 ]
+const PASSENGER_COUNT_TRIM_RE = /\b\d+\s*inseung\b/i
 
 const SUSPICIOUS_DUPLICATE_INTERIOR_COLORS = new Set([
   'Белый',
@@ -219,6 +234,7 @@ export function classifyVehicleOrigin(...values) {
 function hasKnownTrimKeyword(value) {
   const text = cleanText(value)
   if (!text) return false
+  if (PASSENGER_COUNT_TRIM_RE.test(text)) return true
 
   return TRIM_REPLACEMENTS.some(([source]) => {
     const pattern = new RegExp(`\\b${source.replace(/\s+/g, '\\s+')}\\b`, 'i')
@@ -261,6 +277,12 @@ export function extractTrimLabelFromTitle(...values) {
   for (const value of values) {
     const text = cleanText(value)
     if (!text) continue
+
+    const passengerMatch = text.match(PASSENGER_COUNT_TRIM_RE)
+    if (passengerMatch) {
+      const normalized = normalizeTrimLabel(passengerMatch[0])
+      if (normalized && !candidates.includes(normalized)) candidates.push(normalized)
+    }
 
     for (const source of TITLE_SAFE_TRIM_SOURCES) {
       const pattern = new RegExp(`\\b${source.replace(/\s+/g, '\\s+')}\\b`, 'i')
