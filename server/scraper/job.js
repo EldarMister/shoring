@@ -86,6 +86,7 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     ? translateVehicleText(translatedManufacturer)
     : translatedManufacturer
   const normalizedManufacturer = normalizeManufacturer(manufacturer || '')
+  const displayManufacturer = normalizedManufacturer === 'Renault Korea' ? '' : normalizedManufacturer
   const trim_level = normalizeTrimLevel(raw.BadgeDetail, raw.GradeDetail) || extractTrimLevelFromTitle(
     raw.BadgeDetail,
     raw.GradeDetail,
@@ -95,7 +96,7 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
   )
   const rawLocation = String(raw.OfficeCityState || raw.OfficeName || '').trim()
 
-  let name = [normalizedManufacturer, model, badge].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+  let name = [displayManufacturer, model, badge].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
   let modelName = [model, badge].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 
   if (/^\((?:gm|sm|daewoo)\)\b/i.test(name) || /^\((?:gm|sm|daewoo)\)\b/i.test(modelName)) {

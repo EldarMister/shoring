@@ -114,6 +114,7 @@ function stripVehicleTitleNoise(value) {
   if (!text) return ''
 
   text = text
+    .replace(/^(?:reunokoria|renault[-\s]*korea|renault\s*samsung)\s*\(?\s*(?:samseong|samsung)?\s*\)?\s*/gi, '')
     .replace(/\bRenault Korea\s*\((?:Samseong|Samsung)\)/gi, 'Renault Korea')
     .replace(/\b(KG Mobility)\s*\((?:SsangYong)\)/gi, '$1')
 

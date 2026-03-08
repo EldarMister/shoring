@@ -230,11 +230,13 @@ export function normalizeManufacturer(value) {
   const raw = cleanText(value)
   if (!raw) return ''
   if (/renault[-\s]*korea\s*\(?\s*(samseong|samsung)?\s*\)?/i.test(raw)) return 'Renault Korea'
+  if (/reunokoria\s*\(?\s*(samseong|samsung)?\s*\)?/i.test(raw)) return 'Renault Korea'
 
   const text = normalizeText(raw)
   if (!text) return ''
   if (/renault[-\s]*korea\s*\(?\s*(samseong|samsung)?\s*\)?/i.test(text)) return 'Renault Korea'
   if (/renault\s*samsung/i.test(text)) return 'Renault Korea'
+  if (/reunokoria\s*\(?\s*(samseong|samsung)?\s*\)?/i.test(text)) return 'Renault Korea'
   if (/kgmobilriti/i.test(text) || /kg mobility/i.test(text)) return 'KG Mobility'
   if (/ssangyong/i.test(text)) return 'SsangYong'
   return text

@@ -102,8 +102,9 @@ router.get('/:encarId', async (req, res) => {
       ad.subTitle,
     )
 
+    const displayManufacturer = manufacturer === 'Renault Korea' ? '' : manufacturer
     const name = appendTitleTrimSuffix(
-      [manufacturer, modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
+      [displayManufacturer, modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
       category.gradeDetailEnglishName,
       category.gradeDetailName,
       trimLevel,
