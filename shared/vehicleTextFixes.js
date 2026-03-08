@@ -74,6 +74,8 @@ const TITLE_REPLACEMENTS = [
   [/\brabo\b/gi, 'Labo'],
   [/\bmaseuteo\b/gi, 'Master'],
   [/\bseutarekseu\b/gi, 'Starex'],
+  [/\bseupakeu\b/gi, 'Spark'],
+  [/\bspark\s+spark\b/gi, 'Spark'],
   [/\bwaegeon\b/gi, 'Wagon'],
   [/\bdainamik\b/gi, 'Dynamic'],
   [/\baikonik\b/gi, 'Iconic'],
