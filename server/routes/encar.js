@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import axios from 'axios'
 import { fetchEncarInspection } from '../lib/encarInspection.js'
-import { DEFAULT_FEES, computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
+import { computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
+import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
 import {
   PARKING_ADDRESS_EN,
   PARKING_ADDRESS_KO,
@@ -58,12 +59,8 @@ router.get('/:encarId', async (req, res) => {
     const view = data?.view || {}
     const partnership = data?.partnership || {}
     const exchangeSnapshot = await getExchangeRateSnapshot()
-
+    const pricingSettings = await getPricingSettings()
     const priceKRW = (Number(ad.price) || 0) * 10000
-    const pricing = computePricing({
-      priceKrw: priceKRW,
-      ...DEFAULT_FEES,
-    }, exchangeSnapshot)
 
     const yearMonth = String(category.yearMonth || '')
     const year = yearMonth.length >= 6
@@ -106,6 +103,32 @@ router.get('/:encarId', async (req, res) => {
 
     const name = [manufacturer, modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
     const model = [modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+    const bodyType = resolveBodyType(
+      spec.bodyName,
+      name,
+      model,
+      category.modelGroupEnglishName,
+      category.modelGroupName,
+      ad.title,
+      ad.subTitle,
+    )
+    const driveType = inferDrive(driveRaw, name, model)
+    const fees = resolveVehicleFees({
+      name,
+      model,
+      body_type: bodyType,
+      trim_level: trimLevel,
+      drive_type: driveType,
+      pricing_locked: false,
+    }, pricingSettings)
+    const pricing = computePricing({
+      priceKrw: priceKRW,
+      commission: fees.commission,
+      delivery: fees.delivery,
+      loading: fees.loading,
+      unloading: fees.unloading,
+      storage: fees.storage,
+    }, exchangeSnapshot)
 
     const photos = Array.isArray(data?.photos) ? data.photos : []
     const normalizedPhotos = photos
@@ -171,16 +194,8 @@ router.get('/:encarId', async (req, res) => {
       price_usd: pricing.price_usd,
       fuel_type: normalizeFuel(spec.fuelName),
       transmission: normalizeTransmission(spec.transmissionName),
-      drive_type: inferDrive(driveRaw, name, model),
-      body_type: resolveBodyType(
-        spec.bodyName,
-        name,
-        model,
-        category.modelGroupEnglishName,
-        category.modelGroupName,
-        ad.title,
-        ad.subTitle,
-      ),
+      drive_type: driveType,
+      body_type: bodyType,
       trim_level: trimLevel,
       key_info: keyInfo,
       seat_count: Number(spec.seatCount) || null,
@@ -208,11 +223,15 @@ router.get('/:encarId', async (req, res) => {
         isPartneredVehicle: Boolean(partnership.isPartneredVehicle),
       },
       inspection,
-      commission: DEFAULT_FEES.commission,
-      delivery: DEFAULT_FEES.delivery,
-      loading: DEFAULT_FEES.loading,
-      unloading: DEFAULT_FEES.unloading,
-      storage: DEFAULT_FEES.storage,
+      pricing_locked: false,
+      delivery_profile_code: fees.delivery_profile_code,
+      delivery_profile_label: fees.delivery_profile_label,
+      delivery_profile_description: fees.delivery_profile_description,
+      commission: fees.commission,
+      delivery: fees.delivery,
+      loading: fees.loading,
+      unloading: fees.unloading,
+      storage: fees.storage,
       vat_refund: pricing.vat_refund,
       total: pricing.total,
       exchange_rate_current: pricing.exchange_rate_current,

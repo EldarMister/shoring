@@ -22,9 +22,11 @@ CREATE TABLE IF NOT EXISTS cars (
   price_usd        NUMERIC(10,2) DEFAULT 0,
   commission       NUMERIC(10,2) DEFAULT 200,
   delivery         NUMERIC(10,2) DEFAULT 0,
+  delivery_profile_code VARCHAR(60),
   loading          NUMERIC(10,2) DEFAULT 0,
   unloading        NUMERIC(10,2) DEFAULT 0,
   storage          NUMERIC(10,2) DEFAULT 0,
+  pricing_locked   BOOLEAN DEFAULT false,
   vat_refund       NUMERIC(10,2) DEFAULT 0,
   total            NUMERIC(10,2) DEFAULT 0,
   encar_url        TEXT,
@@ -52,6 +54,8 @@ ALTER TABLE cars ADD COLUMN IF NOT EXISTS body_type VARCHAR(100);
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS trim_level VARCHAR(120);
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS key_info VARCHAR(120);
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS displacement INTEGER DEFAULT 0;
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS delivery_profile_code VARCHAR(60);
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS pricing_locked BOOLEAN DEFAULT false;
 
 -- Индексы для быстрых фильтров
 CREATE INDEX IF NOT EXISTS idx_cars_price_usd  ON cars(price_usd);
@@ -86,3 +90,46 @@ CREATE TABLE IF NOT EXISTS scraper_config (
 
 -- Единственная строка конфига
 INSERT INTO scraper_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS pricing_settings (
+  id                INTEGER PRIMARY KEY DEFAULT 1,
+  commission        NUMERIC(10,2) DEFAULT 200,
+  loading           NUMERIC(10,2) DEFAULT 0,
+  unloading         NUMERIC(10,2) DEFAULT 100,
+  storage           NUMERIC(10,2) DEFAULT 310,
+  default_delivery  NUMERIC(10,2) DEFAULT 1450,
+  whatsapp_number   VARCHAR(50) DEFAULT '821056650943',
+  delivery_profiles JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO pricing_settings (
+  id,
+  commission,
+  loading,
+  unloading,
+  storage,
+  default_delivery,
+  whatsapp_number,
+  delivery_profiles
+)
+VALUES (
+  1,
+  200,
+  0,
+  100,
+  310,
+  1450,
+  '821056650943',
+  $$[
+    {"code":"suv_big","label":"SUV BIG","description":"Highlander, Carnival","price":1800,"sort_order":10},
+    {"code":"suv_middle","label":"SUV MIDDLE","description":"Santafe, Sorento","price":1700,"sort_order":20},
+    {"code":"suv_small","label":"SUV SMALL","description":"Tivoli, Seltos","price":1600,"sort_order":30},
+    {"code":"sedan_osh","label":"SEDAN OSH","description":"","price":1500,"sort_order":40},
+    {"code":"sedan_bishkek","label":"SEDAN BISHKEK","description":"","price":1450,"sort_order":50},
+    {"code":"sedan_lux","label":"SEDAN LUX","description":"","price":1600,"sort_order":60},
+    {"code":"half_container","label":"HALF CONTAINER","description":"","price":3000,"sort_order":70},
+    {"code":"mini_car","label":"MINI CAR","description":"Morning, Spark","price":1000,"sort_order":80}
+  ]$$::jsonb
+)
+ON CONFLICT (id) DO NOTHING;

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db.js'
 import { DEFAULT_FEES, VAT_REFUND_RATE, computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
+import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
 import { extractShortLocation, extractTrimLevelFromTitle, normalizeColorName, normalizeInteriorColorName, normalizeTrimLevel } from '../lib/vehicleData.js'
 
 const router = Router()
@@ -253,14 +254,15 @@ function searchPatterns(value) {
     .map((variant) => `%${variant}%`)
 }
 
-function decorateCarRow(row, exchangeSnapshot) {
+function decorateCarRow(row, exchangeSnapshot, pricingSettings) {
+  const fees = resolveVehicleFees(row, pricingSettings)
   const pricing = computePricing({
     priceKrw: row.price_krw,
-    commission: row.commission ?? DEFAULT_FEES.commission,
-    delivery: row.delivery ?? DEFAULT_FEES.delivery,
-    loading: row.loading ?? DEFAULT_FEES.loading,
-    unloading: row.unloading ?? DEFAULT_FEES.unloading,
-    storage: row.storage ?? DEFAULT_FEES.storage,
+    commission: fees.commission,
+    delivery: fees.delivery,
+    loading: fees.loading,
+    unloading: fees.unloading,
+    storage: fees.storage,
   }, exchangeSnapshot)
 
   return {
@@ -270,6 +272,15 @@ function decorateCarRow(row, exchangeSnapshot) {
     trim_level: normalizeTrimLevel(row.trim_level || '') || extractTrimLevelFromTitle(row.name || '', row.model || ''),
     key_info: String(row.key_info || '').trim(),
     location_short: extractShortLocation(row.location || ''),
+    pricing_locked: fees.pricing_locked,
+    delivery_profile_code: fees.delivery_profile_code,
+    delivery_profile_label: fees.delivery_profile_label,
+    delivery_profile_description: fees.delivery_profile_description,
+    commission: fees.commission,
+    delivery: fees.delivery,
+    loading: fees.loading,
+    unloading: fees.unloading,
+    storage: fees.storage,
     price_usd: pricing.price_usd,
     vat_refund: pricing.vat_refund,
     total: pricing.total,
@@ -291,15 +302,9 @@ router.get('/', async (req, res) => {
       page = 1, limit = 20,
     } = req.query
     const exchangeSnapshot = await getExchangeRateSnapshot()
+    const pricingSettings = await getPricingSettings()
     const siteRateSql = Number((exchangeSnapshot.siteRate || 1).toFixed(2))
     const priceUsdSql = `ROUND((COALESCE(c.price_krw, 0)::numeric / ${siteRateSql})::numeric, 0)`
-    const commissionSql = `COALESCE(c.commission, ${DEFAULT_FEES.commission})`
-    const deliverySql = `COALESCE(c.delivery, ${DEFAULT_FEES.delivery})`
-    const loadingSql = `COALESCE(c.loading, ${DEFAULT_FEES.loading})`
-    const unloadingSql = `COALESCE(c.unloading, ${DEFAULT_FEES.unloading})`
-    const storageSql = `COALESCE(c.storage, ${DEFAULT_FEES.storage})`
-    const vatRefundSql = `ROUND((${priceUsdSql}) * ${VAT_REFUND_RATE}, 0)`
-    const totalSql = `ROUND((${priceUsdSql}) + ${commissionSql} + ${deliverySql} + ${loadingSql} + ${unloadingSql} + ${storageSql} - (${vatRefundSql}), 0)`
 
     const conditions = []
     const params = []
@@ -488,7 +493,7 @@ router.get('/', async (req, res) => {
       exchange_rate_site: exchangeSnapshot.siteRate,
       exchange_rate_offset: exchangeSnapshot.offset,
       vat_rate: VAT_REFUND_RATE,
-      cars: carsResult.rows.map((row) => decorateCarRow(row, exchangeSnapshot)),
+      cars: carsResult.rows.map((row) => decorateCarRow(row, exchangeSnapshot, pricingSettings)),
     })
   } catch (err) {
     console.error(err)
@@ -499,6 +504,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const exchangeSnapshot = await getExchangeRateSnapshot()
+    const pricingSettings = await getPricingSettings()
     const result = await pool.query(
       `SELECT c.*,
         COALESCE(
@@ -512,7 +518,7 @@ router.get('/:id', async (req, res) => {
       [req.params.id]
     )
     if (!result.rows.length) return res.status(404).json({ error: 'Не найдено' })
-    return res.json(decorateCarRow(result.rows[0], exchangeSnapshot))
+    return res.json(decorateCarRow(result.rows[0], exchangeSnapshot, pricingSettings))
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Ошибка сервера' })
@@ -528,7 +534,7 @@ router.post('/', async (req, res) => {
       interior_color, interior_color_dots,
       location, vin,
       price_krw, price_usd,
-      commission, delivery, loading, unloading, storage, vat_refund, total,
+      commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total,
       encar_url, encar_id, can_negotiate, tags,
     } = req.body
 
@@ -538,21 +544,23 @@ router.post('/', async (req, res) => {
          fuel_type, transmission, drive_type, body_type, trim_level, key_info, displacement,
          body_color, body_color_dots, interior_color, interior_color_dots,
          location, vin, price_krw, price_usd,
-         commission, delivery, loading, unloading, storage, vat_refund, total,
+         commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total,
          encar_url, encar_id, can_negotiate, tags)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
        RETURNING *`,
       [
         name, model, year, mileage || 0,
         fuel_type, transmission, drive_type, body_type, trim_level, key_info, displacement || 0,
         body_color, body_color_dots || [], interior_color, interior_color_dots || [],
         location, vin, price_krw || 0, price_usd || 0,
-        commission || 200, delivery || 0, loading || 0, unloading || 0,
-        storage || 0, vat_refund || 0, total || 0,
+        commission ?? DEFAULT_FEES.commission, delivery ?? 0, delivery_profile_code || null, loading ?? DEFAULT_FEES.loading, unloading ?? DEFAULT_FEES.unloading,
+        storage ?? DEFAULT_FEES.storage, pricing_locked || false, vat_refund || 0, total || 0,
         encar_url, encar_id, can_negotiate || false, tags || [],
       ]
     )
-    return res.status(201).json(result.rows[0])
+    const exchangeSnapshot = await getExchangeRateSnapshot()
+    const pricingSettings = await getPricingSettings()
+    return res.status(201).json(decorateCarRow(result.rows[0], exchangeSnapshot, pricingSettings))
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Ошибка сервера' })
@@ -566,7 +574,7 @@ router.put('/:id', async (req, res) => {
       'fuel_type', 'transmission', 'drive_type', 'body_type', 'trim_level', 'key_info', 'displacement',
       'body_color', 'body_color_dots', 'interior_color', 'interior_color_dots',
       'location', 'vin', 'price_krw', 'price_usd',
-      'commission', 'delivery', 'loading', 'unloading', 'storage', 'vat_refund', 'total',
+      'commission', 'delivery', 'delivery_profile_code', 'loading', 'unloading', 'storage', 'pricing_locked', 'vat_refund', 'total',
       'encar_url', 'encar_id', 'can_negotiate', 'tags',
     ]
 
@@ -632,7 +640,8 @@ router.put('/:id', async (req, res) => {
       )
 
       const exchangeSnapshot = await getExchangeRateSnapshot()
-      return res.json(decorateCarRow(refreshed.rows[0], exchangeSnapshot))
+      const pricingSettings = await getPricingSettings()
+      return res.json(decorateCarRow(refreshed.rows[0], exchangeSnapshot, pricingSettings))
     }
 
     updates.push('updated_at = NOW()')
@@ -644,7 +653,9 @@ router.put('/:id', async (req, res) => {
     )
 
     if (!result.rows.length) return res.status(404).json({ error: 'Не найдено' })
-    return res.json(result.rows[0])
+    const exchangeSnapshot = await getExchangeRateSnapshot()
+    const pricingSettings = await getPricingSettings()
+    return res.json(decorateCarRow(result.rows[0], exchangeSnapshot, pricingSettings))
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Ошибка сервера' })

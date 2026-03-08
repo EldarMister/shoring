@@ -4,7 +4,7 @@ export const SITE_RATE_OFFSET = 15.0
 export const VAT_REFUND_RATE = 0.063
 export const DEFAULT_FEES = {
   commission: 200,
-  delivery: 1750,
+  delivery: 1450,
   loading: 0,
   unloading: 100,
   storage: 310,

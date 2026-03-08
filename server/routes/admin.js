@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db.js'
 import { getExchangeRateSnapshot } from '../lib/exchangeRate.js'
+import { getPricingSettings, savePricingSettings } from '../lib/pricingSettings.js'
 import { normalizeColorName } from '../lib/vehicleData.js'
 
 const router = Router()
@@ -290,6 +291,42 @@ router.post('/login', (req, res) => {
     return res.json({ ok: true, token: 'adm-ok' })
   }
   return res.status(401).json({ ok: false, error: 'Неверный пароль' })
+})
+
+router.get('/pricing-settings', async (_req, res) => {
+  try {
+    const [pricingSettings, exchangeSnapshot] = await Promise.all([
+      getPricingSettings(),
+      getExchangeRateSnapshot(),
+    ])
+
+    return res.json({
+      ...pricingSettings,
+      exchange_rate_current: exchangeSnapshot.currentRate,
+      exchange_rate_site: exchangeSnapshot.siteRate,
+      exchange_rate_offset: exchangeSnapshot.offset,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'РћС€РёР±РєР° СЃРµСЂРІРµСЂР°' })
+  }
+})
+
+router.put('/pricing-settings', async (req, res) => {
+  try {
+    const saved = await savePricingSettings(req.body || {})
+    const exchangeSnapshot = await getExchangeRateSnapshot()
+
+    return res.json({
+      ...saved,
+      exchange_rate_current: exchangeSnapshot.currentRate,
+      exchange_rate_site: exchangeSnapshot.siteRate,
+      exchange_rate_offset: exchangeSnapshot.offset,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'РћС€РёР±РєР° СЃРµСЂРІРµСЂР°' })
+  }
 })
 
 router.get('/filter-options', async (_req, res) => {

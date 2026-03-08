@@ -49,6 +49,99 @@ const api = {
     deleteImage: id => apiFetch(`/api/images/${id}`, { method: 'DELETE' }),
     fetchEncar: id => apiFetch(`/api/encar/${id}`),
     getStats: () => apiFetch('/api/admin/stats'),
+    getPricingSettings: () => apiFetch('/api/admin/pricing-settings'),
+    updatePricingSettings: d => apiFetch('/api/admin/pricing-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) }),
+}
+
+const PRICING_FALLBACK = {
+    commission: 200,
+    loading: 0,
+    unloading: 100,
+    storage: 310,
+    default_delivery: 1450,
+    whatsapp_number: '821056650943',
+    delivery_profiles: [
+        { code: 'suv_big', label: 'SUV BIG', description: 'Highlander, Carnival', price: 1800, sort_order: 10 },
+        { code: 'suv_middle', label: 'SUV MIDDLE', description: 'Santafe, Sorento', price: 1700, sort_order: 20 },
+        { code: 'suv_small', label: 'SUV SMALL', description: 'Tivoli, Seltos', price: 1600, sort_order: 30 },
+        { code: 'sedan_osh', label: 'SEDAN OSH', description: '', price: 1500, sort_order: 40 },
+        { code: 'sedan_bishkek', label: 'SEDAN BISHKEK', description: '', price: 1450, sort_order: 50 },
+        { code: 'sedan_lux', label: 'SEDAN LUX', description: '', price: 1600, sort_order: 60 },
+        { code: 'half_container', label: 'HALF CONTAINER', description: '', price: 3000, sort_order: 70 },
+        { code: 'mini_car', label: 'MINI CAR', description: 'Morning, Spark', price: 1000, sort_order: 80 },
+    ],
+}
+
+function toNum(value, fallback = 0) {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : fallback
+}
+
+function slugifyProfileCode(value, index = 0) {
+    const code = String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+
+    return code || `profile_${index + 1}`
+}
+
+function normalizePricingSettingsClient(value = {}) {
+    const profiles = Array.isArray(value.delivery_profiles) && value.delivery_profiles.length
+        ? value.delivery_profiles
+        : PRICING_FALLBACK.delivery_profiles
+
+    return {
+        commission: toNum(value.commission, PRICING_FALLBACK.commission),
+        loading: toNum(value.loading, PRICING_FALLBACK.loading),
+        unloading: toNum(value.unloading, PRICING_FALLBACK.unloading),
+        storage: toNum(value.storage, PRICING_FALLBACK.storage),
+        default_delivery: toNum(value.default_delivery, PRICING_FALLBACK.default_delivery),
+        whatsapp_number: String(value.whatsapp_number || PRICING_FALLBACK.whatsapp_number).trim() || PRICING_FALLBACK.whatsapp_number,
+        exchange_rate_current: toNum(value.exchange_rate_current, 0),
+        exchange_rate_site: toNum(value.exchange_rate_site, 0),
+        exchange_rate_offset: toNum(value.exchange_rate_offset, 15),
+        delivery_profiles: profiles
+            .map((profile, index) => ({
+                code: slugifyProfileCode(profile?.code || profile?.label, index),
+                label: String(profile?.label || `TYPE ${index + 1}`).trim(),
+                description: String(profile?.description || '').trim(),
+                price: toNum(profile?.price, 0),
+                sort_order: toNum(profile?.sort_order, (index + 1) * 10),
+            }))
+            .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label)),
+    }
+}
+
+function getProfilePrice(settings, code) {
+    const profileCode = String(code || '').trim()
+    const profile = settings.delivery_profiles.find(item => item.code === profileCode)
+    return {
+        profile: profile || null,
+        delivery: profile ? toNum(profile.price, settings.default_delivery) : toNum(settings.default_delivery, PRICING_FALLBACK.default_delivery),
+    }
+}
+
+function buildEffectivePricingClient(form, pricingSettings) {
+    const settings = normalizePricingSettingsClient(pricingSettings)
+    const priceUsd = toNum(form.price_usd, 0)
+    const vatRefund = toNum(form.vat_refund, 0)
+    const manual = Boolean(form.pricing_locked)
+    const profileState = getProfilePrice(settings, form.delivery_profile_code)
+    const fees = {
+        commission: manual ? toNum(form.commission, settings.commission) : settings.commission,
+        delivery: manual ? toNum(form.delivery, profileState.delivery) : profileState.delivery,
+        loading: manual ? toNum(form.loading, settings.loading) : settings.loading,
+        unloading: manual ? toNum(form.unloading, settings.unloading) : settings.unloading,
+        storage: manual ? toNum(form.storage, settings.storage) : settings.storage,
+        price_usd: priceUsd,
+        vat_refund: vatRefund,
+        total: Math.round(priceUsd + (manual ? toNum(form.commission, settings.commission) : settings.commission) + (manual ? toNum(form.delivery, profileState.delivery) : profileState.delivery) + (manual ? toNum(form.loading, settings.loading) : settings.loading) + (manual ? toNum(form.unloading, settings.unloading) : settings.unloading) + (manual ? toNum(form.storage, settings.storage) : settings.storage) - vatRefund),
+        delivery_profile_label: profileState.profile?.label || '',
+    }
+
+    return fees
 }
 
 /* ── Toast ── */
@@ -83,18 +176,44 @@ function Modal({ title, onClose, children, wide }) {
 }
 
 /* ── Car Form ── */
-const BLANK = { name: '', model: '', year: '', mileage: '', body_color: '', interior_color: '', location: '', vin: '', price_krw: '', price_usd: '', commission: 200, delivery: 1750, loading: 0, unloading: 100, storage: 310, vat_refund: 0, total: 0, encar_url: '', encar_id: '', can_negotiate: false, tags: [] }
+const BLANK = {
+    name: '',
+    model: '',
+    year: '',
+    mileage: '',
+    body_color: '',
+    interior_color: '',
+    location: '',
+    vin: '',
+    price_krw: '',
+    price_usd: '',
+    commission: 200,
+    delivery: 1450,
+    delivery_profile_code: '',
+    loading: 0,
+    unloading: 100,
+    storage: 310,
+    pricing_locked: false,
+    vat_refund: 0,
+    total: 0,
+    encar_url: '',
+    encar_id: '',
+    can_negotiate: false,
+    tags: [],
+}
 
 function recalc(f) {
     const n = k => Number(f[k]) || 0
     return { ...f, total: Math.round(n('price_usd') + n('commission') + n('delivery') + n('loading') + n('unloading') + n('storage') - n('vat_refund')) }
 }
 
-function CarForm({ init = BLANK, onSave, onCancel, busy }) {
+function CarForm({ init = BLANK, onSave, onCancel, busy, pricingSettings }) {
     const [f, setF] = useState({ ...BLANK, ...init, tags: init.tags || [] })
     const [tagInp, setTagInp] = useState('')
     const [encarBusy, setEncarBusy] = useState(false)
     const [encarErr, setEncarErr] = useState('')
+    const effectivePricing = buildEffectivePricingClient(f, pricingSettings)
+    const deliveryProfiles = normalizePricingSettingsClient(pricingSettings).delivery_profiles
 
     const set = (k, v) => setF(prev => recalc({ ...prev, [k]: v }))
     const addTag = () => { const t = tagInp.trim(); if (t && !f.tags.includes(t)) setF(p => ({ ...p, tags: [...p.tags, t] })); setTagInp('') }
@@ -105,18 +224,55 @@ function CarForm({ init = BLANK, onSave, onCancel, busy }) {
         try {
             const d = await api.fetchEncar(f.encar_id)
             if (d.error) { setEncarErr(d.error); return }
-            setF(p => recalc({ ...p, name: d.name || p.name, year: d.year || p.year, mileage: d.mileage || p.mileage, body_color: d.body_color || p.body_color, location: d.location || p.location, vin: d.vin || p.vin, price_krw: d.price_krw || p.price_krw, price_usd: d.price_usd || p.price_usd, encar_url: d.encar_url || p.encar_url, commission: d.commission || p.commission, delivery: d.delivery || p.delivery, loading: d.loading || p.loading, unloading: d.unloading || p.unloading, storage: d.storage || p.storage, vat_refund: d.vat_refund || p.vat_refund }))
+            setF(p => recalc({
+                ...p,
+                name: d.name || p.name,
+                model: d.model || p.model,
+                year: d.year || p.year,
+                mileage: d.mileage || p.mileage,
+                body_color: d.body_color || p.body_color,
+                interior_color: d.interior_color || p.interior_color,
+                location: d.location || p.location,
+                vin: d.vin || p.vin,
+                price_krw: d.price_krw || p.price_krw,
+                price_usd: d.price_usd || p.price_usd,
+                encar_url: d.encar_url || p.encar_url,
+                delivery_profile_code: d.delivery_profile_code || p.delivery_profile_code,
+                pricing_locked: d.pricing_locked ?? p.pricing_locked,
+                commission: d.commission ?? p.commission,
+                delivery: d.delivery ?? p.delivery,
+                loading: d.loading ?? p.loading,
+                unloading: d.unloading ?? p.unloading,
+                storage: d.storage ?? p.storage,
+                vat_refund: d.vat_refund ?? p.vat_refund,
+            }))
         } catch (e) { setEncarErr(e.message) }
         setEncarBusy(false)
     }
 
-    const submit = e => { e.preventDefault(); onSave({ ...f, mileage: +f.mileage || 0, price_krw: +f.price_krw || 0, price_usd: +f.price_usd || 0, commission: +f.commission || 0, delivery: +f.delivery || 0, loading: +f.loading || 0, unloading: +f.unloading || 0, storage: +f.storage || 0, vat_refund: +f.vat_refund || 0, total: +f.total || 0 }) }
+    const submit = e => {
+        e.preventDefault()
+        onSave({
+            ...f,
+            mileage: +f.mileage || 0,
+            price_krw: +f.price_krw || 0,
+            price_usd: effectivePricing.price_usd,
+            commission: effectivePricing.commission,
+            delivery: effectivePricing.delivery,
+            loading: effectivePricing.loading,
+            unloading: effectivePricing.unloading,
+            storage: effectivePricing.storage,
+            pricing_locked: !!f.pricing_locked,
+            vat_refund: +f.vat_refund || 0,
+            total: effectivePricing.total,
+        })
+    }
 
     const Row = ({ kids }) => <div className="adm-fields-row">{kids}</div>
-    const F = ({ label, k, type = 'text', ph, full }) => (
+    const F = ({ label, k, type = 'text', ph, full, disabled = false, valueOverride }) => (
         <div className={`adm-field${full ? ' adm-field-full' : ''}`}>
             <label className="adm-label">{label}</label>
-            <input className="adm-input" type={type} placeholder={ph} value={f[k] ?? ''} onChange={e => set(k, e.target.value)} />
+            <input className="adm-input" type={type} placeholder={ph} value={valueOverride ?? f[k] ?? ''} onChange={e => set(k, e.target.value)} disabled={disabled} />
         </div>
     )
 
@@ -140,17 +296,43 @@ function CarForm({ init = BLANK, onSave, onCancel, busy }) {
 
             <div className="adm-sec-title">💰 Цены и расходы</div>
             <Row kids={[<F key="pk" label="Цена KRW" k="price_krw" type="number" ph="15000000" />, <F key="pu" label="Цена USD" k="price_usd" type="number" ph="11000" />]} />
+            <div className="adm-field" style={{ marginBottom: 12 }}>
+                <label className="adm-label">Тариф доставки по типу машины</label>
+                <select className="adm-select" value={f.delivery_profile_code || ''} onChange={e => set('delivery_profile_code', e.target.value)}>
+                    <option value="">Автоопределение / запасной тариф</option>
+                    {deliveryProfiles.map(profile => (
+                        <option key={profile.code} value={profile.code}>
+                            {profile.label}{profile.description ? ` - ${profile.description}` : ''} ({fmtU(profile.price)})
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <label className="adm-chk-row" style={{ marginBottom: 12 }}>
+                <input type="checkbox" checked={!!f.pricing_locked} onChange={e => set('pricing_locked', e.target.checked)} />
+                <span>Фиксировать ручные расходы для этой машины</span>
+            </label>
+            {!f.pricing_locked && (
+                <div className="adm-car-sub" style={{ marginBottom: 12 }}>
+                    Общие расходы берутся из настроек, а доставка считается по выбранному типу машины.
+                </div>
+            )}
             <div className="adm-price-grid">
                 {[['Комиссия', 'commission'], ['Доставка', 'delivery'], ['Погрузка', 'loading'], ['Выгрузка', 'unloading'], ['Стоянка', 'storage'], ['Возврат НДС', 'vat_refund']].map(([label, k]) => (
                     <div key={k} className="adm-field">
                         <label className="adm-label">{label} ($)</label>
-                        <input className="adm-input" type="number" value={f[k] ?? ''} onChange={e => set(k, e.target.value)} />
+                        <input
+                            className="adm-input"
+                            type="number"
+                            value={k === 'vat_refund' || f.pricing_locked ? (f[k] ?? '') : (effectivePricing[k] ?? '')}
+                            onChange={e => set(k, e.target.value)}
+                            disabled={k !== 'vat_refund' && !f.pricing_locked}
+                        />
                     </div>
                 ))}
             </div>
             <div className="adm-total-row">
                 <span>До Бишкека итого:</span>
-                <span className="adm-total-val">{fmtU(f.total)}</span>
+                <span className="adm-total-val">{fmtU(effectivePricing.total)}</span>
             </div>
 
             <div className="adm-sec-title">🏷️ Теги</div>
@@ -222,17 +404,50 @@ function ImgMgr({ car, onClose, toast }) {
 }
 
 /* ── Quick Price Editor ── */
-function PriceEditor({ car, onSave, onClose }) {
-    const [p, setP] = useState({ price_usd: car.price_usd || 0, commission: car.commission || 200, delivery: car.delivery || 1750, loading: car.loading || 0, unloading: car.unloading || 100, storage: car.storage || 310, vat_refund: car.vat_refund || 0 })
-    const total = Math.round(Object.entries(p).reduce((s, [k, v]) => k === 'vat_refund' ? s - +v : s + (+v), 0))
+function PriceEditor({ car, onSave, onClose, pricingSettings }) {
+    const [p, setP] = useState({
+        price_usd: car.price_usd || 0,
+        commission: car.commission || 200,
+        delivery: car.delivery || 1450,
+        delivery_profile_code: car.delivery_profile_code || '',
+        loading: car.loading || 0,
+        unloading: car.unloading || 100,
+        storage: car.storage || 310,
+        pricing_locked: !!car.pricing_locked,
+        vat_refund: car.vat_refund || 0,
+    })
+    const deliveryProfiles = normalizePricingSettingsClient(pricingSettings).delivery_profiles
+    const effectivePricing = buildEffectivePricingClient(p, pricingSettings)
+    const total = effectivePricing.total
     return (
         <div>
             <div style={{ marginBottom: 12, color: '#94a3b8', fontSize: 13 }}>{car.name} {car.year}</div>
+            <div className="adm-field" style={{ marginBottom: 12 }}>
+                <label className="adm-label">Тариф доставки по типу машины</label>
+                <select className="adm-select" value={p.delivery_profile_code || ''} onChange={e => setP(prev => ({ ...prev, delivery_profile_code: e.target.value }))}>
+                    <option value="">Автоопределение / запасной тариф</option>
+                    {deliveryProfiles.map(profile => (
+                        <option key={profile.code} value={profile.code}>
+                            {profile.label}{profile.description ? ` - ${profile.description}` : ''} ({fmtU(profile.price)})
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <label className="adm-chk-row" style={{ marginBottom: 12 }}>
+                <input type="checkbox" checked={!!p.pricing_locked} onChange={e => setP(prev => ({ ...prev, pricing_locked: e.target.checked }))} />
+                <span>Фиксировать ручные расходы для этой машины</span>
+            </label>
             <div className="adm-price-grid">
-                {Object.entries(p).map(([k, v]) => (
+                {[['price_usd', 'Цена USD'], ['commission', 'Комиссия'], ['delivery', 'Доставка'], ['loading', 'Погрузка'], ['unloading', 'Выгрузка'], ['storage', 'Стоянка'], ['vat_refund', 'Возврат НДС']].map(([k, label]) => (
                     <div key={k} className="adm-field">
                         <label className="adm-label">{k === 'price_usd' ? 'Цена USD' : k === 'commission' ? 'Комиссия' : k === 'delivery' ? 'Доставка' : k === 'loading' ? 'Погрузка' : k === 'unloading' ? 'Выгрузка' : k === 'storage' ? 'Стоянка' : 'Возврат НДС'}</label>
-                        <input className="adm-input" type="number" value={v} onChange={e => setP(prev => ({ ...prev, [k]: e.target.value }))} />
+                        <input
+                            className="adm-input"
+                            type="number"
+                            value={k === 'vat_refund' || k === 'price_usd' || p.pricing_locked ? (p[k] ?? '') : (effectivePricing[k] ?? '')}
+                            onChange={e => setP(prev => ({ ...prev, [k]: e.target.value }))}
+                            disabled={k !== 'vat_refund' && k !== 'price_usd' && !p.pricing_locked}
+                        />
                     </div>
                 ))}
             </div>
@@ -246,14 +461,46 @@ function PriceEditor({ car, onSave, onClose }) {
 }
 
 /* ── Calculator ── */
-function Calculator() {
-    const [v, setV] = useState({ krw: 28000000, rate: 0.00073, comm: 200, delivery: 1750, loading: 0, unloading: 100, storage: 310, vat_pct: 6.3 })
+function Calculator({ pricingSettings }) {
+    const settings = pricingSettings?.delivery_profiles ? pricingSettings : PRICING_FALLBACK
+    const [v, setV] = useState({ krw: 28000000, rate: 0.00073, delivery_profile_code: settings.delivery_profiles[0]?.code || '', comm: settings.commission, delivery: settings.delivery_profiles[0]?.price ?? settings.default_delivery, loading: settings.loading, unloading: settings.unloading, storage: settings.storage, vat_pct: 6.3 })
+    useEffect(() => {
+        const firstProfile = settings.delivery_profiles[0] || null
+        setV(prev => ({
+            ...prev,
+            delivery_profile_code: firstProfile?.code || prev.delivery_profile_code,
+            comm: settings.commission,
+            delivery: firstProfile?.price ?? settings.default_delivery,
+            loading: settings.loading,
+            unloading: settings.unloading,
+            storage: settings.storage,
+        }))
+    }, [pricingSettings])
     const s = (k, val) => setV(p => ({ ...p, [k]: val }))
     const usd = Math.round(+v.krw * +v.rate)
     const vat = Math.round(usd * (+v.vat_pct / 100))
     const total = Math.round(usd + +v.comm + +v.delivery + +v.loading + +v.unloading + +v.storage - vat)
     return (
         <div>
+            <div className="adm-field" style={{ marginBottom: 14 }}>
+                <label className="adm-label">Тип машины / тариф доставки</label>
+                <select
+                    className="adm-select"
+                    value={v.delivery_profile_code || ''}
+                    onChange={e => {
+                        const code = e.target.value
+                        const selected = settings.delivery_profiles.find(profile => profile.code === code)
+                        setV(prev => ({ ...prev, delivery_profile_code: code, delivery: selected?.price ?? settings.default_delivery }))
+                    }}
+                >
+                    <option value="">Запасной тариф</option>
+                    {settings.delivery_profiles.map(profile => (
+                        <option key={profile.code} value={profile.code}>
+                            {profile.label}{profile.description ? ` - ${profile.description}` : ''} ({fmtU(profile.price)})
+                        </option>
+                    ))}
+                </select>
+            </div>
             <div className="adm-calc-grid">
                 {[['krw', 'Цена KRW (вон)'], ['rate', 'KRW→USD курс'], ['comm', 'Комиссия ($)'], ['delivery', 'Доставка ($)'], ['loading', 'Погрузка ($)'], ['unloading', 'Выгрузка ($)'], ['storage', 'Стоянка ($)'], ['vat_pct', 'Возврат НДС (%)']].map(([k, label]) => (
                     <div key={k} className="adm-field">
@@ -272,17 +519,82 @@ function Calculator() {
 }
 
 /* ── Settings ── */
-function Settings({ toast }) {
-    const [settings, setSettings] = useState({ comm: 200, delivery: 1750, unloading: 100, storage: 310, vat: 6.3, rate: 0.00073, wh: '821056650943' })
-    const save = () => { localStorage.setItem('adm_settings', JSON.stringify(settings)); toast('Настройки сохранены', 'success') }
-    useEffect(() => { try { const s = JSON.parse(localStorage.getItem('adm_settings') || '{}'); setSettings(p => ({ ...p, ...s })) } catch { } }, [])
+function Settings({ toast, pricingSettings, pricingLoaded, onSavePricingSettings }) {
+    const [settings, setSettings] = useState(() => normalizePricingSettingsClient(pricingSettings))
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        setSettings(normalizePricingSettingsClient(pricingSettings))
+    }, [pricingSettings])
+
+    const setProfile = (index, patch) => {
+        setSettings(prev => ({
+            ...prev,
+            delivery_profiles: prev.delivery_profiles.map((profile, profileIndex) => (
+                profileIndex === index ? { ...profile, ...patch } : profile
+            )),
+        }))
+    }
+
+    const addProfile = () => {
+        setSettings(prev => ({
+            ...prev,
+            delivery_profiles: [
+                ...prev.delivery_profiles,
+                {
+                    code: slugifyProfileCode(`profile_${prev.delivery_profiles.length + 1}`, prev.delivery_profiles.length),
+                    label: `TYPE ${prev.delivery_profiles.length + 1}`,
+                    description: '',
+                    price: prev.default_delivery,
+                    sort_order: (prev.delivery_profiles.length + 1) * 10,
+                },
+            ],
+        }))
+    }
+
+    const removeProfile = (index) => {
+        setSettings(prev => ({
+            ...prev,
+            delivery_profiles: prev.delivery_profiles.filter((_, profileIndex) => profileIndex !== index),
+        }))
+    }
+
+    const save = async () => {
+        setSaving(true)
+        try {
+            const payload = {
+                commission: toNum(settings.commission, PRICING_FALLBACK.commission),
+                loading: toNum(settings.loading, PRICING_FALLBACK.loading),
+                unloading: toNum(settings.unloading, PRICING_FALLBACK.unloading),
+                storage: toNum(settings.storage, PRICING_FALLBACK.storage),
+                default_delivery: toNum(settings.default_delivery, PRICING_FALLBACK.default_delivery),
+                whatsapp_number: settings.whatsapp_number,
+                delivery_profiles: settings.delivery_profiles.map((profile, index) => ({
+                    ...profile,
+                    code: profile.code || slugifyProfileCode(profile.label, index),
+                    sort_order: (index + 1) * 10,
+                    price: toNum(profile.price, 0),
+                })),
+            }
+            const saved = await api.updatePricingSettings(payload)
+            onSavePricingSettings(saved)
+            toast('Настройки доставки сохранены', 'success')
+        } catch {
+            toast('Не удалось сохранить настройки', 'error')
+        }
+        setSaving(false)
+    }
+
+    if (!pricingLoaded) {
+        return <div className="adm-loading"><div className="adm-spin" /></div>
+    }
     return (
         <div>
-            <h2 className="adm-section-heading" style={{ marginBottom: 20 }}>⚙️ Настройки</h2>
+            <h2 className="adm-section-heading" style={{ marginBottom: 20 }}>Настройки доставки</h2>
             <div className="adm-settings-grid">
                 <div className="adm-settings-card">
-                    <div className="adm-settings-card-title">💰 Расходы по умолчанию</div>
-                    {[['comm', 'Комиссия ($)'], ['delivery', 'Доставка ($)'], ['unloading', 'Выгрузка ($)'], ['storage', 'Стоянка ($)']].map(([k, label]) => (
+                    <div className="adm-settings-card-title">Общие расходы</div>
+                    {[['commission', 'Комиссия ($)'], ['loading', 'Погрузка ($)'], ['unloading', 'Выгрузка ($)'], ['storage', 'Стоянка ($)'], ['default_delivery', 'Запасная доставка ($)']].map(([k, label]) => (
                         <div key={k} className="adm-field" style={{ marginBottom: 10 }}>
                             <label className="adm-label">{label}</label>
                             <input className="adm-input" type="number" value={settings[k]} onChange={e => setSettings(p => ({ ...p, [k]: e.target.value }))} />
@@ -290,22 +602,25 @@ function Settings({ toast }) {
                     ))}
                 </div>
                 <div className="adm-settings-card">
-                    <div className="adm-settings-card-title">🔄 Курс и параметры</div>
+                    <div className="adm-settings-card-title">Курс и контакты</div>
                     <div className="adm-field" style={{ marginBottom: 10 }}>
-                        <label className="adm-label">Курс KRW → USD</label>
-                        <input className="adm-input" type="number" step="0.00001" value={settings.rate} onChange={e => setSettings(p => ({ ...p, rate: e.target.value }))} />
+                        <label className="adm-label">Текущий курс USD/KRW</label>
+                        <input className="adm-input" value={settings.exchange_rate_current || ''} disabled />
                     </div>
                     <div className="adm-field" style={{ marginBottom: 10 }}>
-                        <label className="adm-label">Возврат НДС (%)</label>
-                        <input className="adm-input" type="number" step="0.1" value={settings.vat} onChange={e => setSettings(p => ({ ...p, vat: e.target.value }))} />
+                        <label className="adm-label">Курс сайта</label>
+                        <input className="adm-input" value={settings.exchange_rate_site || ''} disabled />
                     </div>
                     <div className="adm-field" style={{ marginBottom: 10 }}>
                         <label className="adm-label">WhatsApp номер</label>
-                        <input className="adm-input" value={settings.wh} onChange={e => setSettings(p => ({ ...p, wh: e.target.value }))} />
+                        <input className="adm-input" value={settings.whatsapp_number} onChange={e => setSettings(p => ({ ...p, whatsapp_number: e.target.value }))} />
+                    </div>
+                    <div className="adm-car-sub">
+                        MINI, SUV и обычные седаны система подбирает автоматически. Специальные тарифы вроде SEDAN OSH или HALF CONTAINER можно назначать вручную в карточке машины.
                     </div>
                 </div>
                 <div className="adm-settings-card">
-                    <div className="adm-settings-card-title">🌐 Полезные ссылки</div>
+                    <div className="adm-settings-card-title">Полезные ссылки</div>
                     {[['Encar.com', 'https://www.encar.com'], ['Курс KRW/USD', 'https://www.google.com/search?q=KRW+USD'], ['Railway Dashboard', 'https://railway.app']].map(([name, url]) => (
                         <a key={name} href={url} target="_blank" rel="noreferrer" className="adm-quick-link">
                             <Ic d={IC.ext} s={14} /> {name}
@@ -313,8 +628,36 @@ function Settings({ toast }) {
                     ))}
                 </div>
             </div>
+            <div className="adm-chart-box" style={{ marginTop: 20 }}>
+                <div className="adm-chart-title">Тарифы по типам машин</div>
+                <div className="adm-price-grid">
+                    {settings.delivery_profiles.map((profile, index) => (
+                        <div key={profile.code || index} className="adm-settings-card" style={{ padding: 14 }}>
+                            <div className="adm-field" style={{ marginBottom: 10 }}>
+                                <label className="adm-label">Название типа</label>
+                                <input className="adm-input" value={profile.label} onChange={e => setProfile(index, { label: e.target.value })} />
+                            </div>
+                            <div className="adm-field" style={{ marginBottom: 10 }}>
+                                <label className="adm-label">Примеры / описание</label>
+                                <input className="adm-input" value={profile.description} onChange={e => setProfile(index, { description: e.target.value })} />
+                            </div>
+                            <div className="adm-field" style={{ marginBottom: 10 }}>
+                                <label className="adm-label">Доставка ($)</label>
+                                <input className="adm-input" type="number" value={profile.price} onChange={e => setProfile(index, { price: e.target.value })} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                <div className="adm-car-sub">Код: {profile.code}</div>
+                                <button className="adm-btn adm-btn-cancel" type="button" onClick={() => removeProfile(index)}>Удалить</button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div style={{ marginTop: 12 }}>
+                    <button className="adm-btn adm-btn-sm" type="button" onClick={addProfile}>Добавить тип</button>
+                </div>
+            </div>
             <div style={{ marginTop: 20 }}>
-                <button className="adm-btn adm-btn-primary" onClick={save}>💾 Сохранить настройки</button>
+                <button className="adm-btn adm-btn-primary" onClick={save} disabled={saving}>{saving ? 'Сохранение...' : 'Сохранить настройки доставки'}</button>
             </div>
         </div>
     )
@@ -396,7 +739,7 @@ function Dashboard({ onGo }) {
 }
 
 /* ── Cars List ── */
-function Cars({ toast, initAdd }) {
+function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
     const [cars, setCars] = useState([])
     const [total, setTotal] = useState(0)
     const [pages, setPages] = useState(1)
@@ -424,7 +767,7 @@ function Cars({ toast, initAdd }) {
         setLoading(false)
     }, [])
 
-    useEffect(() => { load(page, search, sort) }, [page, sort, load])
+    useEffect(() => { load(page, search, sort) }, [page, sort, load, pricingRevision])
 
     const doSearch = e => { e.preventDefault(); setPage(1); load(1, search, sort) }
     const reset = () => { setSearch(''); setPage(1); load(1, '', sort) }
@@ -576,11 +919,11 @@ function Cars({ toast, initAdd }) {
             {/* Modals */}
             {(adding || editCar) && (
                 <Modal title={editCar ? `Редактировать: ${editCar.name}` : 'Добавить авто'} onClose={() => { setAdding(false); setEditCar(null) }} wide>
-                    <CarForm init={editCar || BLANK} onSave={save} onCancel={() => { setAdding(false); setEditCar(null) }} busy={busy} />
+                    <CarForm init={editCar || BLANK} onSave={save} onCancel={() => { setAdding(false); setEditCar(null) }} busy={busy} pricingSettings={pricingSettings} />
                 </Modal>
             )}
             {imgCar && <Modal title={`Фото: ${imgCar.name}`} onClose={() => setImgCar(null)} wide><ImgMgr car={imgCar} onClose={() => setImgCar(null)} toast={toast} /></Modal>}
-            {priceCar && <Modal title={`Цены: ${priceCar.name}`} onClose={() => setPriceCar(null)}><PriceEditor car={priceCar} onSave={savePrices} onClose={() => setPriceCar(null)} /></Modal>}
+            {priceCar && <Modal title={`Цены: ${priceCar.name}`} onClose={() => setPriceCar(null)}><PriceEditor car={priceCar} onSave={savePrices} onClose={() => setPriceCar(null)} pricingSettings={pricingSettings} /></Modal>}
             {delCar && (
                 <Modal title="Подтверждение удаления" onClose={() => setDelCar(null)}>
                     <p style={{ color: '#e2e8f0', marginBottom: 16 }}>Удалить <strong>{delCar.name}</strong> (ID: {delCar.id})?<br />Это действие необратимо — все фото тоже удалятся.</p>
@@ -638,6 +981,30 @@ export default function AdminPage() {
     const [sidebar, setSidebar] = useState(true)
     const { list: toasts, add: toast } = useToast()
     const [initAdd, setInitAdd] = useState(false)
+    const [pricingSettings, setPricingSettings] = useState(PRICING_FALLBACK)
+    const [pricingLoaded, setPricingLoaded] = useState(false)
+    const [pricingRevision, setPricingRevision] = useState(0)
+
+    useEffect(() => {
+        if (!auth) return
+        let active = true
+        setPricingLoaded(false)
+        api.getPricingSettings()
+            .then(data => {
+                if (!active) return
+                setPricingSettings(normalizePricingSettingsClient(data))
+                setPricingLoaded(true)
+            })
+            .catch(() => {
+                if (!active) return
+                setPricingSettings(PRICING_FALLBACK)
+                setPricingLoaded(true)
+            })
+
+        return () => {
+            active = false
+        }
+    }, [auth])
 
     if (!auth) return <Login onLogin={() => { sessionStorage.setItem('adm', 'ok'); setAuth(true) }} />
 
@@ -650,6 +1017,11 @@ export default function AdminPage() {
     ]
 
     const goTo = id => { setTab(id); if (id === 'cars') { setInitAdd(false) } }
+    const handlePricingSaved = (value) => {
+        setPricingSettings(normalizePricingSettingsClient(value))
+        setPricingLoaded(true)
+        setPricingRevision(prev => prev + 1)
+    }
 
     return (
         <div className="adm-layout">
@@ -680,15 +1052,15 @@ export default function AdminPage() {
                 </header>
                 <main className="adm-content">
                     {tab === 'dashboard' && <Dashboard onGo={id => { goTo(id); if (id === 'cars') setInitAdd(true) }} />}
-                    {tab === 'cars'    && <Cars toast={toast} initAdd={initAdd} />}
+                    {tab === 'cars'    && <Cars toast={toast} initAdd={initAdd} pricingSettings={pricingSettings} pricingRevision={pricingRevision} />}
                     {tab === 'scraper' && <AdminEncar />}
                     {tab === 'calc' && (
                         <div>
                             <h2 className="adm-section-heading" style={{ marginBottom: 20 }}>🧮 Калькулятор</h2>
-                            <Calculator />
+                            <Calculator pricingSettings={pricingSettings} />
                         </div>
                     )}
-                    {tab === 'settings' && <Settings toast={toast} />}
+                    {tab === 'settings' && <Settings toast={toast} pricingSettings={pricingSettings} pricingLoaded={pricingLoaded} onSavePricingSettings={handlePricingSaved} />}
                 </main>
             </div>
 
