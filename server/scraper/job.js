@@ -2,6 +2,7 @@ import pool from '../db.js'
 import { computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
 import {
+  appendTitleTrimSuffix,
   extractShortLocation,
   extractTrimLevelFromTitle,
   inferDrive,
@@ -109,6 +110,8 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
 
   name = stripTrailingTrim(name, trim_level)
   modelName = stripTrailingTrim(modelName, trim_level)
+  name = appendTitleTrimSuffix(name, raw.BadgeDetail, raw.GradeDetail, trim_level)
+  modelName = appendTitleTrimSuffix(modelName, raw.BadgeDetail, raw.GradeDetail, trim_level)
 
   const fees = resolveVehicleFees({
     name,

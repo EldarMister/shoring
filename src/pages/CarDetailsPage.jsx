@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
+  appendDisplayTrimSuffix,
   PARKING_ADDRESS_EN,
   PARKING_ADDRESS_KO,
   VAT_REFUND_RATE,
@@ -294,9 +295,12 @@ const VEHICLE_NAME_FIXES = [
   [/kgmobilriti\s*\(\s*ssangyong\s*\)/gi, 'KG Mobility (SsangYong)'],
   [/kgmobilriti/gi, 'KG Mobility'],
   [/ssangyong/gi, 'SsangYong'],
+  [/keuroseuobeo/gi, 'Crossover'],
+  [/peulreoseu/gi, 'Plus'],
   [/rekseuteon/gi, 'Rexton'],
   [/seupocheu/gi, 'Sports'],
   [/kaeseupeo/gi, 'Casper'],
+  [/aionik/gi, 'Ioniq'],
   [/geuraenjejo/gi, 'Grandeur'],
   [/geuraenjeo/gi, 'Grandeur'],
   [/mohabi/gi, 'Mohave'],
@@ -525,15 +529,16 @@ function mapCar(c) {
   const normalizedModel = normalizeVehicleTitle(c.model || '')
   const normalizedLocation = getShortLocationLabel(c.location_short || c.location || 'Корея')
   const driveSource = c.drive_type || pickDriveFromTags(tags)
+  const trimLevel = normalizeTrimLabel(c.trim_level || '') || extractTrimLabelFromTitle(normalizedName, normalizedModel, c.name || '', c.model || '')
 
   return {
     id: c.id,
-    name: normalizedName || normalizedModel || 'Автомобиль',
-    model: normalizedModel || normalizedName || '',
+    name: appendDisplayTrimSuffix(normalizedName || normalizedModel || 'Автомобиль', trimLevel),
+    model: appendDisplayTrimSuffix(normalizedModel || normalizedName || '', trimLevel),
     year: c.year || '-',
     yearNum: parseYear(c.year),
     mileage: Number(c.mileage || 0),
-    trimLevel: normalizeTrimLabel(c.trim_level || '') || extractTrimLabelFromTitle(normalizedName, normalizedModel, c.name || '', c.model || ''),
+    trimLevel,
     keyInfo: normalizeKeyInfoLabel(c.key_info || ''),
     bodyColor: normalizeColorLabel(c.body_color || '-'),
     interiorColor: normalizeInteriorColorLabel(c.interior_color || '', c.body_color || ''),
@@ -605,8 +610,8 @@ function mergeCarWithEncar(baseCar, detail) {
   const images = detailImages.length ? detailImages : baseImages
   const year = baseCar.year === '-' && detail?.year ? detail.year : baseCar.year
   const detailTrim = baseCar.trimLevel || normalizeTrimLabel(detail?.trim_level || '') || extractTrimLabelFromTitle(detail?.name || '', detail?.model || '')
-  const detailName = stripTrailingTrimLabel(normalizeVehicleTitle(detail?.name || ''), detailTrim)
-  const detailModel = stripTrailingTrimLabel(normalizeVehicleTitle(detail?.model || ''), detailTrim)
+  const detailName = appendDisplayTrimSuffix(stripTrailingTrimLabel(normalizeVehicleTitle(detail?.name || ''), detailTrim), detailTrim)
+  const detailModel = appendDisplayTrimSuffix(stripTrailingTrimLabel(normalizeVehicleTitle(detail?.model || ''), detailTrim), detailTrim)
 
   return {
     ...baseCar,

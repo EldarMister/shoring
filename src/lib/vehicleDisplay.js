@@ -43,6 +43,8 @@ const TRIM_REPLACEMENTS = [
   ['geuraebiti', 'Гравити'],
   ['bijeon', 'Вижен'],
   ['seupesyeol', 'Спешл'],
+  ['peulreoseu', 'Плюс'],
+  ['plus', 'Плюс'],
   ['peurimieo', 'Премьер'],
   ['peurimio', 'Премьер'],
   ['premier', 'Премьер'],
@@ -81,6 +83,8 @@ const TITLE_SAFE_TRIM_SOURCES = [
   'geuraebiti',
   'bijeon',
   'seupesyeol',
+  'peulreoseu',
+  'plus',
   'peurimieo',
   'peurimio',
   'premier',
@@ -210,6 +214,15 @@ export function stripTrailingTrimLabel(value, trimLabel) {
   return text.replace(pattern, '').replace(/\s+/g, ' ').trim()
 }
 
+export function appendDisplayTrimSuffix(value, trimLabel) {
+  const text = cleanText(value)
+  const trim = normalizeTrimLabel(trimLabel)
+  if (!text) return ''
+  if (trim !== 'Плюс') return text
+  if (/\bplus\b/i.test(text)) return text
+  return `${text} Plus`.replace(/\s+/g, ' ').trim()
+}
+
 function inferPassengerBodyTypeFromText(...values) {
   const text = values
     .map((value) => cleanText(value))
@@ -265,7 +278,8 @@ export function normalizeColorLabel(value) {
 
   if (/^(geomeunsaek|geomjeongsaek|heugsaek)$/.test(low)) return 'Черный'
   if (/^(baegsaek|huinsaek)$/.test(low)) return 'Белый'
-  if (/^(eunsaek|eunhasaek)$/.test(low)) return 'Серебристый'
+  if (/^eunsaek$/.test(low)) return 'Серебристый'
+  if (/^eunhasaek$/.test(low)) return 'Серебристо-зеленый'
   if (/^(hoesaek|jwisaek|jwiseak)$/.test(low)) return /^(jwisaek|jwiseak)$/.test(low) ? 'Мокрый асфальт' : 'Серый'
   if (/^(cheongsaek|parangsaek)$/.test(low)) return 'Синий'
   if (/^(ppalgangsaek|ppalgansaek|hongsaek)$/.test(low)) return 'Красный'
@@ -289,6 +303,7 @@ export function normalizeColorLabel(value) {
   if (/wine|와인/i.test(raw)) return 'Винный'
   if (/black|검정|흑색/i.test(raw)) return 'Черный'
   if (/white|흰색|백색/i.test(raw)) return 'Белый'
+  if (/silver\s*green|green\s*silver|은하색/i.test(raw)) return 'Серебристо-зеленый'
   if (/silver|은색/i.test(raw)) return 'Серебристый'
   if (/gray|grey|회색/i.test(raw)) return 'Серый'
   if (/blue|청색|파란색|남색|네이비/i.test(raw)) return /남색|네이비/i.test(raw) ? 'Темно-синий' : 'Синий'
@@ -356,6 +371,7 @@ export function getColorSwatch(value) {
   if (/\u0436\u0435\u043c\u0447\u0443\u0436|pearl/i.test(text)) return '#e7eaef'
   if (/\u0430\u0439\u0432\u043e\u0440\u0438|ivory/i.test(text)) return '#f3ead8'
   if (/\u0432\u0438\u043d\u043d|wine/i.test(text)) return '#7f1d1d'
+  if (text.includes('серебристо-зелен')) return '#a8b7a1'
 
   if (text.includes('черн')) return '#101010'
   if (text.includes('бел')) return '#f8fafc'

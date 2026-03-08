@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import FilterSidebar from '../components/catalog/FilterSidebar'
 import CarCard from '../components/catalog/CarCard'
 import {
+  appendDisplayTrimSuffix,
   extractTrimLabelFromTitle,
   VAT_REFUND_RATE,
   getShortLocationLabel,
@@ -81,9 +82,12 @@ const VEHICLE_NAME_FIXES = [
   [/kgmobilriti\s*\(\s*ssangyong\s*\)/gi, 'KG Mobility (SsangYong)'],
   [/kgmobilriti/gi, 'KG Mobility'],
   [/ssangyong/gi, 'SsangYong'],
+  [/keuroseuobeo/gi, 'Crossover'],
+  [/peulreoseu/gi, 'Plus'],
   [/rekseuteon/gi, 'Rexton'],
   [/seupocheu/gi, 'Sports'],
   [/kaeseupeo/gi, 'Casper'],
+  [/aionik/gi, 'Ioniq'],
   [/geuraenjeo/gi, 'Grandeur'],
   [/mohabi/gi, 'Mohave'],
   [/santa[\s-]*fe/gi, 'Santafe'],
@@ -437,8 +441,8 @@ async function fetchEncarDetail(encarId) {
       const detailTrim = normalizeTrimLabel(detail?.trim_level || '') || extractTrimLabelFromTitle(detail?.name || '', detail?.model || '')
       const normalized = {
         images: normalizeImages(detail?.photos?.length ? detail.photos : detail?.images),
-        name: stripTrailingTrimLabel(normalizeVehicleTitle(detail?.name || ''), detailTrim),
-        model: stripTrailingTrimLabel(normalizeVehicleTitle(detail?.model || ''), detailTrim),
+        name: appendDisplayTrimSuffix(stripTrailingTrimLabel(normalizeVehicleTitle(detail?.name || ''), detailTrim), detailTrim),
+        model: appendDisplayTrimSuffix(stripTrailingTrimLabel(normalizeVehicleTitle(detail?.model || ''), detailTrim), detailTrim),
         fuelType: normalizeTagLabel(detail?.fuel_type || ''),
         transmission: normalizeTagLabel(detail?.transmission || ''),
         driveType: normalizeDriveLabel(detail?.drive_type || ''),
@@ -532,6 +536,7 @@ function mapCar(c) {
     ...(Array.isArray(c.tags) ? c.tags : []),
   ) || normalizeDisplayText(driveSource) || '-'
   const bodyType = resolveDisplayBodyTypeLabel(c.body_type || '', normalizedName, normalizedModel, c.name || '', c.model || '') || '-'
+  const trimLevel = normalizeTrimLabel(c.trim_level || '') || extractTrimLabelFromTitle(normalizedName, normalizedModel, c.name || '', c.model || '')
   const displacement = Number(c.displacement) || 0
   const engineVolume = resolveEngineVolume({
     displacement,
@@ -542,8 +547,8 @@ function mapCar(c) {
 
   return {
     id: c.id,
-    name: normalizedName || normalizedModel || '\u0410\u0432\u0442\u043e\u043c\u043e\u0431\u0438\u043b\u044c',
-    model: normalizedModel || normalizedName || '-',
+    name: appendDisplayTrimSuffix(normalizedName || normalizedModel || '\u0410\u0432\u0442\u043e\u043c\u043e\u0431\u0438\u043b\u044c', trimLevel),
+    model: appendDisplayTrimSuffix(normalizedModel || normalizedName || '-', trimLevel),
     year: c.year,
     mileage: c.mileage || 0,
     tags,
@@ -552,7 +557,7 @@ function mapCar(c) {
     driveType,
     bodyType,
     rawBodyType: String(c.body_type || '').trim(),
-    trimLevel: normalizeTrimLabel(c.trim_level || '') || extractTrimLabelFromTitle(normalizedName, normalizedModel, c.name || '', c.model || ''),
+    trimLevel,
     keyInfo: normalizeKeyInfoLabel(c.key_info || ''),
     displacement,
     engineVolume,

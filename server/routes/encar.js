@@ -4,6 +4,7 @@ import { fetchEncarInspection } from '../lib/encarInspection.js'
 import { computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
 import {
+  appendTitleTrimSuffix,
   PARKING_ADDRESS_EN,
   PARKING_ADDRESS_KO,
   extractKeyInfo,
@@ -101,8 +102,18 @@ router.get('/:encarId', async (req, res) => {
       ad.subTitle,
     )
 
-    const name = [manufacturer, modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
-    const model = [modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+    const name = appendTitleTrimSuffix(
+      [manufacturer, modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
+      category.gradeDetailEnglishName,
+      category.gradeDetailName,
+      trimLevel,
+    )
+    const model = appendTitleTrimSuffix(
+      [modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
+      category.gradeDetailEnglishName,
+      category.gradeDetailName,
+      trimLevel,
+    )
     const bodyType = resolveBodyType(
       spec.bodyName,
       name,

@@ -43,6 +43,8 @@ const TRIM_REPLACEMENTS = [
   ['geuraebiti', 'Гравити'],
   ['bijeon', 'Вижен'],
   ['seupesyeol', 'Спешл'],
+  ['peulreoseu', 'Плюс'],
+  ['plus', 'Плюс'],
   ['peurimieo', 'Премьер'],
   ['peurimio', 'Премьер'],
   ['premier', 'Премьер'],
@@ -81,6 +83,8 @@ const TITLE_SAFE_TRIM_SOURCES = [
   'geuraebiti',
   'bijeon',
   'seupesyeol',
+  'peulreoseu',
+  'plus',
   'peurimieo',
   'peurimio',
   'premier',
@@ -124,6 +128,7 @@ const COLOR_EXACT = new Map([
   ['흰색', 'Белый'],
   ['백색', 'Белый'],
   ['은색', 'Серебристый'],
+  ['은하색', 'Серебристо-зеленый'],
   ['회색', 'Серый'],
   ['쥐색', 'Мокрый асфальт'],
   ['은회색', 'Серебристо-серый'],
@@ -162,6 +167,8 @@ const COLOR_EXACT = new Map([
   ['snow white', 'Снежный белый'],
   ['ivory', 'Айвори'],
   ['wine', 'Винный'],
+  ['silver green', 'Серебристо-зеленый'],
+  ['green silver', 'Серебристо-зеленый'],
 ])
 
 function cleanText(value) {
@@ -193,6 +200,30 @@ export function normalizeText(value) {
   const text = cleanText(value)
   if (!text) return ''
   return hasHangul(text) ? translateVehicleText(text) : text
+}
+
+function resolveTitleTrimSuffix(...values) {
+  for (const value of values) {
+    const raw = cleanText(value)
+    if (!raw) continue
+
+    const normalized = normalizeText(raw)
+    if (normalized === 'Плюс') return 'Plus'
+    if (/\b(?:plus|peulreoseu)\b/i.test(normalized)) return 'Plus'
+    if (/플러스/.test(raw)) return 'Plus'
+  }
+
+  return ''
+}
+
+export function appendTitleTrimSuffix(value, ...trimValues) {
+  const text = cleanText(value)
+  if (!text) return ''
+
+  const suffix = resolveTitleTrimSuffix(...trimValues)
+  if (!suffix) return text
+  if (new RegExp(`\\b${suffix}\\b`, 'i').test(text)) return text
+  return `${text} ${suffix}`.replace(/\s+/g, ' ').trim()
 }
 
 export function normalizeManufacturer(value) {
@@ -430,6 +461,7 @@ export function normalizeColorName(value) {
   if (/^(geomeunsaek|geomjeongsaek|heugsaek)$/.test(low)) return 'Черный'
   if (/^(baegsaek|huinsaek)$/.test(low)) return 'Белый'
   if (/^eunsaek$/.test(low)) return 'Серебристый'
+  if (/^eunhasaek$/.test(low)) return 'Серебристо-зеленый'
   if (/^(hoesaek|jwisaek|jwiseak)$/.test(low)) return /^(jwisaek|jwiseak)$/.test(low) ? 'Мокрый асфальт' : 'Серый'
   if (/^(cheongsaek|parangsaek)$/.test(low)) return 'Синий'
   if (/^(ppalgangsaek|ppalgansaek|hongsaek)$/.test(low)) return 'Красный'
@@ -446,6 +478,8 @@ export function normalizeColorName(value) {
   if (/pearl/.test(low) && /black/.test(low)) return 'Жемчужно-черный'
   if (/pearl/.test(low)) return 'Жемчужный'
   if (/silver/.test(low) && /(gray|grey)/.test(low)) return 'Серебристо-серый'
+  if (/silver/.test(low) && /green/.test(low)) return 'Серебристо-зеленый'
+  if (/green/.test(low) && /silver/.test(low)) return 'Серебристо-зеленый'
   if (/(dark|deep)/.test(low) && /(gray|grey)/.test(low)) return 'Темно-серый'
   if (/(light)/.test(low) && /(gray|grey)/.test(low)) return 'Светло-серый'
   if (/snow/.test(low) && /white/.test(low)) return 'Снежный белый'
