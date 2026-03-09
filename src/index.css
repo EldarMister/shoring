@@ -2923,10 +2923,13 @@ body {
 в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ */
 
 .filter-sidebar {
-  background: #ffffff;
-  border: 1px solid #e9ecef;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 16px;
   overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
 }
 
 .filter-sidebar-hd {
@@ -4560,8 +4563,10 @@ body {
 
 /* Filter sidebar */
 [data-theme="dark"] .filter-sidebar {
-  background: #111e2e;
-  border-right-color: #1e3348;
+  background: rgba(17, 30, 46, 0.9);
+  border-right-color: rgba(30, 51, 72, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 [data-theme="dark"] .filter-header {
