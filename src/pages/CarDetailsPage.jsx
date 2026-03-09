@@ -328,6 +328,47 @@ function getInspectionReportDate(inspection) {
   return certificateDate ? formatInspectionDate(certificateDate) : '-'
 }
 
+function formatInspectionSupplement(value) {
+  const normalized = normalizeInspectionValue(value)
+  if (!normalized || normalized === '-') return ''
+  return translateInspectionText(normalized) || normalized
+}
+
+function buildInspectionMetaLines(item, primaryValue) {
+  const lines = []
+  const primary = String(primaryValue || '').trim()
+  const detail = formatInspectionSupplement(item?.detail || '')
+  const amount = formatInspectionSupplement(item?.amount || '')
+  const note = formatInspectionSupplement(item?.note || '')
+
+  if (detail && detail !== primary) lines.push(detail)
+  if (amount) lines.push(`Оценка: ${amount}`)
+  if (note) lines.push(`Примечание: ${note}`)
+
+  return [...new Set(lines)]
+}
+
+function buildEncarFlagBadges(car) {
+  const flags = car?.detailFlags || {}
+  const badges = []
+
+  if (flags.diagnosis) badges.push({ key: 'diagnosis', label: 'Диагностика Encar', tone: 'blue' })
+  if (flags.hasEvBatteryInfo) badges.push({ key: 'ev-battery', label: 'Данные по EV-батарее', tone: 'teal' })
+  if (flags.meetGo) badges.push({ key: 'meetgo', label: 'Encar MeetGo', tone: 'green' })
+  if (flags.isPartneredVehicle) badges.push({ key: 'partnered', label: 'Партнерский лот', tone: 'amber' })
+
+  return badges
+}
+
+function buildInspectionPhotoMeta(photo, index) {
+  const parts = [`Фото инспекции #${index + 1}`]
+  if (photo?.label) {
+    const translated = translateInspectionText(photo.label)
+    if (translated && translated !== `Фото ${index + 1}`) parts.unshift(translated)
+  }
+  return parts.filter(Boolean).join(' • ')
+}
+
 function buildRegistrationHistoryEntries(car) {
   const inspection = car?.inspection
   const manage = car?.detailManage || {}
@@ -980,6 +1021,7 @@ export default function CarDetailsPage() {
   const registrationHistoryEntries = useMemo(() => buildRegistrationHistoryEntries(car), [car])
   const accidentHistoryEntries = useMemo(() => buildAccidentHistoryEntries(car), [car])
   const repairHistoryItems = useMemo(() => buildRepairHistoryItems(car), [car])
+  const encarFlagBadges = useMemo(() => buildEncarFlagBadges(car), [car])
   const inspectionPhotos = Array.isArray(car?.inspection?.photos) ? car.inspection.photos : []
   const inspectionSummary = Array.isArray(car?.inspection?.summary) ? car.inspection.summary : []
 
@@ -1204,6 +1246,15 @@ export default function CarDetailsPage() {
               <a href={car.inspection.sourceUrl} target="_blank" rel="noreferrer" className="btn-car-green">{translateInspectionText('Open inspection')}</a>
             )}
           </div>
+          {!!encarFlagBadges.length && (
+            <div className="car-inspection-badges">
+              {encarFlagBadges.map((badge) => (
+                <span key={badge.key} className={`car-inspection-badge car-inspection-badge-${badge.tone}`}>
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          )}
 
           {car.inspection ? (
             <div className="car-inspection-stack">
@@ -1215,6 +1266,7 @@ export default function CarDetailsPage() {
                       <a key={`${photo.url}-${index}`} href={photo.url} target="_blank" rel="noreferrer" className="car-inspection-photo">
                         <img src={photo.url} alt={translateInspectionText(photo.label || `Inspection ${index + 1}`)} loading="lazy" />
                         <span>{translateInspectionText(photo.label || `Photo ${index + 1}`)}</span>
+                        <small>{buildInspectionPhotoMeta(photo, index)}</small>
                       </a>
                     ))}
                   </div>
@@ -1225,13 +1277,20 @@ export default function CarDetailsPage() {
                 <div className="car-inspection-block">
                   <h4 className="car-inspection-title">{translateInspectionText('Overall condition')}</h4>
                   <div className="car-inspection-grid">
-                    {inspectionSummary.map((item, index) => (
-                      <div key={`${item.label}-${index}`} className="car-inspection-item">
-                        <span>{translateInspectionText(item.label)}</span>
-                        <strong>{(item.states?.map(translateInspectionText).join(', ')) || translateInspectionText(item.detail) || '-'}</strong>
-                        {item.detail && item.states?.join(', ') !== item.detail && <small>{translateInspectionText(item.detail)}</small>}
-                      </div>
-                    ))}
+                    {inspectionSummary.map((item, index) => {
+                      const primaryValue = (item.states?.map(translateInspectionText).join(', ')) || translateInspectionText(item.detail) || '-'
+                      const metaLines = buildInspectionMetaLines(item, primaryValue)
+
+                      return (
+                        <div key={`${item.label}-${index}`} className="car-inspection-item">
+                          <span>{translateInspectionText(item.label)}</span>
+                          <strong>{primaryValue}</strong>
+                          {metaLines.map((line) => (
+                            <small key={line}>{line}</small>
+                          ))}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -1253,6 +1312,15 @@ export default function CarDetailsPage() {
               {inspectionOpen && !!car.inspection.exteriorStatus?.sections?.length && (
                 <div className="car-inspection-block">
                   <h4 className="car-inspection-title">{translateInspectionText('Body and frame inspection')}</h4>
+                  {!!car.inspection.exteriorStatus?.legend?.length && (
+                    <div className="car-inspection-legend">
+                      {car.inspection.exteriorStatus.legend.map((item, index) => (
+                        <span key={`${item}-${index}`} className="car-inspection-legend-item">
+                          {translateInspectionText(item)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="car-inspection-groups">
                     {car.inspection.exteriorStatus.sections.map((section) => (
                       <div key={section.title} className="car-inspection-group">
@@ -1281,15 +1349,22 @@ export default function CarDetailsPage() {
                       <div key={group.title} className="car-inspection-group">
                         <h5>{translateInspectionText(group.title)}</h5>
                         <div className="car-inspection-group-list">
-                          {group.items.map((item, index) => (
-                            <div key={`${group.title}-${item.label}-${index}`} className="car-inspection-line">
-                              <div>
-                                <span>{translateInspectionText(item.label)}</span>
-                                {item.note && <small>{translateInspectionText(item.note)}</small>}
+                          {group.items.map((item, index) => {
+                            const primaryValue = (item.states?.map(translateInspectionText).join(', ')) || translateInspectionText(item.detail) || '-'
+                            const metaLines = buildInspectionMetaLines(item, primaryValue)
+
+                            return (
+                              <div key={`${group.title}-${item.label}-${index}`} className="car-inspection-line">
+                                <div>
+                                  <span>{translateInspectionText(item.label)}</span>
+                                  {metaLines.map((line) => (
+                                    <small key={line}>{line}</small>
+                                  ))}
+                                </div>
+                                <strong>{primaryValue}</strong>
                               </div>
-                              <strong>{(item.states?.map(translateInspectionText).join(', ')) || translateInspectionText(item.detail) || '-'}</strong>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     ))}

@@ -7241,6 +7241,49 @@ body {
   gap: 18px;
 }
 
+.car-inspection-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.car-inspection-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.car-inspection-badge-blue {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.2);
+  color: #1d4ed8;
+}
+
+.car-inspection-badge-green {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: rgba(22, 163, 74, 0.2);
+  color: #15803d;
+}
+
+.car-inspection-badge-teal {
+  background: rgba(13, 148, 136, 0.12);
+  border-color: rgba(13, 148, 136, 0.2);
+  color: #0f766e;
+}
+
+.car-inspection-badge-amber {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #b45309;
+}
+
 .car-inspection-header {
   display: flex;
   align-items: flex-start;
@@ -7398,6 +7441,32 @@ body {
   font-weight: 700;
 }
 
+.car-inspection-photo small {
+  color: #6d859d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.car-inspection-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.car-inspection-legend-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(26, 60, 94, 0.08);
+  border: 1px solid rgba(26, 60, 94, 0.12);
+  color: #1a3c5e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .car-inspection-opinion {
   display: grid;
   gap: 12px;
@@ -7483,8 +7552,39 @@ body {
 [data-theme="dark"] .car-inspection-opinion-item span,
 [data-theme="dark"] .car-inspection-item small,
 [data-theme="dark"] .car-inspection-line small,
+[data-theme="dark"] .car-inspection-photo small,
 [data-theme="dark"] .car-inspection-empty {
   color: #94a3b8;
+}
+
+[data-theme="dark"] .car-inspection-legend-item {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.16);
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .car-inspection-badge-blue {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(96, 165, 250, 0.18);
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .car-inspection-badge-green {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(52, 211, 153, 0.18);
+  color: #bbf7d0;
+}
+
+[data-theme="dark"] .car-inspection-badge-teal {
+  background: rgba(20, 184, 166, 0.16);
+  border-color: rgba(45, 212, 191, 0.18);
+  color: #99f6e4;
+}
+
+[data-theme="dark"] .car-inspection-badge-amber {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(251, 191, 36, 0.18);
+  color: #fde68a;
 }
 
 .header-login-authenticated,
