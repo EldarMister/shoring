@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS filter_options (
 CREATE TABLE IF NOT EXISTS scraper_config (
   id             INTEGER PRIMARY KEY DEFAULT 1,
   schedule       VARCHAR(20)  DEFAULT 'manual',   -- manual | hourly | daily
+  parse_scope    VARCHAR(20)  DEFAULT 'all',      -- all | imported
   daily_limit    INTEGER      DEFAULT 100,
   start_hour     INTEGER      DEFAULT 10,          -- час запуска daily (0-23)
   interval_hours INTEGER      DEFAULT 1,           -- каждые N часов (hourly)
@@ -91,6 +92,8 @@ CREATE TABLE IF NOT EXISTS scraper_config (
   last_run       TIMESTAMPTZ,
   updated_at     TIMESTAMPTZ  DEFAULT NOW()
 );
+
+ALTER TABLE scraper_config ADD COLUMN IF NOT EXISTS parse_scope VARCHAR(20) DEFAULT 'all';
 
 -- Единственная строка конфига
 INSERT INTO scraper_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;

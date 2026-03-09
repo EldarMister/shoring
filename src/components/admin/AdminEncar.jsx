@@ -161,10 +161,11 @@ export default function AdminEncar() {
   const [dbStats, setDbStats]       = useState({ totalScraped: 0, todayScraped: 0 })
 
   // Config form state
-  const [cfgSchedule,  setCfgSchedule]  = useState('manual')
-  const [cfgLimit,     setCfgLimit]     = useState(100)
-  const [cfgHour,      setCfgHour]      = useState(10)
-  const [cfgInterval,  setCfgInterval]  = useState(1)
+  const [cfgSchedule,   setCfgSchedule]   = useState('manual')
+  const [cfgParseScope, setCfgParseScope] = useState('all')
+  const [cfgLimit,      setCfgLimit]      = useState(100)
+  const [cfgHour,       setCfgHour]       = useState(10)
+  const [cfgInterval,   setCfgInterval]   = useState(1)
 
   const logsRef    = useRef(null)
   const evtRef     = useRef(null)
@@ -179,6 +180,7 @@ export default function AdminEncar() {
       setDbStats(data.dbStats || {})
       if (data.config) {
         setCfgSchedule(data.config.schedule  || 'manual')
+        setCfgParseScope(data.config.parseScope || data.config.parse_scope || 'all')
         setCfgLimit(   data.config.dailyLimit || 100)
         setCfgHour(    data.config.hour       || 10)
         setCfgInterval(data.config.intervalHours || 1)
@@ -246,6 +248,7 @@ export default function AdminEncar() {
   const hasPendingConfigChanges = Boolean(
     status?.config && (
       status.config.schedule !== cfgSchedule ||
+      (status.config.parseScope || 'all') !== cfgParseScope ||
       Number(status.config.dailyLimit || 100) !== Number(cfgLimit || 100) ||
       Number(status.config.hour || 10) !== Number(cfgHour || 10) ||
       Number(status.config.intervalHours || 1) !== Number(cfgInterval || 1)
@@ -258,6 +261,7 @@ export default function AdminEncar() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         schedule:      cfgSchedule,
+        parseScope:    cfgParseScope,
         dailyLimit:    cfgLimit,
         hour:          cfgHour,
         intervalHours: cfgInterval,
@@ -279,7 +283,7 @@ export default function AdminEncar() {
     }
 
     return data
-  }, [cfgHour, cfgInterval, cfgLimit, cfgSchedule])
+  }, [cfgHour, cfgInterval, cfgLimit, cfgParseScope, cfgSchedule])
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const handleStart = async () => {
@@ -292,7 +296,7 @@ export default function AdminEncar() {
       const res  = await fetch('/api/scraper/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: cfgLimit }),
+        body: JSON.stringify({ limit: cfgLimit, parseScope: cfgParseScope }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Ошибка запуска')
@@ -355,6 +359,7 @@ export default function AdminEncar() {
     hourly: `Каждые ${cfgInterval} ч`,
     daily:  `Каждый день в ${String(cfgHour).padStart(2,'0')}:00`,
   }[cfgSchedule] || 'Вручную'
+  const parseScopeLabel = cfgParseScope === 'imported' ? 'Только импортные' : 'Все машины'
 
   return (
     <div style={{
@@ -524,6 +529,27 @@ export default function AdminEncar() {
               <span>5000</span>
             </div>
           </div>
+          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid #1e3a52' }}>
+            <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Режим парсинга
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <ScheduleBtn
+                value="all"
+                label="Все машины"
+                sub="Корея + импорт"
+                active={cfgParseScope === 'all'}
+                onClick={() => setCfgParseScope('all')}
+              />
+              <ScheduleBtn
+                value="imported"
+                label="Только импортные"
+                sub="Audi, BMW, Mercedes"
+                active={cfgParseScope === 'imported'}
+                onClick={() => setCfgParseScope('imported')}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Schedule selector */}
@@ -615,7 +641,7 @@ export default function AdminEncar() {
             }}
           >
             <PlayIcon />
-            {starting ? 'Запускаю...' : `Запустить (${cfgLimit} машин)`}
+            {starting ? 'Запускаю...' : `Запустить: ${parseScopeLabel.toLowerCase()} (${cfgLimit} машин)`}
           </button>
         ) : (
           <button
@@ -653,6 +679,7 @@ export default function AdminEncar() {
               Парсер работает...
             </span>
           )}
+          {!isRunning && <span>Режим: {parseScopeLabel}</span>}
         </div>
       </div>
 

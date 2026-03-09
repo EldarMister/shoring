@@ -5,6 +5,12 @@ import { runScrapeJob } from '../scraper/job.js'
 import { startScheduler, stopScheduler } from '../scraper/scheduler.js'
 
 const router = Router()
+const PARSE_SCOPE_ALL = 'all'
+const PARSE_SCOPE_IMPORTED = 'imported'
+
+function normalizeParseScope(value) {
+  return value === PARSE_SCOPE_IMPORTED ? PARSE_SCOPE_IMPORTED : PARSE_SCOPE_ALL
+}
 
 router.get('/status', async (_req, res) => {
   let dbStats = { totalScraped: 0, todayScraped: 0 }
@@ -32,13 +38,20 @@ router.post('/start', (req, res) => {
   }
 
   const limit = Math.max(1, Math.min(parseInt(req.body.limit, 10) || state.config.dailyLimit, 5000))
+  const parseScope = normalizeParseScope(req.body.parseScope ?? state.config.parseScope)
+  state.config.parseScope = parseScope
 
-  runScrapeJob(limit).catch((err) => state.error(`Необработанная ошибка: ${err.message}`))
+  runScrapeJob(limit, { parseScope }).catch((err) => state.error(`Необработанная ошибка: ${err.message}`))
   if (state.config.schedule !== 'manual') {
     startScheduler(state.config)
   }
 
-  return res.json({ ok: true, message: `Запущен (лимит: ${limit})`, limit })
+  return res.json({
+    ok: true,
+    message: `Запущен (${parseScope === PARSE_SCOPE_IMPORTED ? 'только импортные' : 'все машины'}, лимит: ${limit})`,
+    limit,
+    parseScope,
+  })
 })
 
 router.post('/stop', (req, res) => {
@@ -51,13 +64,20 @@ router.post('/stop', (req, res) => {
 })
 
 router.put('/config', async (req, res) => {
-  const { schedule, dailyLimit, hour, intervalHours } = req.body
+  const { schedule, parseScope, dailyLimit, hour, intervalHours } = req.body
 
   if (schedule !== undefined) {
     if (!['manual', 'hourly', 'daily'].includes(schedule)) {
       return res.status(400).json({ error: 'Неверное расписание' })
     }
     state.config.schedule = schedule
+  }
+
+  if (parseScope !== undefined) {
+    if (![PARSE_SCOPE_ALL, PARSE_SCOPE_IMPORTED].includes(parseScope)) {
+      return res.status(400).json({ error: 'Неверный режим парсинга' })
+    }
+    state.config.parseScope = normalizeParseScope(parseScope)
   }
 
   if (dailyLimit !== undefined) {
@@ -76,11 +96,12 @@ router.put('/config', async (req, res) => {
     await pool.query(
       `UPDATE scraper_config
        SET schedule = $1,
-           daily_limit = $2,
-           start_hour = $3,
-           interval_hours = $4
+           parse_scope = $2,
+           daily_limit = $3,
+           start_hour = $4,
+           interval_hours = $5
        WHERE id = 1`,
-      [state.config.schedule, state.config.dailyLimit, state.config.hour, state.config.intervalHours],
+      [state.config.schedule, state.config.parseScope, state.config.dailyLimit, state.config.hour, state.config.intervalHours],
     )
   } catch {
     // non-critical

@@ -69,6 +69,7 @@ async function start() {
       if (cfgResult.rows.length) {
         const cfg = cfgResult.rows[0]
         scraperState.config.schedule      = cfg.schedule       || 'manual'
+        scraperState.config.parseScope    = cfg.parse_scope    === 'imported' ? 'imported' : 'all'
         scraperState.config.dailyLimit    = cfg.daily_limit    || 100
         scraperState.config.hour          = cfg.start_hour     || 10
         scraperState.config.intervalHours = cfg.interval_hours || 1

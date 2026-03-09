@@ -8,7 +8,7 @@ class ScraperState extends EventEmitter {
     this.stopReq     = false
     this.progress    = { done: 0, total: 0, failed: 0, skipped: 0, photos: 0 }
     this.logs        = []          // ring buffer, newest first
-    this.config      = { schedule: 'manual', dailyLimit: 100, hour: 10, intervalHours: 1 }
+    this.config      = { schedule: 'manual', parseScope: 'all', dailyLimit: 100, hour: 10, intervalHours: 1 }
     this.lastRun     = null
     this.nextRun     = null
     this.startedAt   = null

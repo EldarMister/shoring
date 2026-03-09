@@ -3,6 +3,10 @@ import { state } from './state.js'
 
 let task = null
 
+function formatParseScopeLabel(config = state.config) {
+  return config?.parseScope === 'imported' ? 'только импортные' : 'все машины'
+}
+
 function parseLastRun() {
   if (!state.lastRun) return null
   const value = new Date(state.lastRun)
@@ -85,9 +89,9 @@ function scheduleNext(config = state.config) {
       return
     }
 
-    state.info(`⏰ Автозапуск по расписанию (лимит: ${state.config.dailyLimit})`)
+    state.info(`⏰ Автозапуск по расписанию (${formatParseScopeLabel(state.config)}, лимит: ${state.config.dailyLimit})`)
     try {
-      await runScrapeJob(state.config.dailyLimit)
+      await runScrapeJob(state.config.dailyLimit, { parseScope: state.config.parseScope })
     } catch (err) {
       state.error(`Ошибка автозапуска: ${err.message}`)
     } finally {
@@ -108,7 +112,7 @@ export function startScheduler(config = state.config) {
   }
 
   scheduleNext(config)
-  state.info(`⏰ Планировщик запущен: ${formatScheduleLabel(config)}${state.nextRun ? `, следующий запуск ${state.nextRun}` : ''}`)
+  state.info(`⏰ Планировщик запущен: ${formatScheduleLabel(config)}, режим ${formatParseScopeLabel(config)}${state.nextRun ? `, следующий запуск ${state.nextRun}` : ''}`)
 }
 
 export function stopScheduler() {

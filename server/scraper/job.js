@@ -5,6 +5,7 @@ import { fetchEncarVehicleEnrichment } from '../lib/encarVehicle.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
 import {
   appendTitleTrimSuffix,
+  classifyVehicleOrigin,
   extractShortLocation,
   extractTrimLevelFromTitle,
   inferDrive,
@@ -16,6 +17,7 @@ import {
   resolveBodyType,
   normalizeTransmission,
   normalizeTrimLevel,
+  VEHICLE_ORIGIN_LABELS,
 } from '../lib/vehicleData.js'
 import { isStandardVin, normalizeVin } from '../lib/vin.js'
 import { fetchCarList, extractPhotoUrls, probePhotoUrls, sleep } from './encarApi.js'
@@ -32,6 +34,8 @@ import { state } from './state.js'
 
 const PAGE_SIZE = 20
 const MIN_SCRAPER_YEAR = 2019
+const PARSE_SCOPE_ALL = 'all'
+const PARSE_SCOPE_IMPORTED = 'imported'
 
 function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -328,8 +332,10 @@ async function updateScrapeStats(added) {
   }
 }
 
-export async function runScrapeJob(limit = 100) {
+export async function runScrapeJob(limit = 100, options = {}) {
   if (state.isRunning) throw new Error('Парсер уже запущен')
+
+  const parseScope = options?.parseScope === PARSE_SCOPE_IMPORTED ? PARSE_SCOPE_IMPORTED : PARSE_SCOPE_ALL
 
   state.isRunning = true
   state.stopReq = false
@@ -337,7 +343,7 @@ export async function runScrapeJob(limit = 100) {
   state.lastRun = state.startedAt
   state.progress = { done: 0, total: limit, failed: 0, skipped: 0, photos: 0 }
 
-  state.info(`🚀 Запуск парсера — лимит ${limit} новых машин`)
+  state.info(`🚀 Запуск парсера — ${parseScope === PARSE_SCOPE_IMPORTED ? 'только импортные' : 'все машины'}, лимит ${limit} новых машин`)
 
   const sourceMode = process.env.ENCAR_PROXY_URL ? 'Vercel proxy' : 'direct Encar API'
   state.info(`Source mode: ${sourceMode}`)
@@ -390,6 +396,15 @@ export async function runScrapeJob(limit = 100) {
           state.info(`⏭ Пропуск ${car.name} (${car.year}) — уже в базе`)
           state.setProgress({ skipped: state.progress.skipped + 1 })
           continue
+        }
+
+        if (parseScope === PARSE_SCOPE_IMPORTED) {
+          const origin = classifyVehicleOrigin(car.name, car.model)
+          if (origin !== VEHICLE_ORIGIN_LABELS.imported) {
+            state.info(`⏭ Пропуск ${car.name} (${car.year}) — корейская машина, режим: только импортные`)
+            state.setProgress({ skipped: state.progress.skipped + 1 })
+            continue
+          }
         }
 
         let preparedCar = car
