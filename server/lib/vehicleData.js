@@ -122,6 +122,16 @@ const SUSPICIOUS_DUPLICATE_INTERIOR_COLORS = new Set([
   'Графитовый',
 ])
 
+const INTERIOR_COLOR_TEXT_MARKERS = '(?:\\uC2DC\\uD2B8|\\uB0B4\\uC7A5|seat(?:\\s*color)?|interior(?:\\s*color)?)'
+const INTERIOR_COLOR_TEXT_PATTERNS = Object.freeze([
+  { color: 'black', source: '(?:\\uBE14\\uB799|\\uAC80\\uC815|\\uD751\\uC0C9|black)' },
+  { color: 'beige', source: '(?:\\uBCA0\\uC774\\uC9C0|beige)' },
+  { color: 'brown', source: '(?:\\uBE0C\\uB77C\\uC6B4|brown|tan|camel)' },
+  { color: 'ivory', source: '(?:\\uC544\\uC774\\uBCF4\\uB9AC|ivory)' },
+  { color: 'gray', source: '(?:\\uADF8\\uB808\\uC774|\\uD68C\\uC0C9|gray|grey)' },
+  { color: 'red', source: '(?:\\uB808\\uB4DC|\\uC801\\uC0C9|red|wine|burgundy)' },
+])
+
 const TRIM_REPLACEMENTS = [
   ['neombeowon edisyeon', 'Number One Edition'],
   ['number one edition', 'Number One Edition'],
@@ -818,6 +828,21 @@ export function normalizeInteriorColorName(value, bodyValue = '') {
   }
 
   return normalizedInterior
+}
+
+export function extractInteriorColorFromText(value, bodyValue = '') {
+  const text = cleanText(value)
+  if (!text) return ''
+
+  for (const { color, source } of INTERIOR_COLOR_TEXT_PATTERNS) {
+    const beforeMarker = new RegExp(`${source}\\s*${INTERIOR_COLOR_TEXT_MARKERS}`, 'i')
+    const afterMarker = new RegExp(`${INTERIOR_COLOR_TEXT_MARKERS}(?:\\s*(?:\\uC0C9\\uC0C1|\\uCEEC\\uB7EC|color))?\\s*[:：-]?\\s*${source}`, 'i')
+    if (beforeMarker.test(text) || afterMarker.test(text)) {
+      return normalizeInteriorColorName(color, bodyValue)
+    }
+  }
+
+  return ''
 }
 
 export function isGenericColorLabel(value) {

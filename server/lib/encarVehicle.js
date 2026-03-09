@@ -7,6 +7,7 @@ import {
   PARKING_ADDRESS_EN,
   PARKING_ADDRESS_KO,
   extractKeyInfo,
+  extractInteriorColorFromText,
   extractShortLocation,
   extractTrimLevelFromTitle,
   inferDrive,
@@ -57,6 +58,41 @@ function toAbsolutePhotoUrl(path) {
   if (!path) return null
   if (/^https?:\/\//i.test(path)) return path
   return `https://ci.encar.com${path.startsWith('/') ? '' : '/'}${path}`
+}
+
+function extractInteriorColorFromSpec(spec = {}) {
+  const customColor = spec?.customColor
+  if (customColor && typeof customColor === 'object' && !Array.isArray(customColor)) {
+    return (
+      customColor.interiorColorName ||
+      customColor.interiorColor ||
+      customColor.innerColorName ||
+      customColor.innerColor ||
+      customColor.seatColorName ||
+      customColor.seatColor ||
+      customColor.trimColorName ||
+      customColor.trimColor ||
+      ''
+    )
+  }
+
+  return (
+    spec?.interiorColorName ||
+    spec?.interiorColor ||
+    spec?.innerColorName ||
+    spec?.innerColor ||
+    spec?.trimColorName ||
+    spec?.trimColor ||
+    spec?.seatColorName ||
+    spec?.seatColor ||
+    ''
+  )
+}
+
+function resolveInteriorColor(spec = {}, bodyColor = '', ...texts) {
+  const specValue = normalizeInteriorColorName(extractInteriorColorFromSpec(spec), bodyColor)
+  if (specValue) return specValue
+  return extractInteriorColorFromText(texts.filter(Boolean).join(' '), bodyColor)
 }
 
 export async function fetchEncarVehicleDetail(encarId, { includeInspection = false } = {}) {
@@ -193,6 +229,7 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
   }
 
   const locationRaw = String(contact.address || '').trim()
+  const bodyColor = normalizeColorName(spec.colorName)
   const keyInfo = extractKeyInfo({
     contentsText: contents.text,
     inspectionRows: inspection?.detailStatus || [],
@@ -206,21 +243,8 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
     model,
     year,
     mileage: Number(spec.mileage) || 0,
-    body_color: normalizeColorName(spec.colorName),
-    interior_color: normalizeInteriorColorName(
-      spec?.customColor?.interiorColorName ||
-      spec?.customColor?.interiorColor ||
-      spec?.interiorColorName ||
-      spec?.interiorColor ||
-      spec?.innerColorName ||
-      spec?.innerColor ||
-      spec?.trimColorName ||
-      spec?.trimColor ||
-      spec?.seatColorName ||
-      spec?.seatColor ||
-      '',
-      spec.colorName
-    ),
+    body_color: bodyColor,
+    interior_color: resolveInteriorColor(spec, bodyColor, ad.memo, contents.text, ad.title, ad.subTitle),
     location: locationRaw,
     location_short: extractShortLocation(locationRaw),
     vin: data?.vin || '',
@@ -279,7 +303,7 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
 }
 
 export async function fetchEncarVehicleEnrichment(encarId) {
-  const { data, category, spec, ad, contact } = await fetchEncarVehicleApiData(encarId)
+  const { data, category, spec, ad, contact, contents } = await fetchEncarVehicleApiData(encarId)
   const manufacturerRaw = category.manufacturerEnglishName || category.manufacturerName || ''
   const modelGroupRaw = category.modelGroupEnglishName || category.modelGroupName || category.modelName || ''
   const gradeNameRaw = category.gradeDetailEnglishName || category.gradeDetailName || category.gradeName || ''
@@ -337,6 +361,8 @@ export async function fetchEncarVehicleEnrichment(encarId) {
     trimLevel,
   )
 
+  const bodyColor = normalizeColorName(spec.colorName)
+
   return {
     name,
     model,
@@ -347,21 +373,8 @@ export async function fetchEncarVehicleEnrichment(encarId) {
     fuel_type: normalizeFuel(spec.fuelName),
     transmission: normalizeTransmission(spec.transmissionName),
     drive_type: inferDrive(driveRaw, name, model),
-    body_color: normalizeColorName(spec.colorName),
-    interior_color: normalizeInteriorColorName(
-      spec?.customColor?.interiorColorName ||
-      spec?.customColor?.interiorColor ||
-      spec?.interiorColorName ||
-      spec?.interiorColor ||
-      spec?.innerColorName ||
-      spec?.innerColor ||
-      spec?.trimColorName ||
-      spec?.trimColor ||
-      spec?.seatColorName ||
-      spec?.seatColor ||
-      '',
-      spec.colorName
-    ),
+    body_color: bodyColor,
+    interior_color: resolveInteriorColor(spec, bodyColor, ad.memo, contents.text, ad.title, ad.subTitle),
     body_type: resolveBodyType(
       spec.bodyName,
       name,
