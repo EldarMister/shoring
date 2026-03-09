@@ -172,6 +172,7 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     key_info: '',
     body_color,
     interior_color,
+    option_features: [],
     location: rawLocation || extractShortLocation(rawLocation) || 'Корея',
     encar_url,
     encar_id,
@@ -264,6 +265,9 @@ function normalizeImportedCar(car) {
     trim_level: normalizedText.trim_level ?? car.trim_level,
     body_color: normalizedText.body_color ?? car.body_color,
     interior_color: normalizedText.interior_color ?? car.interior_color,
+    option_features: Array.isArray(car.option_features)
+      ? [...new Set(car.option_features.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 12)
+      : [],
     location: normalizedText.location || car.location || 'Корея',
     vin: normalizeVin(car.vin) || null,
   }
@@ -281,6 +285,9 @@ function mergeCarEnrichment(car, enrichment, exchangeSnapshot, pricingSettings) 
     trim_level: enrichment.trim_level || car.trim_level,
     body_color: enrichment.body_color || car.body_color,
     interior_color: enrichment.interior_color || car.interior_color,
+    option_features: Array.isArray(enrichment.option_features) && enrichment.option_features.length
+      ? enrichment.option_features
+      : car.option_features,
     location: enrichment.location || car.location,
     vin: enrichment.vin || car.vin,
     price_krw: Number(enrichment.price_krw) > 0 ? Number(enrichment.price_krw) : car.price_krw,
@@ -293,15 +300,15 @@ async function insertCar(car, photoUrls) {
   const res = await pool.query(
     `INSERT INTO cars
        (name, model, year, mileage, price_krw, price_usd, fuel_type, transmission, drive_type,
-        body_type, trim_level, key_info, body_color, interior_color, location, vin, encar_url, encar_id,
+        body_type, trim_level, key_info, body_color, interior_color, option_features, location, vin, encar_url, encar_id,
         tags, can_negotiate, commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
      RETURNING id`,
     [
       car.name, car.model, car.year, car.mileage,
       car.price_krw, car.price_usd, car.fuel_type, car.transmission, car.drive_type,
       car.body_type || null, car.trim_level || null, car.key_info || null,
-      car.body_color, car.interior_color, car.location, car.vin, car.encar_url, car.encar_id,
+      car.body_color, car.interior_color, car.option_features || [], car.location, car.vin, car.encar_url, car.encar_id,
       car.tags, car.can_negotiate, car.commission, car.delivery, car.delivery_profile_code || null, car.loading, car.unloading,
       car.storage, car.pricing_locked || false, car.vat_refund, car.total,
     ]

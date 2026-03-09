@@ -838,7 +838,7 @@ function mapCar(c) {
     ) || normalizeDisplayText(driveSource) || '-',
     seatCount: null,
     displacement: 0,
-    optionFeatures: [],
+    optionFeatures: normalizeOptionFeatures(c.option_features),
     vehicleNo: '-',
     detailFlags: {},
     detailCondition: {},

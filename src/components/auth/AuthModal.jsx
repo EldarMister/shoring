@@ -328,7 +328,7 @@ export default function AuthModal({
       <div className="auth-modal">
         <div className="auth-modal-head">
           <div>
-            <p className="auth-modal-eyebrow">TLV Auto</p>
+            <p className="auth-modal-eyebrow">AVT Auto</p>
             <h3>{user ? 'Ваш аккаунт' : 'Вход по номеру телефона'}</h3>
           </div>
           <button className="auth-modal-close" type="button" onClick={onClose} aria-label="Закрыть">

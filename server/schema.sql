@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS cars (
   body_color_dots  TEXT[]  DEFAULT '{}',
   interior_color   VARCHAR(100),
   interior_color_dots TEXT[] DEFAULT '{}',
+  option_features  TEXT[]  DEFAULT '{}',
   location         VARCHAR(100),
   vin              VARCHAR(50),
   price_krw        BIGINT  DEFAULT 0,
@@ -56,6 +57,7 @@ ALTER TABLE cars ADD COLUMN IF NOT EXISTS key_info VARCHAR(120);
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS displacement INTEGER DEFAULT 0;
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS delivery_profile_code VARCHAR(60);
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS pricing_locked BOOLEAN DEFAULT false;
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS option_features TEXT[] DEFAULT '{}';
 
 -- Индексы для быстрых фильтров
 CREATE INDEX IF NOT EXISTS idx_cars_price_usd  ON cars(price_usd);

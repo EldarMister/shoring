@@ -176,10 +176,16 @@ function shouldRefreshInteriorColor(interiorValue, bodyValue = '') {
   return !normalized || normalized !== raw
 }
 
+function shouldRefreshOptionFeatures(value) {
+  if (!Array.isArray(value)) return true
+  return !value.some((item) => cleanText(item))
+}
+
 function shouldEnrichCar(car) {
   return (
     shouldRefreshBodyColor(car.body_color) ||
     shouldRefreshInteriorColor(car.interior_color, car.body_color) ||
+    shouldRefreshOptionFeatures(car.option_features) ||
     isWeakBodyTypeForEnrichment(car.body_type) ||
     shouldRefreshTrim(car.trim_level)
   )
@@ -222,6 +228,10 @@ async function enrichCar(car) {
 
     if (shouldRefreshInteriorColor(car.interior_color, patch.body_color || car.body_color) && cleanText(detail.interior_color)) {
       patch.interior_color = detail.interior_color
+    }
+
+    if (shouldRefreshOptionFeatures(car.option_features) && Array.isArray(detail.option_features) && detail.option_features.length) {
+      patch.option_features = detail.option_features
     }
 
     if (isWeakBodyTypeForEnrichment(car.body_type) && cleanText(detail.body_type)) {
@@ -287,14 +297,14 @@ async function runEmptyFieldEnrichment(options = {}) {
   try {
     const result = scope === ENRICH_SCOPE_LATEST
       ? await pool.query(`
-        SELECT id, encar_id, name, model, body_type, trim_level, body_color, interior_color
+        SELECT id, encar_id, name, model, body_type, trim_level, body_color, interior_color, option_features
         FROM cars
         WHERE encar_id IS NOT NULL AND encar_id != ''
         ORDER BY created_at DESC NULLS LAST, id DESC
         LIMIT $1
       `, [latestLimit])
       : await pool.query(`
-        SELECT id, encar_id, name, model, body_type, trim_level, body_color, interior_color
+        SELECT id, encar_id, name, model, body_type, trim_level, body_color, interior_color, option_features
         FROM cars
         WHERE encar_id IS NOT NULL AND encar_id != ''
         ORDER BY updated_at ASC NULLS FIRST, id ASC

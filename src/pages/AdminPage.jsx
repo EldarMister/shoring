@@ -1287,7 +1287,7 @@ function Login({ onLogin }) {
         <div className="adm-login">
             <div className="adm-login-card">
                 <div className="adm-login-logo"><Ic d={IC.car} s={40} /></div>
-                <h1 className="adm-login-title">TLV Auto</h1>
+                <h1 className="adm-login-title">AVT Auto</h1>
                 <p className="adm-login-sub">Панель управления</p>
                 <form onSubmit={go} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <input className="adm-input" type="password" placeholder="Пароль" value={pw} autoFocus onChange={e => setPw(e.target.value)} />
@@ -1353,7 +1353,7 @@ export default function AdminPage() {
     return (
         <div className="adm-layout">
             <aside className={`adm-sidebar${sidebar ? '' : ' adm-sidebar-col'}`}>
-                <div className="adm-sidebar-logo"><Ic d={IC.car} s={26} />{sidebar && <span>TLV Auto</span>}</div>
+                <div className="adm-sidebar-logo"><Ic d={IC.car} s={26} />{sidebar && <span>AVT Auto</span>}</div>
                 <nav className="adm-nav">
                     {nav.map(n => (
                         <button key={n.id} className={`adm-nav-btn${tab === n.id ? ' adm-nav-active' : ''}`} onClick={() => goTo(n.id)} title={n.label}>
