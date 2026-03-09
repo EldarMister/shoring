@@ -279,10 +279,27 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
 }
 
 export async function fetchEncarVehicleEnrichment(encarId) {
-  const { category, spec, ad } = await fetchEncarVehicleApiData(encarId)
+  const { data, category, spec, ad, contact } = await fetchEncarVehicleApiData(encarId)
+  const manufacturerRaw = category.manufacturerEnglishName || category.manufacturerName || ''
+  const modelGroupRaw = category.modelGroupEnglishName || category.modelGroupName || category.modelName || ''
+  const gradeNameRaw = category.gradeDetailEnglishName || category.gradeDetailName || category.gradeName || ''
+  const driveRaw = [
+    category.gradeDetailEnglishName,
+    category.gradeDetailName,
+    category.gradeEnglishName,
+    category.gradeName,
+    category.modelGroupEnglishName,
+    category.modelGroupName,
+    category.modelEnglishName,
+    category.modelName,
+    ad.title,
+    ad.subTitle,
+    ad.memo,
+  ].filter(Boolean).join(' ')
 
-  const modelGroup = normalizeText(category.modelGroupEnglishName || category.modelGroupName || category.modelName || '')
-  const gradeName = normalizeText(category.gradeDetailEnglishName || category.gradeDetailName || category.gradeName || '')
+  const manufacturer = normalizeManufacturer(manufacturerRaw)
+  const modelGroup = normalizeText(modelGroupRaw)
+  const gradeName = normalizeText(gradeNameRaw)
   const trimLevel = normalizeTrimLevel(
     category.gradeDetailEnglishName,
     category.gradeDetailName,
@@ -297,7 +314,39 @@ export async function fetchEncarVehicleEnrichment(encarId) {
     ad.subTitle,
   )
 
+  const displayManufacturer = resolveManufacturerDisplayName(
+    manufacturerRaw,
+    manufacturer,
+    modelGroupRaw,
+    modelGroup,
+    gradeNameRaw,
+    gradeName,
+    ad.title,
+    ad.subTitle,
+  )
+  const name = appendTitleTrimSuffix(
+    [displayManufacturer, modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
+    category.gradeDetailEnglishName,
+    category.gradeDetailName,
+    trimLevel,
+  )
+  const model = appendTitleTrimSuffix(
+    [modelGroup, gradeName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
+    category.gradeDetailEnglishName,
+    category.gradeDetailName,
+    trimLevel,
+  )
+
   return {
+    name,
+    model,
+    location: String(contact.address || '').trim(),
+    vin: data?.vin || '',
+    vehicle_no: data?.vehicleNo || '',
+    price_krw: (Number(ad.price) || 0) * 10000,
+    fuel_type: normalizeFuel(spec.fuelName),
+    transmission: normalizeTransmission(spec.transmissionName),
+    drive_type: inferDrive(driveRaw, name, model),
     body_color: normalizeColorName(spec.colorName),
     interior_color: normalizeInteriorColorName(
       spec?.customColor?.interiorColorName ||
@@ -315,8 +364,8 @@ export async function fetchEncarVehicleEnrichment(encarId) {
     ),
     body_type: resolveBodyType(
       spec.bodyName,
-      modelGroup,
-      gradeName,
+      name,
+      model,
       category.modelGroupEnglishName,
       category.modelGroupName,
       ad.title,

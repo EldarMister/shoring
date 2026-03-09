@@ -11,7 +11,8 @@
     "server": "node server/index.js",
     "start": "node server/index.js",
     "build:railway": "npm run build && node server/index.js",
-    "normalize:cars": "node scripts/normalize-existing-cars.js"
+    "normalize:cars": "node scripts/normalize-existing-cars.js",
+    "fix:catalog": "node scripts/fix-catalog-issues.js"
   },
   "engines": {
     "node": ">=18.0.0"

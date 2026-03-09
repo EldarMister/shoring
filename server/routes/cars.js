@@ -13,6 +13,7 @@ import {
   normalizeTrimLevel,
 } from '../lib/vehicleData.js'
 import { normalizeCarTextFields } from '../lib/carRecordNormalization.js'
+import { isStandardVin, normalizeVin } from '../lib/vin.js'
 
 const router = Router()
 const MIN_CAR_YEAR = 2019
@@ -29,6 +30,24 @@ function normalizeCatalogYear(value) {
   const year = parseCatalogYear(value)
   if (!year || year < MIN_CAR_YEAR) return null
   return String(year)
+}
+
+async function findDuplicateVinId(vin, excludeId = null) {
+  const normalizedVin = normalizeVin(vin)
+  if (!isStandardVin(normalizedVin)) return null
+
+  const params = [normalizedVin]
+  let sql = 'SELECT id FROM cars WHERE UPPER(BTRIM(vin)) = $1'
+
+  if (excludeId !== null && excludeId !== undefined) {
+    params.push(Number(excludeId))
+    sql += ' AND id <> $2'
+  }
+
+  sql += ' LIMIT 1'
+
+  const result = await pool.query(sql, params)
+  return result.rows[0]?.id ?? null
 }
 
 const KO = {
@@ -606,6 +625,12 @@ router.post('/', async (req, res) => {
       commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total,
       encar_url, encar_id, can_negotiate, tags,
     } = req.body
+    const normalizedVin = normalizeVin(vin)
+    const duplicateVinId = await findDuplicateVinId(normalizedVin)
+    if (duplicateVinId) {
+      return res.status(409).json({ error: `VIN уже привязан к автомобилю #${duplicateVinId}` })
+    }
+
     const normalizedText = normalizeCarTextFields({ name, model, trim_level, body_color, interior_color, location })
 
     const result = await pool.query(
@@ -622,7 +647,7 @@ router.post('/', async (req, res) => {
         normalizedText.name ?? name, normalizedText.model ?? model, normalizedYear, mileage || 0,
         fuel_type, transmission, drive_type, body_type, normalizedText.trim_level ?? trim_level, key_info, displacement || 0,
         normalizedText.body_color ?? body_color, body_color_dots || [], normalizedText.interior_color ?? interior_color, interior_color_dots || [],
-        normalizedText.location || location, vin, price_krw || 0, price_usd || 0,
+        normalizedText.location || location, normalizedVin || null, price_krw || 0, price_usd || 0,
         commission ?? DEFAULT_FEES.commission, delivery ?? 0, delivery_profile_code || null, loading ?? DEFAULT_FEES.loading, unloading ?? DEFAULT_FEES.unloading,
         storage ?? DEFAULT_FEES.storage, pricing_locked || false, vat_refund || 0, total || 0,
         encar_url, encar_id, can_negotiate || false, tags || [],
@@ -646,6 +671,14 @@ router.put('/:id', async (req, res) => {
         return res.status(400).json({ error: `Год выпуска должен быть не раньше ${MIN_CAR_YEAR}` })
       }
       payload.year = normalizedYear
+    }
+
+    if (payload.vin !== undefined) {
+      payload.vin = normalizeVin(payload.vin) || null
+      const duplicateVinId = await findDuplicateVinId(payload.vin, req.params.id)
+      if (duplicateVinId) {
+        return res.status(409).json({ error: `VIN уже привязан к автомобилю #${duplicateVinId}` })
+      }
     }
 
     const fields = [

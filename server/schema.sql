@@ -62,6 +62,10 @@ CREATE INDEX IF NOT EXISTS idx_cars_price_usd  ON cars(price_usd);
 CREATE INDEX IF NOT EXISTS idx_cars_year       ON cars(year);
 CREATE INDEX IF NOT EXISTS idx_cars_mileage    ON cars(mileage);
 CREATE INDEX IF NOT EXISTS idx_cars_encar_id   ON cars(encar_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cars_vin_unique
+  ON cars (UPPER(BTRIM(vin)))
+  WHERE vin IS NOT NULL
+    AND UPPER(BTRIM(vin)) ~ '^[A-HJ-NPR-Z0-9]{17}$';
 CREATE INDEX IF NOT EXISTS idx_car_images_car  ON car_images(car_id);
 
 -- Опции фильтров (управляется через Админ → Фильтры)

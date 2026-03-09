@@ -123,6 +123,15 @@ const SUSPICIOUS_DUPLICATE_INTERIOR_COLORS = new Set([
 ])
 
 const TRIM_REPLACEMENTS = [
+  ['neombeowon edisyeon', 'Number One Edition'],
+  ['number one edition', 'Number One Edition'],
+  ['hai-tech', 'Hi-Tech'],
+  ['hai tech', 'Hi-Tech'],
+  ['hi-tech', 'Hi-Tech'],
+  ['hi tech', 'Hi-Tech'],
+  ['hitech', 'Hi-Tech'],
+  ['haipeo', 'Hyper'],
+  ['hyper', 'Hyper'],
   ['choegogeuphyeong', 'Максимальная'],
   ['gibonhyeong', 'Базовая'],
   ['kaelrigeuraepi', 'Каллиграфия'],
@@ -178,6 +187,15 @@ const TRIM_REPLACEMENTS = [
 ]
 
 const TITLE_SAFE_TRIM_SOURCES = [
+  'neombeowon edisyeon',
+  'number one edition',
+  'hai-tech',
+  'hai tech',
+  'hi-tech',
+  'hi tech',
+  'hitech',
+  'haipeo',
+  'hyper',
   'choegogeuphyeong',
   'gibonhyeong',
   'kaelrigeuraepi',
@@ -249,6 +267,7 @@ const PASSENGER_COUNT_TRIM_RE = /\b\d+\s*inseung\b/i
 const DOOR_COUNT_TRIM_RE = /\b\d+\s*(?:ddeo|doeo|door)\b/i
 
 const KNOWN_CITY_RULES = [
+  [/\uAC15\uC6D0|gangwon|kangwon|Канвон/i, 'Канвон'],
   [/서울|seoul|сеул/i, 'Сеул'],
   [/인천|incheon|инчхон/i, 'Инчхон'],
   [/부산|busan|пусан/i, 'Пусан'],

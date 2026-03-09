@@ -1,5 +1,7 @@
 import pool from '../db.js'
 import { computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
+import { normalizeCarTextFields } from '../lib/carRecordNormalization.js'
+import { fetchEncarVehicleEnrichment } from '../lib/encarVehicle.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
 import {
   appendTitleTrimSuffix,
@@ -15,6 +17,7 @@ import {
   normalizeTransmission,
   normalizeTrimLevel,
 } from '../lib/vehicleData.js'
+import { isStandardVin, normalizeVin } from '../lib/vin.js'
 import { fetchCarList, extractPhotoUrls, probePhotoUrls, sleep } from './encarApi.js'
 import { downloadPhotos } from './downloader.js'
 import {
@@ -189,19 +192,112 @@ async function getExistingId(encarId) {
   return res.rows.length ? res.rows[0].id : null
 }
 
+async function getExistingIdByVin(vin) {
+  const normalizedVin = normalizeVin(vin)
+  if (!isStandardVin(normalizedVin)) return null
+
+  const res = await pool.query(
+    'SELECT id FROM cars WHERE UPPER(BTRIM(vin)) = $1 LIMIT 1',
+    [normalizedVin]
+  )
+  return res.rows.length ? res.rows[0].id : null
+}
+
+function rebuildTags(car) {
+  const tags = []
+  if (car.drive_type) tags.push(car.drive_type)
+  if (car.transmission) tags.push(car.transmission)
+  if (car.fuel_type) tags.push(car.fuel_type)
+  return tags
+}
+
+function applyPricingToCar(car, exchangeSnapshot, pricingSettings) {
+  const fees = resolveVehicleFees({
+    name: car.name,
+    model: car.model,
+    body_type: car.body_type,
+    trim_level: car.trim_level,
+    drive_type: car.drive_type,
+    pricing_locked: car.pricing_locked,
+    delivery_profile_code: car.delivery_profile_code,
+    commission: car.commission,
+    delivery: car.delivery,
+    loading: car.loading,
+    unloading: car.unloading,
+    storage: car.storage,
+  }, pricingSettings)
+  const pricing = computePricing({
+    priceKrw: car.price_krw,
+    commission: fees.commission,
+    delivery: fees.delivery,
+    loading: fees.loading,
+    unloading: fees.unloading,
+    storage: fees.storage,
+  }, exchangeSnapshot)
+
+  return {
+    ...car,
+    tags: rebuildTags(car),
+    delivery_profile_code: fees.delivery_profile_code,
+    commission: fees.commission,
+    delivery: fees.delivery,
+    loading: fees.loading,
+    unloading: fees.unloading,
+    storage: fees.storage,
+    price_usd: pricing.price_usd,
+    vat_refund: pricing.vat_refund,
+    total: pricing.total,
+  }
+}
+
+function normalizeImportedCar(car) {
+  const normalizedText = normalizeCarTextFields(car)
+
+  return {
+    ...car,
+    name: normalizedText.name ?? car.name,
+    model: normalizedText.model ?? car.model,
+    trim_level: normalizedText.trim_level ?? car.trim_level,
+    body_color: normalizedText.body_color ?? car.body_color,
+    interior_color: normalizedText.interior_color ?? car.interior_color,
+    location: normalizedText.location || car.location || 'Корея',
+    vin: normalizeVin(car.vin) || null,
+  }
+}
+
+function mergeCarEnrichment(car, enrichment, exchangeSnapshot, pricingSettings) {
+  const merged = normalizeImportedCar({
+    ...car,
+    name: enrichment.name || car.name,
+    model: enrichment.model || car.model,
+    fuel_type: enrichment.fuel_type || car.fuel_type,
+    transmission: enrichment.transmission || car.transmission,
+    drive_type: enrichment.drive_type || car.drive_type,
+    body_type: enrichment.body_type || car.body_type,
+    trim_level: enrichment.trim_level || car.trim_level,
+    body_color: enrichment.body_color || car.body_color,
+    interior_color: enrichment.interior_color || car.interior_color,
+    location: enrichment.location || car.location,
+    vin: enrichment.vin || car.vin,
+    price_krw: Number(enrichment.price_krw) > 0 ? Number(enrichment.price_krw) : car.price_krw,
+  })
+
+  return applyPricingToCar(merged, exchangeSnapshot, pricingSettings)
+}
+
 async function insertCar(car, photoUrls) {
   const res = await pool.query(
     `INSERT INTO cars
        (name, model, year, mileage, price_krw, price_usd, fuel_type, transmission, drive_type,
-        body_type, trim_level, key_info, body_color, interior_color, location, encar_url, encar_id,
+        body_type, trim_level, key_info, body_color, interior_color, location, vin, encar_url, encar_id,
         tags, can_negotiate, commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
      RETURNING id`,
     [
       car.name, car.model, car.year, car.mileage,
       car.price_krw, car.price_usd, car.fuel_type, car.transmission, car.drive_type,
       car.body_type || null, car.trim_level || null, car.key_info || null,
-      car.body_color, car.interior_color, car.location, car.encar_url, car.encar_id,
+      car.body_color, car.interior_color, car.location, car.vin, car.encar_url, car.encar_id,
       car.tags, car.can_negotiate, car.commission, car.delivery, car.delivery_profile_code || null, car.loading, car.unloading,
       car.storage, car.pricing_locked || false, car.vat_refund, car.total,
     ]
@@ -296,14 +392,37 @@ export async function runScrapeJob(limit = 100) {
           continue
         }
 
-        state.info(`🔍 ${car.name} (${car.year}, ${car.mileage.toLocaleString()} км, $${car.price_usd.toLocaleString()})`)
+        let preparedCar = car
+        try {
+          const enrichment = await fetchEncarVehicleEnrichment(raw.Id)
+          preparedCar = mergeCarEnrichment(car, enrichment, exchangeSnapshot, pricingSettings)
+        } catch (enrichmentError) {
+          state.warn(`⏭ Пропуск ${car.name} — не удалось проверить VIN/detail: ${enrichmentError.message}`)
+          state.setProgress({ skipped: state.progress.skipped + 1 })
+          continue
+        }
+
+        if (Number(preparedCar.price_krw || 0) <= 0) {
+          state.info(`⏭ Пропуск ${preparedCar.name} (${preparedCar.year}) — цена в Encar отсутствует или равна 0`)
+          state.setProgress({ skipped: state.progress.skipped + 1 })
+          continue
+        }
+
+        const duplicateVinId = await getExistingIdByVin(preparedCar.vin)
+        if (duplicateVinId) {
+          state.info(`⏭ Пропуск ${preparedCar.name} (${preparedCar.year}) — VIN уже есть у ID ${duplicateVinId}`)
+          state.setProgress({ skipped: state.progress.skipped + 1 })
+          continue
+        }
+
+        state.info(`🔍 ${preparedCar.name} (${preparedCar.year}, ${preparedCar.mileage.toLocaleString()} км, $${preparedCar.price_usd.toLocaleString()})`)
 
         let photoUrls = []
         try {
           const extracted = extractPhotoUrls(raw, 8)
           const validUrls = extracted.length ? extracted : await probePhotoUrls(raw.Id, 8)
           if (validUrls.length) {
-            state.info(`Processing ${validUrls.length} photos for ${car.name}...`)
+            state.info(`Processing ${validUrls.length} photos for ${preparedCar.name}...`)
             await downloadPhotos(validUrls, raw.Id, 8)
             photoUrls = validUrls
             state.setProgress({ photos: state.progress.photos + photoUrls.length })
@@ -313,12 +432,12 @@ export async function runScrapeJob(limit = 100) {
         }
 
         try {
-          const newId = await insertCar(car, photoUrls)
-          state.success(`✅ Сохранено: ${car.name} → id=${newId}, фото=${photoUrls.length}`)
+          const newId = await insertCar(preparedCar, photoUrls)
+          state.success(`✅ Сохранено: ${preparedCar.name} → id=${newId}, фото=${photoUrls.length}`)
           addedThisRun++
           state.setProgress({ done: state.progress.done + 1 })
         } catch (dbErr) {
-          state.error(`❌ БД: ${car.name} — ${dbErr.message}`)
+          state.error(`❌ БД: ${preparedCar.name} — ${dbErr.message}`)
           state.setProgress({ failed: state.progress.failed + 1 })
         }
 
