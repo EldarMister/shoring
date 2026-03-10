@@ -47,9 +47,24 @@ app.get('/api/health', (_req, res) => {
 // В production — раздаём собранный React-фронтенд
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '..', 'dist')
-  app.use(express.static(distPath))
+  app.use(express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+        return
+      }
+
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        return
+      }
+
+      res.setHeader('Cache-Control', 'public, max-age=300')
+    },
+  }))
   // SPA fallback — все остальные маршруты → index.html
   app.get(/.*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
     res.sendFile(path.join(distPath, 'index.html'))
   })
 }
