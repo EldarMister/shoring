@@ -1,5 +1,6 @@
 import pool from '../db.js'
 import { computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
+import { getBlockedCatalogPriceReason } from '../lib/catalogPriceRules.js'
 import { normalizeCarTextFields } from '../lib/carRecordNormalization.js'
 import { fetchEncarVehicleEnrichment } from '../lib/encarVehicle.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
@@ -398,6 +399,16 @@ export async function runScrapeJob(limit = 100, options = {}) {
           continue
         }
 
+        const preDetailPriceReason = getBlockedCatalogPriceReason({
+          priceKrw: car.price_krw,
+          priceUsd: car.price_usd,
+        })
+        if (preDetailPriceReason) {
+          state.info(`⏭ Пропуск ${car.name} (${car.year}) — ${preDetailPriceReason}`)
+          state.setProgress({ skipped: state.progress.skipped + 1 })
+          continue
+        }
+
         const existId = await getExistingId(raw.Id)
         if (existId) {
           state.info(`⏭ Пропуск ${car.name} (${car.year}) — уже в базе`)
@@ -426,6 +437,16 @@ export async function runScrapeJob(limit = 100, options = {}) {
 
         if (Number(preparedCar.price_krw || 0) <= 0) {
           state.info(`⏭ Пропуск ${preparedCar.name} (${preparedCar.year}) — цена в Encar отсутствует или равна 0`)
+          state.setProgress({ skipped: state.progress.skipped + 1 })
+          continue
+        }
+
+        const postDetailPriceReason = getBlockedCatalogPriceReason({
+          priceKrw: preparedCar.price_krw,
+          priceUsd: preparedCar.price_usd,
+        })
+        if (postDetailPriceReason) {
+          state.info(`⏭ Пропуск ${preparedCar.name} (${preparedCar.year}) — ${postDetailPriceReason}`)
           state.setProgress({ skipped: state.progress.skipped + 1 })
           continue
         }

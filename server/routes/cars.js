@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import pool from '../db.js'
 import { DEFAULT_FEES, VAT_REFUND_RATE, computePricing, getExchangeRateSnapshot } from '../lib/exchangeRate.js'
+import { buildBlockedCatalogPriceSql, getBlockedCatalogPriceReason } from '../lib/catalogPriceRules.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
 import { getKnownBrandSqlPatterns } from '../../shared/brandAliases.js'
 import {
@@ -35,6 +36,13 @@ function normalizeCatalogYear(value) {
 function normalizeOptionFeatures(value) {
   if (!Array.isArray(value)) return []
   return [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 12)
+}
+
+function getPayloadPriceBlockReason(payload = {}) {
+  return getBlockedCatalogPriceReason({
+    priceKrw: payload?.price_krw,
+    priceUsd: payload?.price_usd,
+  })
 }
 
 async function findDuplicateVinId(vin, excludeId = null) {
@@ -444,6 +452,8 @@ router.get('/', async (req, res) => {
       }
     }
 
+    conditions.push(`NOT ${buildBlockedCatalogPriceSql('c')}`)
+
     if (brandValues.length) {
       const patterns = uniqPatterns(brandValues.flatMap(brandPatterns))
       conditions.push(`(c.name ILIKE ANY($${p}::text[]) OR c.model ILIKE ANY($${p}::text[]) OR COALESCE(c.trim_level, '') ILIKE ANY($${p}::text[]))`)
@@ -603,6 +613,7 @@ router.get('/:id', async (req, res) => {
        FROM cars c
        LEFT JOIN car_images ci ON ci.car_id = c.id
        WHERE c.id = $1
+         AND NOT ${buildBlockedCatalogPriceSql('c')}
        GROUP BY c.id`,
       [req.params.id]
     )
@@ -635,6 +646,11 @@ router.post('/', async (req, res) => {
     const duplicateVinId = await findDuplicateVinId(normalizedVin)
     if (duplicateVinId) {
       return res.status(409).json({ error: `VIN уже привязан к автомобилю #${duplicateVinId}` })
+    }
+
+    const priceBlockReason = getPayloadPriceBlockReason({ price_krw, price_usd })
+    if (priceBlockReason) {
+      return res.status(400).json({ error: `Автомобиль не будет сохранён: ${priceBlockReason}` })
     }
 
     const normalizedText = normalizeCarTextFields({ name, model, trim_level, body_color, interior_color, location })
@@ -685,6 +701,11 @@ router.put('/:id', async (req, res) => {
       if (duplicateVinId) {
         return res.status(409).json({ error: `VIN уже привязан к автомобилю #${duplicateVinId}` })
       }
+    }
+
+    const priceBlockReason = getPayloadPriceBlockReason(payload)
+    if (priceBlockReason) {
+      return res.status(400).json({ error: `Автомобиль не будет обновлён: ${priceBlockReason}` })
     }
 
     const fields = [

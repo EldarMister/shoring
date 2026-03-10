@@ -25,7 +25,7 @@ let uaIdx = 0
 function nextUA() { return USER_AGENTS[uaIdx++ % USER_AGENTS.length] }
 
 const ENCAR_PROXY_URL = (process.env.ENCAR_PROXY_URL || '').trim().replace(/\/$/, '')
-const ENCAR_DEFAULT_QUERY = '(And.Hidden.N._.CarType.Y.)'
+const ENCAR_DEFAULT_QUERY = '(And.Hidden.N._.CarType.Y._.Year.range(201900..).)'
 
 const apiClient = axios.create({
   baseURL: 'https://api.encar.com',
