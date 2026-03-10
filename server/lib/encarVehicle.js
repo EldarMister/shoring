@@ -38,12 +38,70 @@ const apiClient = axios.create({
   },
 })
 
-async function fetchEncarVehicleApiData(encarId) {
-  const url = `https://fem.encar.com/cars/detail/${encarId}`
-  const { data } = await apiClient.get(`/v1/readside/vehicle/${encodeURIComponent(encarId)}`)
+const femDetailClient = axios.create({
+  baseURL: 'https://fem.encar.com',
+  timeout: 20000,
+  proxy: false,
+  headers: {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+    Referer: 'https://www.encar.com/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  },
+})
+
+function cleanText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function createVehicleDataError(message, meta = {}) {
+  const error = new Error(message)
+  error.encarDiagnostic = meta
+  return error
+}
+
+function parsePreloadedState(html) {
+  const marker = '__PRELOADED_STATE__ = '
+  const start = html.indexOf(marker)
+  if (start < 0) return null
+
+  const end = html.indexOf('</script>', start)
+  if (end < 0) return null
+
+  const raw = html
+    .slice(start + marker.length, end)
+    .trim()
+    .replace(/;\s*$/, '')
+
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function extractVehicleDataFromState(state) {
+  return (
+    state?.carInfo?.car
+    || state?.cars?.base
+    || state?.saleCar?.car
+    || state?.cars?.detailServerDriven?.result
+    || null
+  )
+}
+
+function buildVehicleApiShape(data, source) {
+  if (!data || typeof data !== 'object') {
+    throw createVehicleDataError('Empty detail payload', {
+      reason: source === 'html_preloaded_state' ? 'detail_parse_failed' : 'detail_empty_payload',
+      temporary: true,
+      retryable: true,
+      details: 'detail payload is empty',
+    })
+  }
 
   return {
-    url,
+    url: `https://fem.encar.com/cars/detail/${data?.vehicleId || data?.queryCarId || ''}`.replace(/\/$/, ''),
     data,
     category: data?.category || {},
     spec: data?.spec || {},
@@ -55,6 +113,96 @@ async function fetchEncarVehicleApiData(encarId) {
     view: data?.view || {},
     partnership: data?.partnership || {},
     options: data?.options || {},
+    source,
+  }
+}
+
+async function fetchEncarVehicleApiPayload(encarId) {
+  const { data } = await apiClient.get(`/v1/readside/vehicle/${encodeURIComponent(encarId)}`)
+  return buildVehicleApiShape(data, 'api')
+}
+
+async function fetchEncarVehicleHtmlPayload(encarId) {
+  const url = `/cars/detail/${encodeURIComponent(encarId)}`
+  const response = await femDetailClient.get(url)
+  const html = String(response.data || '')
+
+  if (!cleanText(html)) {
+    throw createVehicleDataError('Detail HTML is empty', {
+      reason: 'detail_empty_html',
+      temporary: true,
+      retryable: true,
+      details: `empty response from https://fem.encar.com${url}`,
+    })
+  }
+
+  const canonicalMatch = html.match(/<link[^>]+rel="canonical"[^>]+href="([^"]+)"/i)
+  const canonicalUrl = cleanText(canonicalMatch?.[1] || '')
+  if (/\bindex(?:\.do)?\b/i.test(canonicalUrl)) {
+    throw createVehicleDataError('Detail page redirected to index shell', {
+      reason: 'detail_index_shell',
+      temporary: true,
+      retryable: true,
+      details: canonicalUrl || 'canonical points to index',
+    })
+  }
+
+  const state = parsePreloadedState(html)
+  if (!state) {
+    throw createVehicleDataError('Missing __PRELOADED_STATE__ in detail HTML', {
+      reason: 'detail_preloaded_state_missing',
+      temporary: true,
+      retryable: true,
+      details: `missing __PRELOADED_STATE__ for ${encarId}`,
+    })
+  }
+
+  const data = extractVehicleDataFromState(state)
+  if (!data) {
+    throw createVehicleDataError('Failed to extract car object from __PRELOADED_STATE__', {
+      reason: 'detail_parse_failed',
+      temporary: true,
+      retryable: true,
+      details: 'car object missing in __PRELOADED_STATE__',
+    })
+  }
+
+  const shaped = buildVehicleApiShape(data, 'html_preloaded_state')
+  return {
+    ...shaped,
+    url: canonicalUrl || `https://fem.encar.com${url}`,
+  }
+}
+
+async function fetchEncarVehicleApiData(encarId) {
+  try {
+    return await fetchEncarVehicleApiPayload(encarId)
+  } catch (apiError) {
+    const status = Number(apiError?.response?.status) || 0
+    if (status === 404) throw apiError
+
+    try {
+      return await fetchEncarVehicleHtmlPayload(encarId)
+    } catch (htmlError) {
+      if (htmlError?.encarDiagnostic) {
+        apiError.encarDiagnostic = {
+          ...htmlError.encarDiagnostic,
+          source: 'html_preloaded_state',
+          apiFailure: cleanText(apiError.message),
+          fallbackFailure: cleanText(htmlError.message),
+        }
+      } else if (!apiError.encarDiagnostic) {
+        apiError.encarDiagnostic = {
+          reason: status ? 'detail_fetch_failed' : 'detail_network_error',
+          temporary: status !== 404,
+          retryable: status !== 404,
+          httpStatus: status || null,
+          details: cleanText(apiError.message),
+          fallbackFailure: cleanText(htmlError.message),
+        }
+      }
+      throw apiError
+    }
   }
 }
 
@@ -171,6 +319,7 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
     view,
     partnership,
     options,
+    source,
   } = await fetchEncarVehicleApiData(encarId)
   const exchangeSnapshot = await getExchangeRateSnapshot()
   const pricingSettings = await getPricingSettings()
@@ -400,11 +549,12 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
     vat_rate: pricing.vat_rate,
     parking_address_ko: PARKING_ADDRESS_KO,
     parking_address_en: PARKING_ADDRESS_EN,
+    source,
   }
 }
 
 export async function fetchEncarVehicleEnrichment(encarId) {
-  const { data, category, spec, ad, contact, contents, options } = await fetchEncarVehicleApiData(encarId)
+  const { data, category, spec, ad, contact, contents, options, source } = await fetchEncarVehicleApiData(encarId)
   const manufacturerRaw = category.manufacturerEnglishName || category.manufacturerName || ''
   const modelGroupRaw = category.modelGroupEnglishName || category.modelGroupName || category.modelName || ''
   const gradeNameRaw = category.gradeDetailEnglishName || category.gradeDetailName || category.gradeName || ''
@@ -465,7 +615,7 @@ export async function fetchEncarVehicleEnrichment(encarId) {
   const bodyColor = normalizeColorName(spec.colorName)
   const optionTexts = await resolveEncarOptionTexts(options)
   const optionFeatures = extractOptionFeatures({
-    contentsText: contents.text,
+    contentsText: contents?.text,
     memoText: ad.memo,
     titleText: ad.title,
     subtitleText: ad.subTitle,
@@ -497,6 +647,11 @@ export async function fetchEncarVehicleEnrichment(encarId) {
     interior_color: interiorColorResult.value,
     interior_color_source: interiorColorResult.source,
     option_features: optionFeatures,
+    image_urls: Array.isArray(data?.photos)
+      ? data.photos
+        .map((photo) => toAbsolutePhotoUrl(photo?.path || photo?.location || photo?.url))
+        .filter(Boolean)
+      : [],
     body_type: resolveBodyType(
       spec.bodyName,
       name,
@@ -507,5 +662,8 @@ export async function fetchEncarVehicleEnrichment(encarId) {
       ad.subTitle,
     ),
     trim_level: trimLevel,
+    vehicle_id: data?.vehicleId || data?.id || null,
+    encar_url: `https://fem.encar.com/cars/detail/${encarId}`,
+    source,
   }
 }

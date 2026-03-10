@@ -17,7 +17,9 @@ dotenv.config()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
-const PORT = process.env.PORT || 3001
+const ENV = globalThis.process?.env || {}
+const PORT = ENV.PORT || 3001
+const PARSE_SCOPE_OPTIONS = new Set(['all', 'imported', 'japanese', 'german'])
 
 // Middleware
 app.use(cors())
@@ -45,7 +47,7 @@ app.get('/api/health', (_req, res) => {
 })
 
 // В production — раздаём собранный React-фронтенд
-if (process.env.NODE_ENV === 'production') {
+if (ENV.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '..', 'dist')
   app.use(express.static(distPath, {
     setHeaders: (res, filePath) => {
@@ -84,7 +86,7 @@ async function start() {
       if (cfgResult.rows.length) {
         const cfg = cfgResult.rows[0]
         scraperState.config.schedule      = cfg.schedule       || 'manual'
-        scraperState.config.parseScope    = cfg.parse_scope    === 'imported' ? 'imported' : 'all'
+        scraperState.config.parseScope    = PARSE_SCOPE_OPTIONS.has(cfg.parse_scope) ? cfg.parse_scope : 'all'
         scraperState.config.dailyLimit    = cfg.daily_limit    || 100
         scraperState.config.hour          = cfg.start_hour     || 10
         scraperState.config.intervalHours = cfg.interval_hours || 1
@@ -103,7 +105,7 @@ async function start() {
     })
   } catch (err) {
     console.error('❌ Ошибка запуска:', err.message)
-    process.exit(1)
+    globalThis.process?.exit?.(1)
   }
 }
 

@@ -25,12 +25,30 @@ const USER_AGENTS = [
 let uaIdx = 0
 function nextUA() { return USER_AGENTS[uaIdx++ % USER_AGENTS.length] }
 
-const ENCAR_PROXY_URL = (process.env.ENCAR_PROXY_URL || '').trim().replace(/\/$/, '')
-const ENCAR_DEFAULT_QUERY = '(And.Hidden.N._.CarType.Y._.Year.range(201900..).)'
+const ENCAR_PROXY_URL = (globalThis.process?.env?.ENCAR_PROXY_URL || '').trim().replace(/\/$/, '')
 const ENCAR_DEFAULT_SORT = 'ModifiedDate'
 const MIN_LIST_YEAR = 2019
 const MAX_LIST_TOP_UP_PAGES = 6
 const PAGE_FETCH_SIZE = 20
+const PARSE_SCOPE_ALL = 'all'
+const PARSE_SCOPE_IMPORTED = 'imported'
+const PARSE_SCOPE_JAPANESE = 'japanese'
+const PARSE_SCOPE_GERMAN = 'german'
+const IMPORT_ONLY_SCOPES = new Set([
+  PARSE_SCOPE_IMPORTED,
+  PARSE_SCOPE_JAPANESE,
+  PARSE_SCOPE_GERMAN,
+])
+
+function normalizeParseScope(parseScope = PARSE_SCOPE_ALL) {
+  return IMPORT_ONLY_SCOPES.has(parseScope) ? parseScope : PARSE_SCOPE_ALL
+}
+
+function buildEncarListQuery(parseScope = PARSE_SCOPE_ALL) {
+  const normalizedScope = normalizeParseScope(parseScope)
+  const carType = IMPORT_ONLY_SCOPES.has(normalizedScope) ? 'N' : 'Y'
+  return `(And.Hidden.N._.CarType.${carType}._.Year.range(201900..).)`
+}
 
 const apiClient = axios.create({
   baseURL: 'https://api.encar.com',
@@ -71,7 +89,7 @@ function isUsableListCar(raw) {
   return true
 }
 
-async function fetchListViaProxy(offset, pageLimit) {
+async function fetchListViaProxy(offset, pageLimit, parseScope = PARSE_SCOPE_ALL) {
   const resp = await axios.get(ENCAR_PROXY_URL, {
     timeout: 25000,
     proxy: false,
@@ -80,7 +98,7 @@ async function fetchListViaProxy(offset, pageLimit) {
       offset,
       limit: pageLimit,
       count: true,
-      q: ENCAR_DEFAULT_QUERY,
+      q: buildEncarListQuery(parseScope),
       sr: `|${ENCAR_DEFAULT_SORT}|${offset}|${pageLimit}`,
       sort: ENCAR_DEFAULT_SORT,
     },
@@ -93,11 +111,11 @@ async function fetchListViaProxy(offset, pageLimit) {
   return asListResult(resp.data)
 }
 
-async function fetchListDirect(offset, pageLimit) {
+async function fetchListDirect(offset, pageLimit, parseScope = PARSE_SCOPE_ALL) {
   const resp = await apiClient.get('/search/car/list/premium', {
     params: {
       count: true,
-      q: ENCAR_DEFAULT_QUERY,
+      q: buildEncarListQuery(parseScope),
       sr: `|${ENCAR_DEFAULT_SORT}|${offset}|${pageLimit}`,
     },
     headers: { 'User-Agent': nextUA() },
@@ -118,10 +136,12 @@ function withProxyHint(err) {
  * @param {number} offset
  * @param {number} limit max 20 per page
  * @param {number} retries
+ * @param {{ parseScope?: 'all' | 'imported' | 'japanese' | 'german' }} options
  * @returns {{ total: number, cars: object[] }}
  */
-export async function fetchCarList(offset = 0, limit = 20, retries = 3) {
+export async function fetchCarList(offset = 0, limit = 20, retries = 3, options = {}) {
   const pageLimit = Math.min(limit, 20)
+  const parseScope = normalizeParseScope(options?.parseScope)
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -133,8 +153,8 @@ export async function fetchCarList(offset = 0, limit = 20, retries = 3) {
 
       while (collected.length < pageLimit && pagesFetched < MAX_LIST_TOP_UP_PAGES) {
         const batch = ENCAR_PROXY_URL
-          ? await fetchListViaProxy(nextOffset, PAGE_FETCH_SIZE)
-          : await fetchListDirect(nextOffset, PAGE_FETCH_SIZE)
+          ? await fetchListViaProxy(nextOffset, PAGE_FETCH_SIZE, parseScope)
+          : await fetchListDirect(nextOffset, PAGE_FETCH_SIZE, parseScope)
 
         if (!total) total = batch.total
         const batchCars = Array.isArray(batch.cars) ? batch.cars : []

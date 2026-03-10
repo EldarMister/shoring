@@ -7,9 +7,24 @@ import { startScheduler, stopScheduler } from '../scraper/scheduler.js'
 const router = Router()
 const PARSE_SCOPE_ALL = 'all'
 const PARSE_SCOPE_IMPORTED = 'imported'
+const PARSE_SCOPE_JAPANESE = 'japanese'
+const PARSE_SCOPE_GERMAN = 'german'
+const PARSE_SCOPE_OPTIONS = new Set([
+  PARSE_SCOPE_ALL,
+  PARSE_SCOPE_IMPORTED,
+  PARSE_SCOPE_JAPANESE,
+  PARSE_SCOPE_GERMAN,
+])
 
 function normalizeParseScope(value) {
-  return value === PARSE_SCOPE_IMPORTED ? PARSE_SCOPE_IMPORTED : PARSE_SCOPE_ALL
+  return PARSE_SCOPE_OPTIONS.has(value) ? value : PARSE_SCOPE_ALL
+}
+
+function formatParseScopeLabel(parseScope) {
+  if (parseScope === PARSE_SCOPE_IMPORTED) return 'только импортные'
+  if (parseScope === PARSE_SCOPE_JAPANESE) return 'только японские'
+  if (parseScope === PARSE_SCOPE_GERMAN) return 'только немецкие'
+  return 'все машины'
 }
 
 router.get('/status', async (_req, res) => {
@@ -48,7 +63,7 @@ router.post('/start', (req, res) => {
 
   return res.json({
     ok: true,
-    message: `Запущен (${parseScope === PARSE_SCOPE_IMPORTED ? 'только импортные' : 'все машины'}, лимит: ${limit})`,
+    message: `Запущен (${formatParseScopeLabel(parseScope)}, лимит: ${limit})`,
     limit,
     parseScope,
   })
@@ -74,7 +89,7 @@ router.put('/config', async (req, res) => {
   }
 
   if (parseScope !== undefined) {
-    if (![PARSE_SCOPE_ALL, PARSE_SCOPE_IMPORTED].includes(parseScope)) {
+    if (!PARSE_SCOPE_OPTIONS.has(parseScope)) {
       return res.status(400).json({ error: 'Неверный режим парсинга' })
     }
     state.config.parseScope = normalizeParseScope(parseScope)

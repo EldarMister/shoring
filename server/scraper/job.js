@@ -23,7 +23,13 @@ import {
 } from '../lib/vehicleData.js'
 import { isStandardVin, normalizeVin } from '../lib/vin.js'
 import { fetchCarList, extractPhotoUrls, probePhotoUrls, sleep } from './encarApi.js'
-import { downloadPhotos } from './downloader.js'
+import { downloadPhotosDetailed } from './downloader.js'
+import {
+  buildCarDiagnostic,
+  classifyDetailError,
+  formatDiagnosticMessage,
+  retryOperation,
+} from './diagnostics.js'
 import {
   MANUFACTURER_MAP,
   tr,
@@ -38,6 +44,43 @@ const PAGE_SIZE = 20
 const MIN_SCRAPER_YEAR = 2019
 const PARSE_SCOPE_ALL = 'all'
 const PARSE_SCOPE_IMPORTED = 'imported'
+const PARSE_SCOPE_JAPANESE = 'japanese'
+const PARSE_SCOPE_GERMAN = 'german'
+const IMPORT_ONLY_SCOPES = new Set([PARSE_SCOPE_IMPORTED, PARSE_SCOPE_JAPANESE, PARSE_SCOPE_GERMAN])
+const DETAIL_RETRY_ATTEMPTS = 3
+const PHOTO_LIMIT = 8
+const JAPANESE_BRAND_ALIASES = [
+  'toyota',
+  'lexus',
+  'honda',
+  'nissan',
+  'infiniti',
+  'mazda',
+  'subaru',
+  'mitsubishi',
+  'suzuki',
+  'isuzu',
+  'daihatsu',
+  'acura',
+]
+const GERMAN_BRAND_ALIASES = [
+  'bmw',
+  'mercedesbenz',
+  'mercedes',
+  'benz',
+  'audi',
+  'volkswagen',
+  'vw',
+  'porsche',
+  'mini',
+  'smart',
+  'maybach',
+  'opel',
+]
+
+function cleanText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
 
 function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -50,6 +93,56 @@ function stripTrailingTrim(text, trimLevel) {
 
   const pattern = new RegExp(`(?:\\s+|[(/-])${escapeRegex(trim)}\\)?$`, 'i')
   return value.replace(pattern, '').replace(/\s+/g, ' ').trim()
+}
+
+function normalizeParseScope(parseScope) {
+  return IMPORT_ONLY_SCOPES.has(parseScope) ? parseScope : PARSE_SCOPE_ALL
+}
+
+function formatParseScopeLabel(parseScope) {
+  if (parseScope === PARSE_SCOPE_IMPORTED) return 'только импортные'
+  if (parseScope === PARSE_SCOPE_JAPANESE) return 'только японские'
+  if (parseScope === PARSE_SCOPE_GERMAN) return 'только немецкие'
+  return 'все машины'
+}
+
+function normalizeBrandSignal(value) {
+  const normalized = normalizeManufacturer(value || '')
+  return cleanText(normalized).toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function collectBrandSignals(car, raw) {
+  return [...new Set(
+    [
+      car?.manufacturer,
+      car?.name,
+      car?.model,
+      raw?.Manufacturer,
+      raw?.Maker,
+      raw?.Brand,
+      raw?.Name,
+      raw?.Model,
+      raw?.Badge,
+    ]
+      .map((value) => normalizeBrandSignal(value))
+      .filter(Boolean),
+  )]
+}
+
+function resolveBrandAliasesForScope(parseScope) {
+  if (parseScope === PARSE_SCOPE_JAPANESE) return JAPANESE_BRAND_ALIASES
+  if (parseScope === PARSE_SCOPE_GERMAN) return GERMAN_BRAND_ALIASES
+  return []
+}
+
+function matchesScopedImportedBrand(car, raw, parseScope) {
+  if (!IMPORT_ONLY_SCOPES.has(parseScope) || parseScope === PARSE_SCOPE_IMPORTED) return true
+
+  const aliases = resolveBrandAliasesForScope(parseScope)
+  if (!aliases.length) return true
+
+  const signals = collectBrandSignals(car, raw)
+  return signals.some((signal) => aliases.some((alias) => signal === alias || signal.startsWith(alias)))
 }
 
 function mapCar(raw, exchangeSnapshot, pricingSettings) {
@@ -158,6 +251,7 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
   if (fuel_type) tags.push(fuel_type)
 
   return {
+    manufacturer: displayManufacturer,
     name,
     model: modelName,
     year: year ? String(year) : null,
@@ -175,7 +269,7 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     body_color,
     interior_color,
     option_features: [],
-    location: rawLocation || extractShortLocation(rawLocation) || 'Корея',
+    location: rawLocation || extractShortLocation(rawLocation) || 'РљРѕСЂРµСЏ',
     encar_url,
     encar_id,
     tags,
@@ -188,6 +282,9 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     vat_refund: pricing.vat_refund,
     total: pricing.total,
     thumbnail: raw.Thumbnail || raw.Photo || null,
+    vehicle_id: '',
+    vehicle_no: '',
+    image_urls: [],
   }
 }
 
@@ -197,7 +294,7 @@ async function getExistingEncarIdMap(encarIds = []) {
 
   const res = await pool.query(
     'SELECT id, encar_id FROM cars WHERE encar_id = ANY($1::text[])',
-    [normalized]
+    [normalized],
   )
 
   return new Map(res.rows.map((row) => [String(row.encar_id || '').trim(), row.id]))
@@ -209,7 +306,7 @@ async function getExistingIdByVin(vin) {
 
   const res = await pool.query(
     'SELECT id FROM cars WHERE UPPER(BTRIM(vin)) = $1 LIMIT 1',
-    [normalizedVin]
+    [normalizedVin],
   )
   return res.rows.length ? res.rows[0].id : null
 }
@@ -274,7 +371,7 @@ function normalizeImportedCar(car) {
     option_features: Array.isArray(car.option_features)
       ? [...new Set(car.option_features.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 16)
       : [],
-    location: normalizedText.location || car.location || 'Корея',
+    location: normalizedText.location || car.location || 'РљРѕСЂРµСЏ',
     vin: normalizeVin(car.vin) || null,
   }
 }
@@ -297,37 +394,83 @@ function mergeCarEnrichment(car, enrichment, exchangeSnapshot, pricingSettings) 
     location: enrichment.location || car.location,
     vin: enrichment.vin || car.vin,
     price_krw: Number(enrichment.price_krw) > 0 ? Number(enrichment.price_krw) : car.price_krw,
+    vehicle_id: enrichment.vehicle_id || car.vehicle_id || '',
+    vehicle_no: enrichment.vehicle_no || car.vehicle_no || '',
+    image_urls: Array.isArray(enrichment.image_urls) && enrichment.image_urls.length
+      ? enrichment.image_urls
+      : car.image_urls,
+    encar_url: enrichment.encar_url || car.encar_url,
   })
 
   return applyPricingToCar(merged, exchangeSnapshot, pricingSettings)
 }
 
-async function insertCar(car, photoUrls) {
-  const res = await pool.query(
-    `INSERT INTO cars
-       (name, model, year, mileage, price_krw, price_usd, fuel_type, transmission, drive_type,
-        body_type, trim_level, key_info, body_color, interior_color, option_features, location, vin, encar_url, encar_id,
-        tags, can_negotiate, commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
-     RETURNING id`,
-    [
-      car.name, car.model, car.year, car.mileage,
-      car.price_krw, car.price_usd, car.fuel_type, car.transmission, car.drive_type,
-      car.body_type || null, car.trim_level || null, car.key_info || null,
-      car.body_color, car.interior_color, car.option_features || [], car.location, car.vin, car.encar_url, car.encar_id,
-      car.tags, car.can_negotiate, car.commission, car.delivery, car.delivery_profile_code || null, car.loading, car.unloading,
-      car.storage, car.pricing_locked || false, car.vat_refund, car.total,
-    ]
-  )
-  const carId = res.rows[0].id
+function createDuplicateError(code, duplicateId) {
+  const error = new Error(code)
+  error.code = code
+  error.duplicateId = duplicateId
+  return error
+}
 
-  for (let i = 0; i < photoUrls.length; i++) {
-    await pool.query(
-      'INSERT INTO car_images (car_id, url, position) VALUES ($1,$2,$3)',
-      [carId, photoUrls[i], i]
-    )
+async function insertCar(car, photoUrls) {
+  const existingByEncar = await pool.query(
+    'SELECT id FROM cars WHERE encar_id = $1 LIMIT 1',
+    [car.encar_id],
+  )
+  if (existingByEncar.rows.length) {
+    throw createDuplicateError('DUPLICATE_ENCAR', existingByEncar.rows[0].id)
   }
-  return carId
+
+  if (car.vin && isStandardVin(car.vin)) {
+    const existingByVin = await pool.query(
+      'SELECT id FROM cars WHERE UPPER(BTRIM(vin)) = $1 LIMIT 1',
+      [normalizeVin(car.vin)],
+    )
+    if (existingByVin.rows.length) {
+      throw createDuplicateError('DUPLICATE_VIN', existingByVin.rows[0].id)
+    }
+  }
+
+  const client = await pool.connect()
+
+  try {
+    await client.query('BEGIN')
+    const res = await client.query(
+      `INSERT INTO cars
+         (name, model, year, mileage, price_krw, price_usd, fuel_type, transmission, drive_type,
+          body_type, trim_level, key_info, body_color, interior_color, option_features, location, vin, encar_url, encar_id,
+          tags, can_negotiate, commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
+       RETURNING id`,
+      [
+        car.name, car.model, car.year, car.mileage,
+        car.price_krw, car.price_usd, car.fuel_type, car.transmission, car.drive_type,
+        car.body_type || null, car.trim_level || null, car.key_info || null,
+        car.body_color, car.interior_color, car.option_features || [], car.location, car.vin, car.encar_url, car.encar_id,
+        car.tags, car.can_negotiate, car.commission, car.delivery, car.delivery_profile_code || null, car.loading, car.unloading,
+        car.storage, car.pricing_locked || false, car.vat_refund, car.total,
+      ],
+    )
+    const carId = res.rows[0].id
+
+    for (let i = 0; i < photoUrls.length; i += 1) {
+      await client.query(
+        'INSERT INTO car_images (car_id, url, position) VALUES ($1,$2,$3)',
+        [carId, photoUrls[i], i],
+      )
+    }
+
+    await client.query('COMMIT')
+    return carId
+  } catch (error) {
+    await client.query('ROLLBACK')
+    if (error?.code === '23505') {
+      throw createDuplicateError('DUPLICATE_VIN', null)
+    }
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 async function updateScrapeStats(added) {
@@ -338,27 +481,183 @@ async function updateScrapeStats(added) {
            today_scraped = today_scraped + $1,
            last_run      = NOW()
        WHERE id = 1`,
-      [added]
+      [added],
     )
   } catch {
     // non-critical
   }
 }
 
-export async function runScrapeJob(limit = 100, options = {}) {
-  if (state.isRunning) throw new Error('Парсер уже запущен')
+function addSkipProgress(classification) {
+  const next = {
+    skipped: state.progress.skipped + 1,
+  }
 
-  const parseScope = options?.parseScope === PARSE_SCOPE_IMPORTED ? PARSE_SCOPE_IMPORTED : PARSE_SCOPE_ALL
+  if (classification === 'normal') {
+    next.normalSkipped = state.progress.normalSkipped + 1
+  } else {
+    next.discarded = state.progress.discarded + 1
+  }
+
+  state.setProgress(next)
+}
+
+function recordSkip(diagnostic) {
+  state.recordSkipDiagnostic(diagnostic)
+  addSkipProgress(diagnostic.classification)
+
+  const level = diagnostic.classification === 'normal' ? 'info' : 'warn'
+  state[level](formatDiagnosticMessage('SKIP', diagnostic), { diagnostic })
+}
+
+function recordFailure(diagnostic) {
+  state.recordSkipDiagnostic(diagnostic)
+  state.setProgress({
+    failed: state.progress.failed + 1,
+    discarded: state.progress.discarded + 1,
+  })
+  state.error(formatDiagnosticMessage('FAIL', diagnostic), { diagnostic })
+}
+
+function recordRetryRecovered(stage, car, attempts, details = '') {
+  state.setProgress({ retryRecovered: state.progress.retryRecovered + 1 })
+  state.success(
+    [
+      'RECOVERED',
+      `stage=${stage}`,
+      `carId=${cleanText(car?.encar_id || '')}`,
+      `attempts=${attempts}`,
+      details ? `details=${cleanText(details)}` : '',
+    ].filter(Boolean).join(' | '),
+    {
+      stage,
+      carId: cleanText(car?.encar_id || ''),
+      attempts,
+      details: cleanText(details),
+    },
+  )
+}
+
+function buildFilterDiagnostic({ stage, reason, details, car, raw }) {
+  return buildCarDiagnostic({
+    stage,
+    reason,
+    details,
+    car,
+    raw,
+    retryable: false,
+    temporary: false,
+  })
+}
+
+function hasMinimumCarFields(car) {
+  return Boolean(
+    cleanText(car?.encar_id)
+    && cleanText(car?.name || car?.model)
+    && Number(car?.price_krw) > 0
+    && cleanText(car?.year),
+  )
+}
+
+function canImportPartialCar(car, diagnostic) {
+  if (!hasMinimumCarFields(car)) return false
+  if (diagnostic.reason === 'detail_not_found') return false
+  return true
+}
+
+function buildDetailDiagnostic(error, car, raw) {
+  const classification = classifyDetailError(error, 'detail_fetch_failed')
+  const attempts = Number(error?.retryMeta?.attempts) || 1
+  return buildCarDiagnostic({
+    stage: 'detail_enrichment',
+    reason: classification.reason,
+    details: classification.details,
+    retryable: classification.retryable,
+    temporary: classification.temporary,
+    attempts,
+    httpStatus: classification.httpStatus,
+    car,
+    raw,
+    technical: {
+      source: cleanText(error?.encarDiagnostic?.source || ''),
+      fallbackFailure: cleanText(error?.encarDiagnostic?.fallbackFailure || ''),
+      error: cleanText(error?.message),
+    },
+  })
+}
+
+function buildDbDiagnostic(error, car, raw) {
+  return buildCarDiagnostic({
+    stage: 'db_insert',
+    reason: 'db_insert_error',
+    details: cleanText(error?.message) || 'DB insert failed',
+    retryable: false,
+    temporary: false,
+    car,
+    raw,
+    technical: {
+      error: cleanText(error?.message),
+      code: cleanText(error?.code),
+    },
+  })
+}
+
+function buildDuplicateDiagnostic(reason, details, car, raw, duplicateId = null) {
+  return buildCarDiagnostic({
+    stage: 'dedupe',
+    reason,
+    details,
+    retryable: false,
+    temporary: false,
+    car,
+    raw,
+    technical: duplicateId ? { duplicateId } : {},
+  })
+}
+
+function buildPhotoDiagnostic(reason, details, car, raw, technical = {}) {
+  return buildCarDiagnostic({
+    stage: 'photo_download',
+    reason,
+    details,
+    retryable: true,
+    temporary: true,
+    car,
+    raw,
+    technical,
+  })
+}
+
+function getSummaryLines() {
+  const summary = state.sessionSummary
+  const topReasons = summary.topReasons.slice(0, 8)
+
+  const lines = [
+    `SESSION_SUMMARY | found=${summary.found} | imported=${summary.imported} | skipped=${summary.skipped} | failed=${summary.failed} | recovered=${summary.retryRecovered} | discarded=${summary.discarded} | normal_skips=${summary.normalSkipped} | photos=${summary.photos}`,
+  ]
+
+  for (const item of topReasons) {
+    lines.push(`SESSION_REASON | ${item.code}=${item.count} (${item.percent}%)`)
+  }
+
+  return lines
+}
+
+export async function runScrapeJob(limit = 100, options = {}) {
+  if (state.isRunning) throw new Error('РџР°СЂСЃРµСЂ СѓР¶Рµ Р·Р°РїСѓС‰РµРЅ')
+
+  const parseScope = normalizeParseScope(options?.parseScope)
 
   state.isRunning = true
   state.stopReq = false
   state.startedAt = new Date().toISOString()
   state.lastRun = state.startedAt
-  state.progress = { done: 0, total: limit, failed: 0, skipped: 0, photos: 0 }
+  state.resetSession({ total: limit, parseScope, limit })
+  state.info(`Parse scope: ${formatParseScopeLabel(parseScope)}, limit=${limit}`)
 
-  state.info(`🚀 Запуск парсера — ${parseScope === PARSE_SCOPE_IMPORTED ? 'только импортные' : 'все машины'}, лимит ${limit} новых машин`)
+  state.info(`рџљЂ Р—Р°РїСѓСЃРє РїР°СЂСЃРµСЂР° вЂ” ${parseScope === PARSE_SCOPE_IMPORTED ? 'С‚РѕР»СЊРєРѕ РёРјРїРѕСЂС‚РЅС‹Рµ' : 'РІСЃРµ РјР°С€РёРЅС‹'}, Р»РёРјРёС‚ ${limit} РЅРѕРІС‹С… РјР°С€РёРЅ`)
 
-  const sourceMode = process.env.ENCAR_PROXY_URL ? 'Vercel proxy / direct detail' : 'direct Encar API'
+  const sourceMode = globalThis.process?.env?.ENCAR_PROXY_URL ? 'Vercel proxy / direct detail' : 'direct Encar API + detail HTML fallback'
   state.info(`Source mode: ${sourceMode}`)
   const exchangeSnapshot = await getExchangeRateSnapshot()
   const pricingSettings = await getPricingSettings()
@@ -369,39 +668,46 @@ export async function runScrapeJob(limit = 100, options = {}) {
 
   try {
     while (addedThisRun < limit && !state.stopReq) {
-      const pageLimit = PAGE_SIZE
-      state.info(`📋 Получаю список (offset=${offset}, count=${pageLimit})...`)
+      state.info(`рџ“‹ РџРѕР»СѓС‡Р°СЋ СЃРїРёСЃРѕРє (offset=${offset}, count=${PAGE_SIZE})...`)
 
       let listResult
       try {
-        listResult = await fetchCarList(offset, pageLimit)
+        listResult = await fetchCarList(offset, PAGE_SIZE, 3, { parseScope })
       } catch (err) {
-        state.error(`❌ Ошибка API: ${err.message}`)
+        state.error(`вќЊ РћС€РёР±РєР° list API: ${err.message}`)
         if (state.stopReq) break
         await sleep(8000)
         continue
       }
 
       const { cars, total, scanned = cars.length } = listResult
+      state.setProgress({
+        scanned: state.progress.scanned + scanned,
+        found: state.progress.found + cars.length,
+      })
+
       if (!cars.length) {
         if (scanned > 0) {
-          state.info(`📭 В этой пачке нет подходящих машин, пропускаю ещё ${scanned} позиций`)
+          state.info(`рџ“­ Р’ СЌС‚РѕР№ РїР°С‡РєРµ РЅРµС‚ РїРѕРґС…РѕРґСЏС‰РёС… РјР°С€РёРЅ, РїСЂРѕРїСѓСЃРєР°СЋ РµС‰С‘ ${scanned} РїРѕР·РёС†РёР№`)
           offset += scanned
           continue
         }
-        state.info('📭 Больше машин нет — завершаю')
+        state.info('рџ“­ Р‘РѕР»СЊС€Рµ РјР°С€РёРЅ РЅРµС‚ вЂ” Р·Р°РІРµСЂС€Р°СЋ')
         break
       }
-      state.info(`📦 Получено ${cars.length} машин из ${scanned} просмотренных (Encar всего: ${total.toLocaleString()})`)
+
+      state.info(`рџ“¦ РџРѕР»СѓС‡РµРЅРѕ ${cars.length} РјР°С€РёРЅ РёР· ${scanned} РїСЂРѕСЃРјРѕС‚СЂРµРЅРЅС‹С… (Encar РІСЃРµРіРѕ: ${Number(total || 0).toLocaleString()})`)
       const existingEncarIds = await getExistingEncarIdMap(cars.map((raw) => raw?.Id))
 
       for (const raw of cars) {
         if (state.stopReq) {
-          state.warn('⏹ Остановлено пользователем')
+          state.warn('вЏ№ РћСЃС‚Р°РЅРѕРІР»РµРЅРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј')
           break
         }
 
         const car = mapCar(raw, exchangeSnapshot, pricingSettings)
+        const currentEncarId = cleanText(raw.Id)
+
         const genericVehicleReason = getBlockedGenericVehicleReason({
           name: car.name,
           model: car.model,
@@ -409,16 +715,25 @@ export async function runScrapeJob(limit = 100, options = {}) {
           rawModel: raw.Model,
         })
         if (genericVehicleReason) {
-          state.info(`⏭ Пропуск ${car.name || raw.Name || raw.Id} — ${genericVehicleReason}`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildFilterDiagnostic({
+            stage: 'list_filter',
+            reason: 'filtered_generic_vehicle',
+            details: genericVehicleReason,
+            car,
+            raw,
+          }))
           continue
         }
 
         const carYear = Number.parseInt(String(car.year || ''), 10)
         if (!Number.isFinite(carYear) || carYear < MIN_SCRAPER_YEAR) {
-          const yearLabel = car.year || 'unknown year'
-          state.info(`⏭ Пропуск ${car.name} (${yearLabel}) — год раньше ${MIN_SCRAPER_YEAR}`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildFilterDiagnostic({
+            stage: 'list_filter',
+            reason: 'filtered_year',
+            details: `year=${car.year || 'unknown'} < ${MIN_SCRAPER_YEAR}`,
+            car,
+            raw,
+          }))
           continue
         }
 
@@ -427,36 +742,100 @@ export async function runScrapeJob(limit = 100, options = {}) {
           priceUsd: car.price_usd,
         })
         if (preDetailPriceReason) {
-          state.info(`⏭ Пропуск ${car.name} (${car.year}) — ${preDetailPriceReason}`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildFilterDiagnostic({
+            stage: 'list_filter',
+            reason: 'filtered_price',
+            details: preDetailPriceReason,
+            car,
+            raw,
+          }))
           continue
         }
 
-        const currentEncarId = String(raw.Id || '').trim()
         const existId = existingEncarIds.get(currentEncarId) || (seenEncarIds.has(currentEncarId) ? 'seen' : null)
         if (existId) {
-          state.info(`⏭ Пропуск ${car.name} (${car.year}) — уже в базе`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildDuplicateDiagnostic(
+            'duplicate_encar_id',
+            `existing car with encar_id=${currentEncarId}`,
+            car,
+            raw,
+            existId,
+          ))
           continue
         }
 
-        if (parseScope === PARSE_SCOPE_IMPORTED) {
+        if (IMPORT_ONLY_SCOPES.has(parseScope)) {
           const origin = classifyVehicleOrigin(car.name, car.model)
           if (origin !== VEHICLE_ORIGIN_LABELS.imported) {
-            state.info(`⏭ Пропуск ${car.name} (${car.year}) — корейская машина, режим: только импортные`)
-            state.setProgress({ skipped: state.progress.skipped + 1 })
+            recordSkip(buildFilterDiagnostic({
+              stage: 'scope_filter',
+              reason: 'parse_scope_filtered',
+              details: `origin=${origin || 'unknown'}, scope=${parseScope}`,
+              car,
+              raw,
+            }))
             continue
           }
         }
 
+        if (!matchesScopedImportedBrand(car, raw, parseScope)) {
+          recordSkip(buildFilterDiagnostic({
+            stage: 'scope_filter',
+            reason: 'parse_scope_filtered',
+            details: `manufacturer=${cleanText(car.manufacturer || raw?.Manufacturer || 'unknown')}, scope=${parseScope}`,
+            car,
+            raw,
+          }))
+          continue
+        }
+
+        seenEncarIds.add(currentEncarId)
+
         let preparedCar = car
+        let enrichment = null
+
         try {
-          const enrichment = await fetchEncarVehicleEnrichment(raw.Id)
+          const result = await retryOperation(
+            () => fetchEncarVehicleEnrichment(raw.Id),
+            {
+              maxAttempts: DETAIL_RETRY_ATTEMPTS,
+              baseDelayMs: 1500,
+              factor: 2,
+              classifyError: (error) => classifyDetailError(error, 'detail_fetch_failed'),
+              onRetry: async ({ attempt, nextAttempt, maxAttempts, delayMs, classification }) => {
+                state.warn(
+                  [
+                    'RETRY',
+                    'stage=detail_enrichment',
+                    `carId=${currentEncarId}`,
+                    `reason=${classification.reason}`,
+                    `attempt=${attempt}/${maxAttempts}`,
+                    `next=${nextAttempt}`,
+                    `delayMs=${delayMs}`,
+                    classification.httpStatus ? `http=${classification.httpStatus}` : '',
+                    classification.details ? `details=${classification.details}` : '',
+                  ].filter(Boolean).join(' | '),
+                )
+              },
+            },
+          )
+          enrichment = result.value
+          if (result.recovered) {
+            recordRetryRecovered('detail_enrichment', car, result.attempts, enrichment?.source || '')
+          }
           preparedCar = mergeCarEnrichment(car, enrichment, exchangeSnapshot, pricingSettings)
         } catch (enrichmentError) {
-          state.warn(`⏭ Пропуск ${car.name} — не удалось проверить VIN/detail: ${enrichmentError.message}`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
-          continue
+          const detailDiagnostic = buildDetailDiagnostic(enrichmentError, car, raw)
+          if (!canImportPartialCar(car, detailDiagnostic)) {
+            recordSkip(detailDiagnostic)
+            continue
+          }
+
+          state.warn(formatDiagnosticMessage('PARTIAL_IMPORT', detailDiagnostic), {
+            diagnostic: detailDiagnostic,
+            partialImport: true,
+          })
+          preparedCar = normalizeImportedCar(car)
         }
 
         const enrichedGenericVehicleReason = getBlockedGenericVehicleReason({
@@ -464,14 +843,24 @@ export async function runScrapeJob(limit = 100, options = {}) {
           model: preparedCar.model,
         })
         if (enrichedGenericVehicleReason) {
-          state.info(`⏭ Пропуск ${preparedCar.name || preparedCar.encar_id} (${preparedCar.year}) — ${enrichedGenericVehicleReason}`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildFilterDiagnostic({
+            stage: 'post_detail_filter',
+            reason: 'filtered_generic_vehicle',
+            details: enrichedGenericVehicleReason,
+            car: preparedCar,
+            raw,
+          }))
           continue
         }
 
         if (Number(preparedCar.price_krw || 0) <= 0) {
-          state.info(`⏭ Пропуск ${preparedCar.name} (${preparedCar.year}) — цена в Encar отсутствует или равна 0`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildFilterDiagnostic({
+            stage: 'post_detail_filter',
+            reason: 'filtered_price',
+            details: 'price_krw <= 0 after detail merge',
+            car: preparedCar,
+            raw,
+          }))
           continue
         }
 
@@ -480,47 +869,109 @@ export async function runScrapeJob(limit = 100, options = {}) {
           priceUsd: preparedCar.price_usd,
         })
         if (postDetailPriceReason) {
-          state.info(`⏭ Пропуск ${preparedCar.name} (${preparedCar.year}) — ${postDetailPriceReason}`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildFilterDiagnostic({
+            stage: 'post_detail_filter',
+            reason: 'filtered_price',
+            details: postDetailPriceReason,
+            car: preparedCar,
+            raw,
+          }))
           continue
         }
 
         const duplicateVinId = await getExistingIdByVin(preparedCar.vin)
         if (duplicateVinId) {
-          state.info(`⏭ Пропуск ${preparedCar.name} (${preparedCar.year}) — VIN уже есть у ID ${duplicateVinId}`)
-          state.setProgress({ skipped: state.progress.skipped + 1 })
+          recordSkip(buildDuplicateDiagnostic(
+            'duplicate_vin',
+            `VIN already exists at ID ${duplicateVinId}`,
+            preparedCar,
+            raw,
+            duplicateVinId,
+          ))
           continue
         }
 
-        state.info(`🔍 ${preparedCar.name} (${preparedCar.year}, ${preparedCar.mileage.toLocaleString()} км, $${preparedCar.price_usd.toLocaleString()})`)
+        state.info(`рџ”Ќ ${preparedCar.name} (${preparedCar.year}, ${Number(preparedCar.mileage || 0).toLocaleString()} км, $${Number(preparedCar.price_usd || 0).toLocaleString()})`)
 
         let photoUrls = []
         try {
-          const extracted = extractPhotoUrls(raw, 8)
-          const validUrls = extracted.length ? extracted : await probePhotoUrls(raw.Id, 8)
-          if (validUrls.length) {
-            state.info(`Processing ${validUrls.length} photos for ${preparedCar.name}...`)
-            await downloadPhotos(validUrls, raw.Id, 8)
-            photoUrls = validUrls
+          const extracted = extractPhotoUrls(raw, PHOTO_LIMIT)
+          const detailPhotos = Array.isArray(preparedCar.image_urls) ? preparedCar.image_urls.slice(0, PHOTO_LIMIT) : []
+          const validUrls = extracted.length
+            ? extracted
+            : detailPhotos.length
+              ? detailPhotos
+              : await probePhotoUrls(raw.Id, PHOTO_LIMIT)
+
+          photoUrls = validUrls
+
+          if (photoUrls.length) {
+            state.info(`PHOTO_FETCH | carId=${currentEncarId} | count=${photoUrls.length} | source=${extracted.length ? 'list' : detailPhotos.length ? 'detail' : 'probe'}`)
+            const photoDownload = await downloadPhotosDetailed(photoUrls, raw.Id, PHOTO_LIMIT)
             state.setProgress({ photos: state.progress.photos + photoUrls.length })
+
+            if (photoDownload.failed && photoDownload.failed === photoDownload.attempted) {
+              state.warn(formatDiagnosticMessage(
+                'PHOTO_WARN',
+                buildPhotoDiagnostic('photo_all_failed', 'all photo downloads failed, keeping car import', preparedCar, raw, {
+                  attempted: photoDownload.attempted,
+                  saved: photoDownload.saved,
+                }),
+              ))
+            } else if (photoDownload.failed) {
+              state.warn(formatDiagnosticMessage(
+                'PHOTO_WARN',
+                buildPhotoDiagnostic('photo_partial_failure', `${photoDownload.failed} photo(s) failed, keeping partial photo set`, preparedCar, raw, {
+                  attempted: photoDownload.attempted,
+                  saved: photoDownload.saved,
+                }),
+              ))
+            }
           }
         } catch (photoErr) {
-          state.warn(`Photo error: ${photoErr.message}`)
+          state.warn(formatDiagnosticMessage(
+            'PHOTO_WARN',
+            buildPhotoDiagnostic('photo_all_failed', cleanText(photoErr.message), preparedCar, raw),
+          ))
         }
 
         try {
           const newId = await insertCar(preparedCar, photoUrls)
           seenEncarIds.add(preparedCar.encar_id)
-          state.success(`✅ Сохранено: ${preparedCar.name} → id=${newId}, фото=${photoUrls.length}`)
-          addedThisRun++
+          addedThisRun += 1
           state.setProgress({ done: state.progress.done + 1 })
+          state.success(`вњ… РЎРѕС…СЂР°РЅРµРЅРѕ: ${preparedCar.name} в†’ id=${newId}, фото=${photoUrls.length}`, {
+            carId: currentEncarId,
+            importedId: newId,
+          })
         } catch (dbErr) {
-          state.error(`❌ БД: ${preparedCar.name} — ${dbErr.message}`)
-          state.setProgress({ failed: state.progress.failed + 1 })
+          if (dbErr?.code === 'DUPLICATE_ENCAR') {
+            recordSkip(buildDuplicateDiagnostic(
+              'duplicate_encar_id',
+              `late duplicate by encar_id, existing ID ${dbErr.duplicateId || '-'}`,
+              preparedCar,
+              raw,
+              dbErr.duplicateId,
+            ))
+            continue
+          }
+
+          if (dbErr?.code === 'DUPLICATE_VIN') {
+            recordSkip(buildDuplicateDiagnostic(
+              'duplicate_vin',
+              `late duplicate by VIN, existing ID ${dbErr.duplicateId || '-'}`,
+              preparedCar,
+              raw,
+              dbErr.duplicateId,
+            ))
+            continue
+          }
+
+          recordFailure(buildDbDiagnostic(dbErr, preparedCar, raw))
         }
 
         if (addedThisRun >= limit) {
-          state.info(`✅ Достигнут лимит новых машин: ${limit}`)
+          state.info(`вњ… Р”РѕСЃС‚РёРіРЅСѓС‚ Р»РёРјРёС‚ РЅРѕРІС‹С… РјР°С€РёРЅ: ${limit}`)
           break
         }
       }
@@ -531,20 +982,30 @@ export async function runScrapeJob(limit = 100, options = {}) {
     await updateScrapeStats(addedThisRun)
 
     if (state.stopReq) {
-      state.warn(`⏹ Остановлено. Добавлено: ${state.progress.done}`)
+      state.warn(`вЏ№ РћСЃС‚Р°РЅРѕРІР»РµРЅРѕ. Р”РѕР±Р°РІР»РµРЅРѕ: ${state.progress.done}`)
     } else {
       state.success(
-        `🎉 Готово! Добавлено: ${state.progress.done} | ` +
-        `Пропущено: ${state.progress.skipped} | ` +
-        `Ошибок: ${state.progress.failed} | ` +
-        `Фото: ${state.progress.photos}`
+        `рџЋ‰ Р“РѕС‚РѕРІРѕ! Р”РѕР±Р°РІР»РµРЅРѕ: ${state.progress.done} | РџСЂРѕРїСѓС‰РµРЅРѕ: ${state.progress.skipped} | РћС€РёР±РѕРє: ${state.progress.failed} | Р’РѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРѕ retry: ${state.progress.retryRecovered} | Р¤РѕС‚Рѕ: ${state.progress.photos}`,
       )
     }
+
+    for (const line of getSummaryLines()) {
+      state.info(line)
+    }
   } catch (err) {
-    state.error(`💥 Критическая ошибка: ${err.message}`)
+    state.error(`рџ’Ґ РљСЂРёС‚РёС‡РµСЃРєР°СЏ РѕС€РёР±РєР°: ${err.message}`)
   } finally {
+    state.finishSession()
     state.isRunning = false
     state.stopReq = false
-    state.emit('update', { type: 'done', progress: { ...state.progress } })
+    state.emit('update', {
+      type: 'done',
+      progress: { ...state.progress },
+      sessionSummary: {
+        ...state.sessionSummary,
+        reasons: { ...state.sessionSummary.reasons },
+        topReasons: state.sessionSummary.topReasons.slice(0, 20),
+      },
+    })
   }
 }

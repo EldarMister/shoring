@@ -53,6 +53,35 @@ function formatDate(iso) {
   })
 }
 
+function formatPercent(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '0%'
+  return `${numeric.toFixed(numeric % 1 === 0 ? 0 : 1)}%`
+}
+
+function renderDiagnosticMeta(meta) {
+  const diagnostic = meta?.diagnostic
+  if (!diagnostic) return null
+
+  const bits = [
+    diagnostic.stage ? `stage=${diagnostic.stage}` : null,
+    diagnostic.reason ? `reason=${diagnostic.reason}` : null,
+    diagnostic.carId ? `carId=${diagnostic.carId}` : null,
+    diagnostic.vehicleId ? `vehicleId=${diagnostic.vehicleId}` : null,
+    diagnostic.vehicleNo ? `vehicleNo=${diagnostic.vehicleNo}` : null,
+    diagnostic.retryable ? 'retry=yes' : 'retry=no',
+    diagnostic.temporary ? 'temp=yes' : 'temp=no',
+    diagnostic.httpStatus ? `http=${diagnostic.httpStatus}` : null,
+  ].filter(Boolean)
+
+  return (
+    <div style={{ marginTop: '3px', color: '#64748b', fontSize: '11px' }}>
+      <div>{bits.join(' • ')}</div>
+      {diagnostic.url && <div style={{ marginTop: '2px' }}>url={diagnostic.url}</div>}
+    </div>
+  )
+}
+
 const LOG_COLORS = {
   success: { bg: 'rgba(0,184,148,0.12)', dot: '#00b894', text: '#00b894' },
   error:   { bg: 'rgba(239,68,68,0.12)', dot: '#ef4444', text: '#ef4444' },
@@ -129,7 +158,7 @@ function PowerBtn({ value, label, active, onClick }) {
   )
 }
 
-function ScheduleBtn({ value, label, sub, active, onClick }) {
+function ScheduleBtn({ label, sub, active, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -158,7 +187,6 @@ export default function AdminEncar() {
   const [successMsg, setSuccessMsg] = useState(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
-  const [dbStats, setDbStats]       = useState({ totalScraped: 0, todayScraped: 0 })
 
   // Config form state
   const [cfgSchedule,   setCfgSchedule]   = useState('manual')
@@ -169,7 +197,6 @@ export default function AdminEncar() {
 
   const logsRef    = useRef(null)
   const evtRef     = useRef(null)
-  const pollRef    = useRef(null)
 
   // ── Fetch initial status ───────────────────────────────────────────────────
   const loadStatus = useCallback(async () => {
@@ -177,7 +204,6 @@ export default function AdminEncar() {
       const res  = await fetch('/api/scraper/status')
       const data = await res.json()
       setStatus(data)
-      setDbStats(data.dbStats || {})
       if (data.config) {
         setCfgSchedule(data.config.schedule  || 'manual')
         setCfgParseScope(data.config.parseScope || data.config.parse_scope || 'all')
@@ -187,7 +213,7 @@ export default function AdminEncar() {
       }
       if (data.logs?.length) setLogs(data.logs)
       setLoading(false)
-    } catch (e) {
+    } catch {
       setError('Не удалось подключиться к серверу')
       setLoading(false)
     }
@@ -206,7 +232,6 @@ export default function AdminEncar() {
 
         if (data.type === 'status') {
           setStatus(prev => ({ ...prev, ...data }))
-          setDbStats(data.dbStats || {})
         }
         if (data.type === 'log') {
           setLogs(prev => [data.entry, ...prev].slice(0, 500))
@@ -215,7 +240,12 @@ export default function AdminEncar() {
           setStatus(prev => prev ? { ...prev, progress: data.progress } : prev)
         }
         if (data.type === 'done') {
-          setStatus(prev => prev ? { ...prev, isRunning: false, progress: data.progress } : prev)
+          setStatus(prev => prev ? {
+            ...prev,
+            isRunning: false,
+            progress: data.progress,
+            ...(data.sessionSummary ? { sessionSummary: data.sessionSummary } : {}),
+          } : prev)
           setStarting(false)
           loadStatus()
         }
@@ -234,7 +264,6 @@ export default function AdminEncar() {
     connectSSE()
     return () => {
       evtRef.current?.close()
-      if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [loadStatus, connectSSE])
 
@@ -320,20 +349,10 @@ export default function AdminEncar() {
   const handleSaveConfig = async () => {
     setSaving(true)
     setError(null)
+    const res = { ok: true }
+    const data = {}
     try {
-      await saveConfig()
-      return
-      const res  = await fetch('/api/scraper/config', {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          schedule:      cfgSchedule,
-          dailyLimit:    cfgLimit,
-          hour:          cfgHour,
-          intervalHours: cfgInterval,
-        }),
-      })
-      const data = await res.json()
+      await saveConfig({ silent: true })
       if (!res.ok) throw new Error(data.error || 'Ошибка сохранения')
       flash('✅ Настройки сохранены', 'success')
     } catch (e) {
@@ -353,13 +372,29 @@ export default function AdminEncar() {
   // ── Render ─────────────────────────────────────────────────────────────────
   const isRunning = status?.isRunning
   const progress  = status?.progress || { done: 0, total: 0, failed: 0, skipped: 0, photos: 0 }
+  const sessionSummary = status?.sessionSummary || {
+    found: 0,
+    imported: 0,
+    skipped: 0,
+    failed: 0,
+    retryRecovered: 0,
+    discarded: 0,
+    normalSkipped: 0,
+    photos: 0,
+    topReasons: [],
+  }
 
   const scheduleLabel = {
     manual: 'Вручную',
     hourly: `Каждые ${cfgInterval} ч`,
     daily:  `Каждый день в ${String(cfgHour).padStart(2,'0')}:00`,
   }[cfgSchedule] || 'Вручную'
-  const parseScopeLabel = cfgParseScope === 'imported' ? 'Только импортные' : 'Все машины'
+  const parseScopeLabel = {
+    all: 'Все машины',
+    imported: 'Только импортные',
+    japanese: 'Только японские',
+    german: 'Только немецкие',
+  }[cfgParseScope] || 'Все машины'
 
   return (
     <div style={{
@@ -429,7 +464,7 @@ export default function AdminEncar() {
       )}
 
       {/* ── Status + Stats Row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '14px', marginBottom: '20px' }}>
         {/* Status card */}
         <div style={{
           gridColumn: '1 / 2',
@@ -473,6 +508,7 @@ export default function AdminEncar() {
         <StatBadge label="Добавлено за сеанс" value={progress.done}     color="#00b894" bg="rgba(0,184,148,0.08)" />
         <StatBadge label="Фото скачано"       value={progress.photos}   color="#3b82f6" bg="rgba(59,130,246,0.08)" />
         <StatBadge label="Ошибок / Пропущено" value={`${progress.failed} / ${progress.skipped}`} color="#f59e0b" bg="rgba(245,158,11,0.08)" />
+        <StatBadge label="Retry recovered"    value={progress.retryRecovered || 0} color="#8b5cf6" bg="rgba(139,92,246,0.10)" />
       </div>
 
       {/* ── Progress bar (visible when running) ── */}
@@ -489,6 +525,55 @@ export default function AdminEncar() {
       )}
 
       {/* ── Power + Schedule + Controls ── */}
+      {!isRunning && (
+        <div style={{
+          background: '#0f2030',
+          borderRadius: '14px',
+          padding: '20px 24px',
+          border: '1px solid #1e3a52',
+          marginBottom: '20px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#f1f5f9' }}>Reason Summary</div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                Найдено: {sessionSummary.found || 0} • Импортировано: {sessionSummary.imported || 0} • Нормальные skip: {sessionSummary.normalSkipped || 0} • Финально отброшено: {sessionSummary.discarded || 0}
+              </div>
+            </div>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>
+              Retry recovered: <span style={{ color: '#c4b5fd' }}>{sessionSummary.retryRecovered || 0}</span> • Фото: <span style={{ color: '#93c5fd' }}>{sessionSummary.photos || 0}</span>
+            </div>
+          </div>
+
+          {sessionSummary.topReasons?.length ? (
+            <div style={{ display: 'grid', gap: '8px' }}>
+              {sessionSummary.topReasons.slice(0, 8).map((item) => (
+                <div
+                  key={item.code}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    background: '#0a1628',
+                    border: '1px solid #1e293b',
+                    fontSize: '12px',
+                  }}
+                >
+                  <span style={{ color: '#cbd5e1', fontFamily: 'monospace' }}>{item.code}</span>
+                  <span style={{ color: '#94a3b8' }}>{item.count} • {formatPercent(item.percent)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: '12px', color: '#475569' }}>
+              Пока нет данных по причинам пропусков за текущий/последний сеанс.
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
 
         {/* Power selector */}
@@ -533,7 +618,7 @@ export default function AdminEncar() {
             <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Режим парсинга
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
               <ScheduleBtn
                 value="all"
                 label="Все машины"
@@ -544,9 +629,23 @@ export default function AdminEncar() {
               <ScheduleBtn
                 value="imported"
                 label="Только импортные"
-                sub="Audi, BMW, Mercedes"
+                sub="Все не-корейские"
                 active={cfgParseScope === 'imported'}
                 onClick={() => setCfgParseScope('imported')}
+              />
+              <ScheduleBtn
+                value="japanese"
+                label="Только японские"
+                sub="Toyota, Lexus, Honda"
+                active={cfgParseScope === 'japanese'}
+                onClick={() => setCfgParseScope('japanese')}
+              />
+              <ScheduleBtn
+                value="german"
+                label="Только немецкие"
+                sub="BMW, Audi, Mercedes"
+                active={cfgParseScope === 'german'}
+                onClick={() => setCfgParseScope('german')}
               />
             </div>
           </div>
@@ -779,6 +878,7 @@ export default function AdminEncar() {
                 }} />
                 <span style={{ color: c.text, wordBreak: 'break-word' }}>
                   {entry.message}
+                  {renderDiagnosticMeta(entry.meta)}
                 </span>
               </div>
             )
