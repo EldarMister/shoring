@@ -1,13 +1,22 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 
+function readRuntimeValue(key) {
+  if (typeof window === 'undefined') return ''
+  return String(window.__APP_CONFIG__?.[key] || '')
+}
+
+function readFirebaseConfigValue(key) {
+  return readRuntimeValue(key) || String(import.meta.env[key] || '')
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  apiKey: readFirebaseConfigValue('VITE_FIREBASE_API_KEY'),
+  authDomain: readFirebaseConfigValue('VITE_FIREBASE_AUTH_DOMAIN'),
+  projectId: readFirebaseConfigValue('VITE_FIREBASE_PROJECT_ID'),
+  appId: readFirebaseConfigValue('VITE_FIREBASE_APP_ID'),
+  messagingSenderId: readFirebaseConfigValue('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+  storageBucket: readFirebaseConfigValue('VITE_FIREBASE_STORAGE_BUCKET'),
 }
 
 const requiredEnvKeys = [
@@ -17,7 +26,7 @@ const requiredEnvKeys = [
   'VITE_FIREBASE_APP_ID',
 ]
 
-const missingEnvKeys = requiredEnvKeys.filter((key) => !import.meta.env[key])
+const missingEnvKeys = requiredEnvKeys.filter((key) => !readFirebaseConfigValue(key))
 
 export const isFirebaseConfigured = missingEnvKeys.length === 0
 export const firebaseConfigError = isFirebaseConfigured

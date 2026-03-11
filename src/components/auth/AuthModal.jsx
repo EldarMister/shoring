@@ -55,6 +55,10 @@ function formatPhoneFull(phone) {
 }
 
 function mapFirebaseError(error, fallbackMessage) {
+  if (error?.code === 'sms/request-limit') {
+    return error?.message || 'Слишком много запросов SMS-кода. Повторите позже'
+  }
+
   switch (error?.code) {
     case 'auth/invalid-phone-number':
       return 'Введите корректный номер телефона в международном формате'
@@ -277,6 +281,24 @@ export default function AuthModal({
     }
   }
 
+  const reserveSmsRequest = async (targetPhone) => {
+    const response = await fetch('/api/auth/sms/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: targetPhone }),
+    })
+    const payload = await response.json().catch(() => ({}))
+
+    if (response.ok && payload?.ok) {
+      return payload
+    }
+
+    const error = new Error(payload?.error || 'Не удалось отправить SMS-код')
+    error.code = 'sms/request-limit'
+    error.retryAfterSeconds = Number(payload?.retryAfterSeconds) || 0
+    throw error
+  }
+
   const handleRequestCode = async (event) => {
     event?.preventDefault?.()
 
@@ -300,8 +322,9 @@ export default function AuthModal({
     setStatus('')
 
     try {
-      await signOut(firebaseAuth).catch(() => {})
       const targetPhone = hasRequestedCode ? requestedPhone : composedPhone
+      await reserveSmsRequest(targetPhone)
+      await signOut(firebaseAuth).catch(() => {})
       const confirmation = await signInWithPhoneNumber(
         firebaseAuth,
         targetPhone,
@@ -319,6 +342,15 @@ export default function AuthModal({
       clearRecaptcha()
       setRecaptchaReady(false)
     } catch (requestError) {
+      if (requestError?.code === 'sms/request-limit') {
+        if (requestError.retryAfterSeconds > 0) {
+          setCooldownUntil((current) => Math.max(current, Date.now() + requestError.retryAfterSeconds * 1000))
+          setNow(Date.now())
+        }
+        setError(mapFirebaseError(requestError, 'Не удалось отправить код'))
+        return
+      }
+
       setError(mapFirebaseError(requestError, 'Не удалось отправить код'))
       refreshRecaptcha()
     } finally {

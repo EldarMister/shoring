@@ -177,6 +177,17 @@ CREATE TABLE IF NOT EXISTS sms_codes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS admin_login_attempts (
+  identifier      VARCHAR(120) PRIMARY KEY,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  last_failed_at  TIMESTAMPTZ,
+  blocked_until   TIMESTAMPTZ,
+  last_success_at TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_sms_codes_phone_created_at ON sms_codes(phone, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sms_codes_expires_at ON sms_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_blocked_until ON admin_login_attempts(blocked_until);

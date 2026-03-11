@@ -199,7 +199,8 @@ router.get('/stats', async (_req, res) => {
       todayCars: parseInt(todayCars.rows[0].count, 10) || 0,
     })
   } catch (error) {
-    return res.status(500).json({ error: error.message })
+    console.error('SCRAPER_STATS_ERROR |', error?.message || error)
+    return res.status(500).json({ error: 'Ошибка сервера' })
   }
 })
 

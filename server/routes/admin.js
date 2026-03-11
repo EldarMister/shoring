@@ -53,6 +53,8 @@ const ENRICH_ERROR_RETRY_HOURS = (() => {
   if (!Number.isFinite(raw)) return 12
   return Math.min(Math.max(raw, 1), 168)
 })()
+const ADMIN_LOGIN_MAX_ATTEMPTS = 3
+const ADMIN_LOGIN_LOCKOUT_HOURS = 1
 
 const HANGUL_RE = /[\uAC00-\uD7A3]/u
 const ENRICH_TRIM_ROMANIZED_RE = /\b(choegogeuphyeong|gibonhyeong|kaelrigeuraepi|geuraebiti|bijeon|seupesyeol|direokseu|intelrijeonteu|maseuteojeu|koeo|rimujin|raunji|teurendi|kaempingka|camping\s+car|idongsamucha|hairimujin|hailimujin|peulreoseu|peurimieo|peurimio)\b/i
@@ -87,6 +89,120 @@ const EXTRA_COLOR_SWATCH = {
   'Винный': { color: '#7f1d1d' },
   'Темно-синий': { color: '#1e3a8a' },
   'Золотой': { color: '#c9971a' },
+}
+
+function getAdminLoginIdentifier(req) {
+  const forwardedFor = String(req.get('x-forwarded-for') || '')
+    .split(',')
+    .map((value) => value.trim())
+    .find(Boolean)
+
+  return forwardedFor || req.ip || req.socket?.remoteAddress || 'unknown'
+}
+
+function buildAdminLockoutState(row) {
+  const failedAttempts = Number(row?.failed_attempts || 0)
+  const blockedUntil = row?.blocked_until ? new Date(row.blocked_until).toISOString() : null
+  const blockedUntilMs = blockedUntil ? new Date(blockedUntil).getTime() : 0
+  const remainingSeconds = blockedUntilMs > Date.now()
+    ? Math.max(0, Math.ceil((blockedUntilMs - Date.now()) / 1000))
+    : 0
+
+  return {
+    active: remainingSeconds > 0,
+    failedAttempts,
+    attemptsRemaining: Math.max(0, ADMIN_LOGIN_MAX_ATTEMPTS - failedAttempts),
+    blockedUntil,
+    remainingSeconds,
+  }
+}
+
+async function getAdminLoginAttemptRow(identifier) {
+  const result = await pool.query(
+    `SELECT identifier, failed_attempts, last_failed_at, blocked_until, last_success_at
+     FROM admin_login_attempts
+     WHERE identifier = $1
+     LIMIT 1`,
+    [identifier],
+  )
+
+  const row = result.rows[0] || null
+  if (!row) return null
+
+  const now = Date.now()
+  const blockedUntilMs = row.blocked_until ? new Date(row.blocked_until).getTime() : 0
+  const lastFailedMs = row.last_failed_at ? new Date(row.last_failed_at).getTime() : 0
+  const shouldResetExpiredBlock = blockedUntilMs > 0 && blockedUntilMs <= now
+  const shouldResetStaleAttempts = blockedUntilMs === 0 && lastFailedMs > 0 && (now - lastFailedMs) >= (ADMIN_LOGIN_LOCKOUT_HOURS * 60 * 60 * 1000)
+
+  if (!shouldResetExpiredBlock && !shouldResetStaleAttempts) {
+    return row
+  }
+
+  const resetResult = await pool.query(
+    `UPDATE admin_login_attempts
+     SET failed_attempts = 0,
+         last_failed_at = NULL,
+         blocked_until = NULL,
+         updated_at = NOW()
+     WHERE identifier = $1
+     RETURNING identifier, failed_attempts, last_failed_at, blocked_until, last_success_at`,
+    [identifier],
+  )
+
+  return resetResult.rows[0] || null
+}
+
+async function recordAdminLoginFailure(identifier) {
+  const current = await getAdminLoginAttemptRow(identifier)
+  const nextFailedAttempts = Number(current?.failed_attempts || 0) + 1
+  const shouldBlock = nextFailedAttempts >= ADMIN_LOGIN_MAX_ATTEMPTS
+  const blockedUntil = shouldBlock
+    ? new Date(Date.now() + ADMIN_LOGIN_LOCKOUT_HOURS * 60 * 60 * 1000).toISOString()
+    : null
+
+  const result = await pool.query(
+    `INSERT INTO admin_login_attempts (
+       identifier,
+       failed_attempts,
+       last_failed_at,
+       blocked_until,
+       created_at,
+       updated_at
+     )
+     VALUES ($1, $2, NOW(), $3, NOW(), NOW())
+     ON CONFLICT (identifier) DO UPDATE
+     SET failed_attempts = $2,
+         last_failed_at = NOW(),
+         blocked_until = $3,
+         updated_at = NOW()
+     RETURNING identifier, failed_attempts, last_failed_at, blocked_until, last_success_at`,
+    [identifier, nextFailedAttempts, blockedUntil],
+  )
+
+  return result.rows[0] || null
+}
+
+async function clearAdminLoginAttempts(identifier) {
+  await pool.query(
+    `INSERT INTO admin_login_attempts (
+       identifier,
+       failed_attempts,
+       last_failed_at,
+       blocked_until,
+       last_success_at,
+       created_at,
+       updated_at
+     )
+     VALUES ($1, 0, NULL, NULL, NOW(), NOW(), NOW())
+     ON CONFLICT (identifier) DO UPDATE
+     SET failed_attempts = 0,
+         last_failed_at = NULL,
+         blocked_until = NULL,
+         last_success_at = NOW(),
+         updated_at = NOW()`,
+    [identifier],
+  )
 }
 
 const KO = {
@@ -788,13 +904,75 @@ function aggregateOrigins(rows) {
     .map(([name, count]) => ({ name, count }))
 }
 
-router.post('/login', (req, res) => {
+router.get('/login/status', async (req, res) => {
+  try {
+    const identifier = getAdminLoginIdentifier(req)
+    const row = await getAdminLoginAttemptRow(identifier)
+    return res.json({ ok: true, lockout: buildAdminLockoutState(row) })
+  } catch (error) {
+    console.error('ADMIN_LOGIN_STATUS_ERROR |', error?.message || error)
+    return res.status(500).json({
+      ok: false,
+      error: 'Не удалось проверить статус входа',
+      lockout: buildAdminLockoutState(null),
+    })
+  }
+})
+
+router.post('/login', async (req, res) => {
+  const identifier = getAdminLoginIdentifier(req)
   const { password } = req.body || {}
   const correctPass = globalThis.process?.env?.ADMIN_PASSWORD || 'admin123'
-  if (password === correctPass) {
-    return res.json({ ok: true, token: 'adm-ok' })
+
+  try {
+    const currentRow = await getAdminLoginAttemptRow(identifier)
+    const currentLockout = buildAdminLockoutState(currentRow)
+
+    if (currentLockout.active) {
+      console.warn(`ADMIN_LOGIN_LOCKED | identifier=${identifier} | remainingSeconds=${currentLockout.remainingSeconds}`)
+      return res.status(423).json({
+        ok: false,
+        error: 'Слишком много неверных попыток. Повторите позже.',
+        lockout: currentLockout,
+      })
+    }
+
+    if (password === correctPass) {
+      await clearAdminLoginAttempts(identifier)
+      console.info(`ADMIN_LOGIN_SUCCESS | identifier=${identifier}`)
+      return res.json({
+        ok: true,
+        token: 'adm-ok',
+        lockout: buildAdminLockoutState(null),
+      })
+    }
+
+    const failedRow = await recordAdminLoginFailure(identifier)
+    const failedLockout = buildAdminLockoutState(failedRow)
+
+    console.warn(
+      `ADMIN_LOGIN_FAILED | identifier=${identifier} | failedAttempts=${failedLockout.failedAttempts} | attemptsRemaining=${failedLockout.attemptsRemaining}`,
+    )
+
+    if (failedLockout.active) {
+      console.warn(`ADMIN_LOGIN_LOCKOUT_STARTED | identifier=${identifier} | blockedUntil=${failedLockout.blockedUntil}`)
+    }
+
+    return res.status(failedLockout.active ? 423 : 401).json({
+      ok: false,
+      error: failedLockout.active
+        ? 'Слишком много неверных попыток. Вход временно заблокирован.'
+        : 'Неверный пароль',
+      lockout: failedLockout,
+    })
+  } catch (error) {
+    console.error('ADMIN_LOGIN_ERROR |', error?.message || error)
+    return res.status(500).json({
+      ok: false,
+      error: 'Ошибка авторизации',
+      lockout: buildAdminLockoutState(null),
+    })
   }
-  return res.status(401).json({ ok: false, error: 'Неверный пароль' })
 })
 
 router.get('/pricing-settings', async (_req, res) => {

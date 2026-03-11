@@ -1,10 +1,20 @@
 import express from 'express'
 import pool from '../db.js'
 import { getFirebaseAdminAuth } from '../lib/firebaseAdmin.js'
+import {
+  consumeRateLimit,
+  createRateLimitStore,
+  getClientIp,
+  getRateLimitSnapshot,
+} from '../lib/requestSecurity.js'
 import requireUserAuth from '../middleware/requireUserAuth.js'
 import { createUserToken, normalizePhone, serializeUser } from '../lib/userAuth.js'
 
 const router = express.Router()
+const SMS_SEND_LIMIT_MAX = 5
+const SMS_SEND_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const smsSendPhoneRateStore = createRateLimitStore('sms-send-phone')
+const smsSendIpRateStore = createRateLimitStore('sms-send-ip')
 
 function mapFirebaseAuthError(error) {
   switch (error?.code) {
@@ -41,6 +51,50 @@ function getAuthConfigStatus() {
 
 router.get('/status', (_req, res) => {
   return res.json(getAuthConfigStatus())
+})
+
+router.post('/sms/request', (req, res) => {
+  const phone = normalizePhone(req.body?.phone)
+  if (!phone) {
+    return res.status(400).json({ error: 'Введите корректный номер телефона' })
+  }
+
+  const ip = getClientIp(req)
+  const phoneKey = `phone:${phone}`
+  const ipKey = `ip:${ip}`
+  const phoneSnapshot = getRateLimitSnapshot(smsSendPhoneRateStore, phoneKey, {
+    windowMs: SMS_SEND_LIMIT_WINDOW_MS,
+    max: SMS_SEND_LIMIT_MAX,
+  })
+  const ipSnapshot = getRateLimitSnapshot(smsSendIpRateStore, ipKey, {
+    windowMs: SMS_SEND_LIMIT_WINDOW_MS,
+    max: SMS_SEND_LIMIT_MAX,
+  })
+  const blockedSnapshot = [phoneSnapshot, ipSnapshot].find((snapshot) => !snapshot.allowed)
+
+  if (blockedSnapshot) {
+    const retryAfterSeconds = blockedSnapshot.retryAfterSeconds
+    console.warn(`SMS_SEND_LIMIT_BLOCKED | ip=${ip} | phone=${phone} | retryAfterSeconds=${retryAfterSeconds}`)
+    return res.status(429).json({
+      error: 'Слишком много запросов SMS-кода. Повторите позже.',
+      retryAfterSeconds,
+    })
+  }
+
+  const phoneState = consumeRateLimit(smsSendPhoneRateStore, phoneKey, {
+    windowMs: SMS_SEND_LIMIT_WINDOW_MS,
+    max: SMS_SEND_LIMIT_MAX,
+  })
+  const ipState = consumeRateLimit(smsSendIpRateStore, ipKey, {
+    windowMs: SMS_SEND_LIMIT_WINDOW_MS,
+    max: SMS_SEND_LIMIT_MAX,
+  })
+
+  return res.json({
+    ok: true,
+    remaining: Math.min(phoneState.remaining, ipState.remaining),
+    windowSeconds: Math.ceil(SMS_SEND_LIMIT_WINDOW_MS / 1000),
+  })
 })
 
 router.post('/firebase', async (req, res) => {

@@ -41,6 +41,42 @@ const ENRICH_SCOPE_ALL = 'all'
 const ENRICH_SCOPE_LATEST = 'latest'
 const DEFAULT_LATEST_ENRICH_LIMIT = 50
 const MAX_LATEST_ENRICH_LIMIT = 50000
+const ADMIN_LOGIN_MAX_ATTEMPTS = 3
+const ADMIN_LOGIN_LOCKOUT_KEY = 'tlv-admin-login-lockout-until'
+
+function syncAdminLoginLockoutStorage(blockedUntil) {
+    if (typeof window === 'undefined') return
+    if (blockedUntil) {
+        window.localStorage.setItem(ADMIN_LOGIN_LOCKOUT_KEY, blockedUntil)
+        return
+    }
+    window.localStorage.removeItem(ADMIN_LOGIN_LOCKOUT_KEY)
+}
+
+function readAdminLoginLockoutStorage() {
+    if (typeof window === 'undefined') return null
+    const raw = window.localStorage.getItem(ADMIN_LOGIN_LOCKOUT_KEY)
+    if (!raw) return null
+    const blockedUntilMs = new Date(raw).getTime()
+    if (!Number.isFinite(blockedUntilMs) || blockedUntilMs <= Date.now()) {
+        syncAdminLoginLockoutStorage(null)
+        return null
+    }
+    return new Date(blockedUntilMs).toISOString()
+}
+
+function formatAdminLockoutTime(totalSeconds) {
+    const seconds = Math.max(0, Number(totalSeconds) || 0)
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+
+    if (hours > 0) {
+        return `${hours}ч ${String(minutes).padStart(2, '0')}м ${String(secs).padStart(2, '0')}с`
+    }
+
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
 
 function normalizeLatestEnrichLimit(value) {
     const parsed = Number.parseInt(String(value || DEFAULT_LATEST_ENRICH_LIMIT), 10)
@@ -1288,19 +1324,99 @@ function Login({ onLogin }) {
     const [pw, setPw] = useState('')
     const [err, setErr] = useState('')
     const [busy, setBusy] = useState(false)
+    const [attemptsRemaining, setAttemptsRemaining] = useState(ADMIN_LOGIN_MAX_ATTEMPTS)
+    const [lockoutUntil, setLockoutUntil] = useState(() => readAdminLoginLockoutStorage())
+    const [lockoutNow, setLockoutNow] = useState(Date.now())
+
+    const applyLockoutState = useCallback((lockout) => {
+        const nextBlockedUntil = lockout?.blockedUntil || null
+        const nextAttemptsRemaining = Number.parseInt(String(lockout?.attemptsRemaining ?? ADMIN_LOGIN_MAX_ATTEMPTS), 10)
+
+        setAttemptsRemaining(Number.isFinite(nextAttemptsRemaining) ? Math.max(0, nextAttemptsRemaining) : ADMIN_LOGIN_MAX_ATTEMPTS)
+        setLockoutUntil(nextBlockedUntil)
+        syncAdminLoginLockoutStorage(nextBlockedUntil)
+    }, [])
+
+    useEffect(() => {
+        let active = true
+
+        fetch('/api/admin/login/status')
+            .then(async response => {
+                const payload = await response.json().catch(() => ({}))
+                if (!active) return
+                applyLockoutState(payload?.lockout)
+            })
+            .catch(() => {
+                if (!active) return
+                applyLockoutState({ blockedUntil: readAdminLoginLockoutStorage() })
+            })
+
+        return () => {
+            active = false
+        }
+    }, [applyLockoutState])
+
+    useEffect(() => {
+        if (!lockoutUntil) return
+        setLockoutNow(Date.now())
+        const timer = window.setInterval(() => {
+            setLockoutNow(Date.now())
+        }, 1000)
+        return () => window.clearInterval(timer)
+    }, [lockoutUntil])
+
+    const lockoutRemainingSeconds = lockoutUntil
+        ? Math.max(0, Math.ceil((new Date(lockoutUntil).getTime() - lockoutNow) / 1000))
+        : 0
+    const isLocked = lockoutRemainingSeconds > 0
+
+    useEffect(() => {
+        if (lockoutUntil && !isLocked) {
+            applyLockoutState(null)
+        }
+    }, [applyLockoutState, isLocked, lockoutUntil])
     const go = async e => {
         e.preventDefault()
-        setBusy(true); setErr('')
+        if (isLocked) {
+            setErr(`Слишком много неверных попыток. Повторите через ${formatAdminLockoutTime(lockoutRemainingSeconds)}.`)
+            return
+        }
+
+        setBusy(true)
+        setErr('')
         try {
             const r = await fetch('/api/admin/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password: pw }),
             })
-            if (r.ok) { onLogin() }
-            else { setErr('Неверный пароль') }
-        } catch { setErr('Ошибка соединения') }
-        setBusy(false)
+            const payload = await r.json().catch(() => ({}))
+            applyLockoutState(payload?.lockout)
+
+            if (r.ok && payload?.ok) {
+                setPw('')
+                setErr('')
+                applyLockoutState(null)
+                onLogin()
+                return
+            }
+
+            if (payload?.lockout?.active) {
+                setErr(`Слишком много неверных попыток. Вход заблокирован на ${formatAdminLockoutTime(payload.lockout.remainingSeconds)}.`)
+                return
+            }
+
+            const remaining = Number.parseInt(String(payload?.lockout?.attemptsRemaining ?? ADMIN_LOGIN_MAX_ATTEMPTS), 10)
+            const fallbackMessage = Number.isFinite(remaining)
+                ? `Неверный пароль. Осталось попыток: ${remaining}.`
+                : 'Неверный пароль'
+
+            setErr(r.status === 401 ? fallbackMessage : (payload?.error || fallbackMessage))
+        } catch {
+            setErr('Ошибка соединения')
+        } finally {
+            setBusy(false)
+        }
     }
     return (
         <div className="adm-login">
@@ -1308,11 +1424,36 @@ function Login({ onLogin }) {
                 <div className="adm-login-logo"><Ic d={IC.car} s={40} /></div>
                 <h1 className="adm-login-title">AVT Auto</h1>
                 <p className="adm-login-sub">Панель управления</p>
-                <form onSubmit={go} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <input className="adm-input" type="password" placeholder="Пароль" value={pw} autoFocus onChange={e => setPw(e.target.value)} />
+                <form onSubmit={go} className="adm-login-form">
+                    {isLocked && (
+                        <div className="adm-login-status adm-login-status-warning">
+                            <strong>Вход временно заблокирован</strong>
+                            <span>Осталось: {formatAdminLockoutTime(lockoutRemainingSeconds)}</span>
+                        </div>
+                    )}
+                    {!isLocked && attemptsRemaining < ADMIN_LOGIN_MAX_ATTEMPTS && (
+                        <div className="adm-login-status">
+                            <strong>Осторожно</strong>
+                            <span>Осталось попыток: {attemptsRemaining} из {ADMIN_LOGIN_MAX_ATTEMPTS}</span>
+                        </div>
+                    )}
+                    <input
+                        className="adm-input"
+                        type="password"
+                        placeholder="Пароль"
+                        value={pw}
+                        autoFocus
+                        disabled={busy || isLocked}
+                        onChange={e => setPw(e.target.value)}
+                    />
                     {err && <div className="adm-err">{err}</div>}
-                    <button className="adm-btn adm-btn-primary" style={{ width: '100%', justifyContent: 'center' }} type="submit" disabled={busy}>
-                        {busy ? 'Проверка...' : 'Войти →'}
+                    <button
+                        className="adm-btn adm-btn-primary"
+                        style={{ width: '100%', justifyContent: 'center' }}
+                        type="submit"
+                        disabled={busy || isLocked}
+                    >
+                        {isLocked ? `Блокировка ${formatAdminLockoutTime(lockoutRemainingSeconds)}` : busy ? 'Проверка...' : 'Войти →'}
                     </button>
                 </form>
             </div>

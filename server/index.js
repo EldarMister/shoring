@@ -12,6 +12,11 @@ import scraperRouter from './routes/scraper.js'
 import authRouter from './routes/auth.js'
 import { startScheduler } from './scraper/scheduler.js'
 import { state as scraperState } from './scraper/state.js'
+import {
+  applyBasicSecurityHeaders,
+  createRateLimitMiddleware,
+  sendSafeApiError,
+} from './lib/requestSecurity.js'
 
 dotenv.config()
 
@@ -20,9 +25,32 @@ const app = express()
 const ENV = globalThis.process?.env || {}
 const PORT = ENV.PORT || 3001
 const PARSE_SCOPE_OPTIONS = new Set(['all', 'domestic', 'imported', 'japanese', 'german'])
+const API_RATE_LIMIT_WINDOW_MS = 60 * 1000
+const API_RATE_LIMIT_MAX = 60
+
+function getPublicRuntimeConfig() {
+  return {
+    VITE_FIREBASE_API_KEY: String(ENV.VITE_FIREBASE_API_KEY || ''),
+    VITE_FIREBASE_AUTH_DOMAIN: String(ENV.VITE_FIREBASE_AUTH_DOMAIN || ''),
+    VITE_FIREBASE_PROJECT_ID: String(ENV.VITE_FIREBASE_PROJECT_ID || ''),
+    VITE_FIREBASE_APP_ID: String(ENV.VITE_FIREBASE_APP_ID || ''),
+    VITE_FIREBASE_MESSAGING_SENDER_ID: String(ENV.VITE_FIREBASE_MESSAGING_SENDER_ID || ''),
+    VITE_FIREBASE_STORAGE_BUCKET: String(ENV.VITE_FIREBASE_STORAGE_BUCKET || ''),
+  }
+}
 
 // Middleware
+app.disable('x-powered-by')
+app.set('trust proxy', 1)
 app.use(cors())
+app.use(applyBasicSecurityHeaders)
+app.use('/api', createRateLimitMiddleware({
+  windowMs: API_RATE_LIMIT_WINDOW_MS,
+  max: API_RATE_LIMIT_MAX,
+  message: 'Слишком много запросов. Повторите позже.',
+  skip: (req) => req.path === '/health' || req.method === 'OPTIONS',
+  logLabel: 'API_RATE_LIMIT',
+}))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -44,6 +72,12 @@ app.delete('/api/images/:id', (req, res, next) => {
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() })
+})
+
+app.get('/api/runtime-config.js', (_req, res) => {
+  res.type('application/javascript')
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  res.send(`window.__APP_CONFIG__ = ${JSON.stringify(getPublicRuntimeConfig())};`)
 })
 
 // В production — раздаём собранный React-фронтенд
@@ -70,6 +104,23 @@ if (ENV.NODE_ENV === 'production') {
     res.sendFile(path.join(distPath, 'index.html'))
   })
 }
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) {
+    return next(error)
+  }
+
+  if (req.originalUrl?.startsWith('/api/')) {
+    if (error?.type === 'entity.parse.failed') {
+      return res.status(400).json({ error: 'Некорректный JSON' })
+    }
+
+    return sendSafeApiError(req, res, error, 'Внутренняя ошибка сервера')
+  }
+
+  console.error(`REQUEST_ERROR | ${req.method} ${req.originalUrl} |`, error?.stack || error?.message || error)
+  return res.status(500).send('Internal Server Error')
+})
 
 // Инициализация БД и запуск
 async function start() {
