@@ -237,10 +237,10 @@ function normalizeDriveLabel(value) {
   if (!text) return ''
   const low = text.toLowerCase()
 
-  if (low.includes('awd')) return 'Полный (AWD)'
-  if (low.includes('4wd')) return 'Полный (4WD)'
-  if (low.includes('rwd') || low.includes('задн')) return 'Задний (RWD)'
-  if (low.includes('2wd') || low.includes('fwd') || low.includes('передн')) return 'Передний (FWD)'
+  if (/(?:all[-\s]*wheel|allrad|4matic|xdrive|quattro|4motion|syncro|awd)/i.test(low)) return '\u041f\u043e\u043b\u043d\u044b\u0439 (AWD)'
+  if (/(?:4wd|4x4|e-?4wd)/i.test(low)) return '\u041f\u043e\u043b\u043d\u044b\u0439 (4WD)'
+  if (/(?:rear[-\s]*wheel)/i.test(low) || /\b(?:fr|rwd)\b/i.test(low) || low.includes('\u0437\u0430\u0434\u043d')) return '\u0417\u0430\u0434\u043d\u0438\u0439 (RWD)'
+  if (/(?:front[-\s]*wheel)/i.test(low) || /\b(?:ff|fwd|2wd)\b/i.test(low) || low.includes('\u043f\u0435\u0440\u0435\u0434\u043d')) return '\u041f\u0435\u0440\u0435\u0434\u043d\u0438\u0439 (FWD)'
 
   return ''
 }

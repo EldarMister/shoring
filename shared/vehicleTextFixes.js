@@ -118,6 +118,12 @@ const TITLE_REPLACEMENTS = [
 
 const TRIM_REPLACEMENTS = [
   [/\bkwateuro\b/gi, 'Quattro'],
+  [/\bebo\b/gi, 'Evo'],
+  [/\bseupaideo\b/gi, 'Spyder'],
+  [/\bseupoteubaek\b/gi, 'Sportback'],
+  [/\bgeurankupe\b/gi, 'Gran Coupe'],
+  [/\beoltimeiteu\b/gi, 'Ultimate'],
+  [/\bbeuraiteu\b/gi, 'Bright'],
   [/\bpeureimieom\b/gi, 'Premium'],
   [/\babanggareudeu\b/gi, 'Avantgarde'],
   [/\bpeoseuteu\b/gi, 'First'],
@@ -282,14 +288,28 @@ const TRIM_REPLACEMENTS = [
   [/\u0414\u043b\u044f\s+\u043b\u044e\u0434\u0435\u0439\s+\u0441\s+\u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u043d\u044b\u043c\u0438\s+\u0432\u043e\u0437\u043c\u043e\u0436\u043d\u043e\u0441\u0442\u044f\u043c\u0438/gi, 'Disabled Access'],
 ]
 
+function applyPremiumNameFixes(value) {
+  let text = cleanText(value)
+  if (!text) return ''
+
+  text = text.replace(/\b([1-8])\s*-\s*series\b/gi, '$1 Series')
+  text = text.replace(/\blp\s*([0-9]{3,4}-[0-9])\b/gi, 'LP $1')
+
+  if (/\b(?:audi|tfsi|tdi|fsi|rs\d*|s\d)\b/i.test(text)) {
+    text = text.replace(/\bQuattro\b/g, 'quattro')
+  }
+
+  return text.replace(/\s+/g, ' ').trim()
+}
+
 export function applyTrimFixes(value) {
-  return applyReplacementList(value, TRIM_REPLACEMENTS)
+  return applyPremiumNameFixes(applyReplacementList(value, TRIM_REPLACEMENTS))
 }
 
 export function applyVehicleTitleFixes(value) {
   let text = applyReplacementList(value, TITLE_REPLACEMENTS)
   text = applyTrimFixes(text)
-  return relocateMarketingEdition(text)
+  return applyPremiumNameFixes(relocateMarketingEdition(text))
 }
 
 export function normalizeRequestedRomanizedColorAlias(value) {

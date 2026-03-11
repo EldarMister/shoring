@@ -133,6 +133,11 @@ const TITLE_SAFE_TRIM_SOURCES = [
   'premier',
   'calligraphy',
   'prestige',
+  'ultimate bright',
+  'gran coupe',
+  'sportback',
+  'evo spyder',
+  'spyder',
   'the essential',
   'essential',
   'luxury',
@@ -190,18 +195,21 @@ const SUSPICIOUS_DUPLICATE_INTERIOR_COLORS = new Set([
   'Мокрый асфальт',
   'Графитовый',
 ])
-
 const BODY_CLASS_LABELS = new Set([
-  'Малый класс',
-  'Компактный класс',
-  'Средний класс',
-  'Бизнес-класс',
+  '\u0421\u0435\u0434\u0430\u043d \u043c\u0430\u043b\u043e\u0433\u043e \u043a\u043b\u0430\u0441\u0441\u0430',
+  '\u0421\u0435\u0434\u0430\u043d \u043a\u043e\u043c\u043f\u0430\u043a\u0442-\u043a\u043b\u0430\u0441\u0441\u0430',
+  '\u0421\u0435\u0434\u0430\u043d \u0441\u0440\u0435\u0434\u043d\u0435\u0433\u043e \u043a\u043b\u0430\u0441\u0441\u0430',
+  '\u0421\u0435\u0434\u0430\u043d \u0431\u0438\u0437\u043d\u0435\u0441-\u043a\u043b\u0430\u0441\u0441\u0430',
 ])
+
 
 const SUV_BODY_HINT_RE = /\b(santa[\s-]*fe|santafe|tucson|sorento|sportage|seltos|palisade|mohave|trailblazer|trax|qm6|gv60|gv70|gv80|korando|tivoli|niro|kona|torres)\b/i
 const MINIVAN_BODY_HINT_RE = /\b(carnival|staria|starex|orlando|master)\b/i
 const MINI_BODY_HINT_RE = /\b(casper|morning|spark|ray)\b/i
 const PICKUP_BODY_HINT_RE = /\b(korando\s+sports|rexton\s+sports|sports\s+cx7|pickup)\b/i
+const LIFTBACK_BODY_HINT_RE = /\b(sportback|seupoteubaek|liftback|fastback)\b/i
+const GRAN_COUPE_BODY_HINT_RE = /\b(gran\s+coupe|geurankupe|4[-\s]*door\s+coupe)\b/i
+const SPORTSCAR_BODY_HINT_RE = /\b(sportska|sportscar|huracan|aventador|gallardo|murcielago|revuelto|r8\b|amg\s*gt|mclaren|f8\b|488\b|458\b|720s\b|570s\b|650s\b|600lt\b)\b/i
 const SEDAN_BODY_HINT_RE = /\b(k3|k5|k7|k8|k9|avante|elantra|sonata|grandeur|g70|g80|g90|eq900|sm3|sm5|sm6|sm7|malibu|impala|cts|s80|s90|camry|accord)\b/i
 const HATCH_BODY_HINT_RE = /\b(ioniq|aionik|i30|ceed|cee['’ -]?d|picanto|morning|spark|matiz|golf|polo|veloster|brio)\b/i
 const WAGON_BODY_HINT_RE = /\b(wagon|estate|touring|shooting\s*brake)\b/i
@@ -215,8 +223,9 @@ function normalizeRawBodyLabel(value) {
   if (!raw) return ''
   const low = raw.toLowerCase()
 
-  if (low === 'suv' || low === 'rv') return 'Кроссовер / внедорожник'
-  if (low === 'вэн' || low === 'van' || low === 'minivan') return 'Минивэн'
+  if (low === 'sportska' || low === 'sportscar') return '\u0421\u043f\u043e\u0440\u0442\u043a\u0430\u0440'
+  if (low === 'suv' || low === 'rv') return '\u041a\u0440\u043e\u0441\u0441\u043e\u0432\u0435\u0440 / \u0432\u043d\u0435\u0434\u043e\u0440\u043e\u0436\u043d\u0438\u043a'
+  if (low === '\u0432\u044d\u043d' || low === 'van' || low === 'minivan') return '\u041c\u0438\u043d\u0438\u0432\u044d\u043d'
   if (low === '-') return ''
   return raw
 }
@@ -359,15 +368,18 @@ function inferPassengerBodyTypeFromText(...values) {
     .toLowerCase()
 
   if (!text) return ''
-  if (PICKUP_BODY_HINT_RE.test(text)) return 'Грузовой / пикап'
-  if (MINIVAN_BODY_HINT_RE.test(text)) return 'Минивэн'
-  if (MINI_BODY_HINT_RE.test(text)) return 'Мини'
-  if (CABRIO_BODY_HINT_RE.test(text)) return 'Кабриолет'
-  if (WAGON_BODY_HINT_RE.test(text)) return 'Универсал'
-  if (COUPE_BODY_HINT_RE.test(text)) return 'Купе'
-  if (HATCH_BODY_HINT_RE.test(text) || /\bhatch|sportback|fastback|liftback\b/i.test(text)) return 'Хэтчбек'
-  if (SEDAN_BODY_HINT_RE.test(text) || /\bsedan\b/i.test(text)) return 'Седан'
-  if (SUV_BODY_HINT_RE.test(text)) return 'Кроссовер / внедорожник'
+  if (PICKUP_BODY_HINT_RE.test(text)) return '\u0413\u0440\u0443\u0437\u043e\u0432\u043e\u0439 / \u043f\u0438\u043a\u0430\u043f'
+  if (MINIVAN_BODY_HINT_RE.test(text)) return '\u041c\u0438\u043d\u0438\u0432\u044d\u043d'
+  if (MINI_BODY_HINT_RE.test(text)) return '\u041c\u0438\u043d\u0438'
+  if (GRAN_COUPE_BODY_HINT_RE.test(text)) return '4-\u0434\u0432\u0435\u0440\u043d\u043e\u0435 \u043a\u0443\u043f\u0435'
+  if (LIFTBACK_BODY_HINT_RE.test(text)) return '\u041b\u0438\u0444\u0442\u0431\u0435\u043a'
+  if (SPORTSCAR_BODY_HINT_RE.test(text)) return '\u0421\u043f\u043e\u0440\u0442\u043a\u0430\u0440'
+  if (CABRIO_BODY_HINT_RE.test(text)) return '\u041a\u0430\u0431\u0440\u0438\u043e\u043b\u0435\u0442'
+  if (WAGON_BODY_HINT_RE.test(text)) return '\u0423\u043d\u0438\u0432\u0435\u0440\u0441\u0430\u043b'
+  if (COUPE_BODY_HINT_RE.test(text)) return '\u041a\u0443\u043f\u0435'
+  if (HATCH_BODY_HINT_RE.test(text) || /\bhatch\b/i.test(text)) return '\u0425\u044d\u0442\u0447\u0431\u0435\u043a'
+  if (SEDAN_BODY_HINT_RE.test(text) || /\bsedan\b/i.test(text)) return '\u0421\u0435\u0434\u0430\u043d'
+  if (SUV_BODY_HINT_RE.test(text)) return '\u041a\u0440\u043e\u0441\u0441\u043e\u0432\u0435\u0440 / \u0432\u043d\u0435\u0434\u043e\u0440\u043e\u0436\u043d\u0438\u043a'
   return ''
 }
 
@@ -385,32 +397,36 @@ export function resolveDisplayBodyTypeLabel(bodyValue, ...contextValues) {
     actual &&
     (
       !normalized ||
-      BODY_CLASS_LABELS.has(normalized) ||
-      normalized === 'Кроссовер / внедорожник' ||
-      normalized === 'Минивэн' ||
-      normalized === 'Мини'
+      (BODY_CLASS_LABELS.has(normalized) && actual !== '\u0421\u0435\u0434\u0430\u043d') ||
+      (normalized === '\u0421\u043f\u043e\u0440\u0442\u043a\u0430\u0440' && actual !== '\u0421\u043f\u043e\u0440\u0442\u043a\u0430\u0440') ||
+      normalized === '\u041a\u0440\u043e\u0441\u0441\u043e\u0432\u0435\u0440 / \u0432\u043d\u0435\u0434\u043e\u0440\u043e\u0436\u043d\u0438\u043a' ||
+      normalized === '\u041c\u0438\u043d\u0438\u0432\u044d\u043d' ||
+      normalized === '\u041c\u0438\u043d\u0438'
     )
   ) {
     return actual
   }
 
   if (
-    normalized === 'Мини' ||
-    normalized === 'Кроссовер / внедорожник' ||
-    normalized === 'Пикап' ||
-    normalized === 'Грузовой / пикап' ||
-    normalized === 'Минивэн' ||
-    normalized === 'Седан' ||
-    normalized === 'Купе' ||
-    normalized === 'Кабриолет' ||
-    normalized === 'Хэтчбек' ||
-    normalized === 'Универсал'
+    normalized === '\u041c\u0438\u043d\u0438' ||
+    normalized === '\u041a\u0440\u043e\u0441\u0441\u043e\u0432\u0435\u0440 / \u0432\u043d\u0435\u0434\u043e\u0440\u043e\u0436\u043d\u0438\u043a' ||
+    normalized === '\u041f\u0438\u043a\u0430\u043f' ||
+    normalized === '\u0413\u0440\u0443\u0437\u043e\u0432\u043e\u0439 / \u043f\u0438\u043a\u0430\u043f' ||
+    normalized === '\u041c\u0438\u043d\u0438\u0432\u044d\u043d' ||
+    normalized === '\u0421\u0435\u0434\u0430\u043d' ||
+    normalized === '\u041a\u0443\u043f\u0435' ||
+    normalized === '\u041a\u0430\u0431\u0440\u0438\u043e\u043b\u0435\u0442' ||
+    normalized === '4-\u0434\u0432\u0435\u0440\u043d\u043e\u0435 \u043a\u0443\u043f\u0435' ||
+    normalized === '\u041b\u0438\u0444\u0442\u0431\u0435\u043a' ||
+    normalized === '\u0421\u043f\u043e\u0440\u0442\u043a\u0430\u0440' ||
+    normalized === '\u0425\u044d\u0442\u0447\u0431\u0435\u043a' ||
+    normalized === '\u0423\u043d\u0438\u0432\u0435\u0440\u0441\u0430\u043b'
   ) {
     return normalized
   }
 
   if (actual) return actual
-  if (BODY_CLASS_LABELS.has(normalized)) return ''
+  if (BODY_CLASS_LABELS.has(normalized)) return normalized
   return normalized
 }
 

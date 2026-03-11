@@ -76,7 +76,7 @@ const PREMIUM_SEDAN_HINT_RE = /\b(k8|k9|g80|g90|eq900|grandeur|genesis|s-class|e
 const BIG_SUV_HINT_RE = /\b(highlander|carnival|staria|starex|palisade|telluride|mohave|mohabi|traverse|tahoe|escalade|rexton\s*w|santa\s*cruz)\b/i
 const SMALL_SUV_HINT_RE = /\b(tivoli|seltos|kona|niro|venue|stonic|trax|trailblazer|encore|xm3|korando\s?c)\b/i
 const MIDDLE_SUV_HINT_RE = /\b(santa\s*fe|santafe|sorento|sportage|tucson|qm6|torres|korando|captiva|equinox|rav4|cr-v|x-trail|rogue)\b/i
-const CAR_LIKE_BODY_TYPES = new Set(['Седан', 'Хэтчбек', 'Универсал', 'Купе', 'Кабриолет'])
+const CAR_LIKE_BODY_TYPES = new Set(['\u0421\u0435\u0434\u0430\u043d', '\u0421\u0435\u0434\u0430\u043d \u043c\u0430\u043b\u043e\u0433\u043e \u043a\u043b\u0430\u0441\u0441\u0430', '\u0421\u0435\u0434\u0430\u043d \u043a\u043e\u043c\u043f\u0430\u043a\u0442-\u043a\u043b\u0430\u0441\u0441\u0430', '\u0421\u0435\u0434\u0430\u043d \u0441\u0440\u0435\u0434\u043d\u0435\u0433\u043e \u043a\u043b\u0430\u0441\u0441\u0430', '\u0421\u0435\u0434\u0430\u043d \u0431\u0438\u0437\u043d\u0435\u0441-\u043a\u043b\u0430\u0441\u0441\u0430', '\u0425\u044d\u0442\u0447\u0431\u0435\u043a', '\u0423\u043d\u0438\u0432\u0435\u0440\u0441\u0430\u043b', '\u041a\u0443\u043f\u0435', '\u041a\u0430\u0431\u0440\u0438\u043e\u043b\u0435\u0442'])
 const HEAVY_BODY_TYPES = new Set(['Пикап', 'Грузовой / пикап', 'Минивэн'])
 
 let cachedSettings = null
