@@ -111,13 +111,14 @@ export default function AuthModal({
   const recaptchaContainerRef = useRef(null)
   const recaptchaVerifierRef = useRef(null)
   const confirmationResultRef = useRef(null)
+  const codeInputRef = useRef(null)
 
   const selectedCountry = getCountryById(countryId)
   const composedPhone = composePhoneNumber(countryId, phone)
   const phoneDigitsLength = getDigitsLength(composedPhone)
   const resendSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
   const expiresSeconds = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000)) : 0
-  const hasRequestedCode = authStep === 'code'
+  const hasRequestedCode = authStep === 'code' || Boolean(requestedPhone)
   const activePhone = requestedPhone || composedPhone
   const serverAuthReady = authStatus?.ready !== false
   const shouldShowRecaptcha = !user && isFirebaseConfigured && (!hasRequestedCode || resendSeconds === 0)
@@ -130,12 +131,12 @@ export default function AuthModal({
     && resendSeconds === 0
     && recaptchaReady
   )
-  const canVerifyCode = hasRequestedCode && code.trim().length === 6 && !submittingVerify
+  const codeDigitsLength = code.trim().length
+  const canVerifyCode = hasRequestedCode && codeDigitsLength >= 4 && codeDigitsLength <= 6 && !submittingVerify
+  const canResendCode = hasRequestedCode && resendSeconds === 0 && !submittingRequest && recaptchaReady
   const resendButtonLabel = submittingRequest
     ? 'Отправка...'
-    : resendSeconds > 0
-      ? `Повторная отправка через ${formatSeconds(resendSeconds)}`
-      : 'Отправить код повторно'
+    : 'Отправить код снова'
 
   function clearRecaptcha() {
     if (recaptchaVerifierRef.current) {
@@ -182,6 +183,7 @@ export default function AuthModal({
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', handleKeyDown)
+
     return () => {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
@@ -196,6 +198,7 @@ export default function AuthModal({
     setRecaptchaReady(false)
     setPhone('')
     setCountryId(DEFAULT_COUNTRY_ID)
+
     return undefined
   }, [open])
 
@@ -208,6 +211,17 @@ export default function AuthModal({
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [cooldownUntil, expiresAt, open])
+
+  useEffect(() => {
+    if (!open || !hasRequestedCode) return undefined
+
+    const frame = window.requestAnimationFrame(() => {
+      codeInputRef.current?.focus()
+      codeInputRef.current?.scrollIntoView({ block: 'center' })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [hasRequestedCode, open])
 
   useEffect(() => {
     if (!open || !shouldShowRecaptcha || !firebaseAuth || !recaptchaContainerRef.current) {
@@ -287,21 +301,20 @@ export default function AuthModal({
 
     try {
       await signOut(firebaseAuth).catch(() => {})
+      const targetPhone = hasRequestedCode ? requestedPhone : composedPhone
       const confirmation = await signInWithPhoneNumber(
         firebaseAuth,
-        hasRequestedCode ? requestedPhone : composedPhone,
+        targetPhone,
         recaptchaVerifierRef.current,
       )
 
-      const targetPhone = hasRequestedCode ? requestedPhone : composedPhone
       confirmationResultRef.current = confirmation
-      setAuthStep('code')
       setRequestedPhone(targetPhone)
+      setAuthStep('code')
       setExpiresAt(new Date(Date.now() + CODE_TTL_SECONDS * 1000).toISOString())
       setCooldownUntil(Date.now() + RESEND_SECONDS * 1000)
-      setPhone('')
       setCode('')
-      setStatus(`Код отправлен на ${formatPhoneFull(targetPhone)}`)
+      setStatus(`Код отправлен на ${formatPhoneFull(targetPhone)}. Введите его ниже.`)
       setNow(Date.now())
       clearRecaptcha()
       setRecaptchaReady(false)
@@ -336,6 +349,11 @@ export default function AuthModal({
     } catch (verifyError) {
       if (firebaseAuth) {
         await signOut(firebaseAuth).catch(() => {})
+      }
+      if (verifyError?.code === 'auth/code-expired' || verifyError?.code === 'auth/session-expired') {
+        setCooldownUntil(0)
+        setExpiresAt(new Date().toISOString())
+        refreshRecaptcha()
       }
       setError(mapFirebaseError(verifyError, 'Не удалось подтвердить код'))
     } finally {
@@ -449,10 +467,11 @@ export default function AuthModal({
                 <label className="auth-field">
                   <span>Введите SMS-код</span>
                   <input
+                    ref={codeInputRef}
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
-                    placeholder="6 цифр"
+                    placeholder="4-6 цифр"
                     value={code}
                     maxLength={6}
                     onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -475,16 +494,18 @@ export default function AuthModal({
                 )}
 
                 <div className="auth-modal-actions">
-                  <button
-                    type="button"
-                    className="auth-secondary-btn"
-                    disabled={submittingRequest || resendSeconds > 0 || !recaptchaReady}
-                    onClick={() => handleRequestCode()}
-                  >
-                    {resendButtonLabel}
-                  </button>
+                  {resendSeconds === 0 && (
+                    <button
+                      type="button"
+                      className="auth-secondary-btn"
+                      disabled={!canResendCode}
+                      onClick={() => handleRequestCode()}
+                    >
+                      {resendButtonLabel}
+                    </button>
+                  )}
                   <button type="submit" className="auth-primary-btn" disabled={!canVerifyCode}>
-                    {submittingVerify ? 'Проверка...' : 'Подтвердить'}
+                    {submittingVerify ? 'Проверка...' : 'Подтвердить код'}
                   </button>
                 </div>
               </form>

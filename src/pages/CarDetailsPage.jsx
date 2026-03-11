@@ -488,7 +488,7 @@ function buildVehicleHistoryStatistics(car) {
   const stats = history?.statistics || {}
   const exchangeRate = getHistoryExchangeRate(car)
 
-  return [
+  const entries = [
     { key: 'accidents', label: 'Аварии', value: stats.accidents },
     { key: 'totalLoss', label: 'Тотальная потеря', value: stats.totalLoss },
     { key: 'ownerChanges', label: 'Смены владельцев', value: stats.ownerChanges },
@@ -508,6 +508,20 @@ function buildVehicleHistoryStatistics(car) {
       secondary: entry.type === 'money' ? formatHistoryUsdApprox(entry.value, exchangeRate) : '',
     }))
     .filter((entry) => hasHistoryDisplayValue(entry.value))
+
+  const order = new Map([
+    ['accidents', 0],
+    ['totalLoss', 1],
+    ['ownerChanges', 2],
+    ['numberChanges', 3],
+    ['atFaultDamage', 4],
+    ['notAtFaultDamage', 5],
+    ['atFaultCount', 6],
+    ['notAtFaultCount', 7],
+    ['thefts', 8],
+  ])
+
+  return entries.sort((left, right) => (order.get(left.key) ?? 999) - (order.get(right.key) ?? 999))
 }
 
 function buildVehicleHistoryHighlightCards(car) {
@@ -1931,7 +1945,7 @@ export default function CarDetailsPage() {
               <h4 className="car-inspection-title">Статистика</h4>
               <div className="car-history-stats-grid">
                 {historyStatisticsEntries.map((entry) => (
-                  <div key={entry.key} className={`car-history-stat-card car-history-stat-card-${entry.tone || 'neutral'}`}>
+                  <div key={entry.key} className={`car-history-stat-card car-history-stat-card-${entry.tone || 'neutral'}${entry.key === 'atFaultDamage' || entry.key === 'notAtFaultDamage' ? ' car-history-stat-card-damage-compare' : ''}`}>
                     <span>{entry.label}</span>
                     <strong>{entry.value}</strong>
                     {entry.secondary ? <small>{entry.secondary}</small> : null}
