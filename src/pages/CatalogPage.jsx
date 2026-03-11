@@ -671,6 +671,8 @@ export default function CatalogPage() {
   const [filters, setFilters] = useState({ minYear: MIN_CATALOG_YEAR })
   const [page, setPage] = useState(1)
   const sortRef = useRef(null)
+  const listAbortControllerRef = useRef(null)
+  const activeCatalogRequestRef = useRef(0)
   const location = useLocation()
   const searchQuery = new URLSearchParams(location.search).get('q')?.trim() || ''
   const activeSortOption = SORT_OPTIONS.find((option) => option.value === sort) || SORT_OPTIONS[0]
@@ -701,19 +703,21 @@ export default function CatalogPage() {
     setPage(1)
   }, [])
 
-  const fetchCarsFallback = useCallback(async () => {
+  const fetchCarsFallback = useCallback(async ({ signal, requestId } = {}) => {
     const fallbackLimit = 250
     const fallbackPages = 4
     const fallbackCars = []
     let loadedAnyPage = false
 
     for (let currentPage = 1; currentPage <= fallbackPages; currentPage += 1) {
+      if (signal?.aborted || requestId !== activeCatalogRequestRef.current) return false
+
       const params = appendFilterParams(new URLSearchParams(), filters)
       params.set('sort', sort)
       params.set('page', String(currentPage))
       params.set('limit', String(fallbackLimit))
 
-      const res = await fetch(`/api/cars?${params}`)
+      const res = await fetch(`/api/cars?${params}`, { signal })
       if (!res.ok) {
         if (loadedAnyPage) break
         throw new Error('\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f \u043e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u0438\u0441\u043a\u0430. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c.')
@@ -727,13 +731,23 @@ export default function CatalogPage() {
       if (!mappedCars.length || mappedCars.length < fallbackLimit) break
     }
 
+    if (signal?.aborted || requestId !== activeCatalogRequestRef.current) return false
+
     const filteredCars = fallbackCars.filter((car) => carMatchesSearch(car, searchQuery))
     setCars(filteredCars)
     setMeta({ total: filteredCars.length, page: 1, pages: 1 })
     setError(filteredCars.length ? null : '\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e')
+    return true
   }, [sort, filters, searchQuery])
 
   const fetchCars = useCallback(async () => {
+    const requestId = activeCatalogRequestRef.current + 1
+    activeCatalogRequestRef.current = requestId
+    listAbortControllerRef.current?.abort()
+    const controller = new AbortController()
+    listAbortControllerRef.current = controller
+    const isStale = () => controller.signal.aborted || requestId !== activeCatalogRequestRef.current
+
     setLoading(true)
     setError(null)
     try {
@@ -742,10 +756,10 @@ export default function CatalogPage() {
       params.set('page', String(page))
       params.set('limit', '20')
       if (searchQuery) params.set('q', searchQuery)
-      const res = await fetch(`/api/cars?${params}`)
+      const res = await fetch(`/api/cars?${params}`, { signal: controller.signal })
       if (!res.ok) {
         if (searchQuery) {
-          await fetchCarsFallback()
+          await fetchCarsFallback({ signal: controller.signal, requestId })
           return
         }
         throw new Error('\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438')
@@ -754,9 +768,11 @@ export default function CatalogPage() {
 
       const mappedCars = data.cars.map(mapCar)
       if (searchQuery && data.total === 0) {
-        await fetchCarsFallback()
+        await fetchCarsFallback({ signal: controller.signal, requestId })
         return
       }
+      if (isStale()) return
+
       setCars(mappedCars)
       setMeta({ total: data.total, page: data.page, pages: data.pages })
 
@@ -765,10 +781,10 @@ export default function CatalogPage() {
         const patchesToPersist = []
         const enrichedCars = await Promise.all(
           mappedCars.map(async (car) => {
-            if (!needsEncarEnrichment(car)) return car
+            if (isStale() || !needsEncarEnrichment(car)) return car
 
             const detail = await fetchEncarDetail(car.encarId)
-            if (!detail) return car
+            if (isStale() || !detail) return car
 
             const next = { ...car }
             if (shouldUpgradeVehicleTitle(car.name) && detail.name) next.name = detail.name
@@ -829,6 +845,8 @@ export default function CatalogPage() {
           })
         )
 
+        if (isStale()) return
+
         setCars((prev) => {
           const prevIds = prev.map((c) => c.id).join(',')
           const enrichedIds = enrichedCars.map((c) => c.id).join(',')
@@ -836,7 +854,7 @@ export default function CatalogPage() {
           return enrichedCars
         })
 
-        if (patchesToPersist.length) {
+        if (patchesToPersist.length && !isStale()) {
           Promise.allSettled(
             patchesToPersist.map(({ id, patch }) =>
               fetch(`/api/cars/${id}`, {
@@ -849,24 +867,36 @@ export default function CatalogPage() {
         }
       }
     } catch (e) {
+      if (e?.name === 'AbortError' || isStale()) return
+
       if (searchQuery) {
         try {
-          await fetchCarsFallback()
+          await fetchCarsFallback({ signal: controller.signal, requestId })
           return
         } catch {
+          if (isStale()) return
           setError('\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f \u043e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u0438\u0441\u043a\u0430. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c.')
         }
-      } else {
+      } else if (!isStale()) {
         setError(e.message)
       }
     } finally {
-      setLoading(false)
+      if (listAbortControllerRef.current === controller) {
+        listAbortControllerRef.current = null
+      }
+      if (!isStale()) {
+        setLoading(false)
+      }
     }
   }, [sort, page, filters, searchQuery, fetchCarsFallback])
 
   useEffect(() => {
     fetchCars()
   }, [fetchCars])
+
+  useEffect(() => () => {
+    listAbortControllerRef.current?.abort()
+  }, [])
 
   useEffect(() => {
     setPage(1)

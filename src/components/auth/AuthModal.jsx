@@ -110,6 +110,7 @@ export default function AuthModal({
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [expiresAt, setExpiresAt] = useState('')
   const [now, setNow] = useState(Date.now())
+  const [confirmationReady, setConfirmationReady] = useState(false)
   const [recaptchaReady, setRecaptchaReady] = useState(false)
   const [recaptchaVerified, setRecaptchaVerified] = useState(IS_FIREBASE_TEST_MODE)
   const [recaptchaVersion, setRecaptchaVersion] = useState(0)
@@ -125,7 +126,7 @@ export default function AuthModal({
   const expiresSeconds = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000)) : 0
   const hasRequestedCode = authStep === 'code' || Boolean(requestedPhone)
   const activePhone = requestedPhone || composedPhone
-  const hasActiveConfirmation = Boolean(confirmationResultRef.current) && expiresSeconds > 0
+  const hasActiveConfirmation = confirmationReady && expiresSeconds > 0
   const serverAuthReady = authStatus?.ready !== false
   const shouldShowRecaptcha = !user
     && isFirebaseConfigured
@@ -193,6 +194,7 @@ export default function AuthModal({
     }
     setCooldownUntil(0)
     setNow(Date.now())
+    setConfirmationReady(false)
     setRecaptchaVerified(IS_FIREBASE_TEST_MODE)
     confirmationResultRef.current = null
   }
@@ -362,9 +364,6 @@ export default function AuthModal({
 
     try {
       await reserveSmsRequest(targetPhone)
-      setRequestedPhone(targetPhone)
-      setAuthStep('code')
-      setCode('')
       setStatus(`Отправляем SMS-код на ${formatPhoneFull(targetPhone)}...`)
       setNow(Date.now())
       const confirmation = await signInWithPhoneNumber(
@@ -374,6 +373,9 @@ export default function AuthModal({
       )
 
       confirmationResultRef.current = confirmation
+      setConfirmationReady(true)
+      setRequestedPhone(targetPhone)
+      setAuthStep('code')
       setExpiresAt(new Date(Date.now() + CODE_TTL_SECONDS * 1000).toISOString())
       setCooldownUntil(Date.now() + RESEND_SECONDS * 1000)
       setCode('')
@@ -383,14 +385,7 @@ export default function AuthModal({
       setRecaptchaReady(false)
     } catch (requestError) {
       if (requestError?.code === 'sms/request-limit') {
-        if (resendFromVerificationStep) {
-          confirmationResultRef.current = null
-          setAuthStep('code')
-          setRequestedPhone(targetPhone)
-          setCode('')
-          setExpiresAt('')
-          setStatus('')
-        } else {
+        if (!resendFromVerificationStep) {
           resetVerificationState({ preserveStatus: false })
         }
         if (requestError.retryAfterSeconds > 0) {
@@ -401,12 +396,21 @@ export default function AuthModal({
         return
       }
 
-      confirmationResultRef.current = null
-      setAuthStep('code')
-      setRequestedPhone(targetPhone)
-      setCode('')
-      setExpiresAt('')
-      setCooldownUntil(0)
+      if (!resendFromVerificationStep) {
+        confirmationResultRef.current = null
+        setConfirmationReady(false)
+        setAuthStep('phone')
+        setRequestedPhone('')
+        setCode('')
+        setExpiresAt('')
+        setCooldownUntil(0)
+      } else if (!hasActiveConfirmation) {
+        confirmationResultRef.current = null
+        setConfirmationReady(false)
+        setCode('')
+        setExpiresAt('')
+        setCooldownUntil(0)
+      }
       setNow(Date.now())
       setStatus('SMS-\u0441\u0435\u0441\u0441\u0438\u044f \u043d\u0435 \u0441\u043e\u0437\u0434\u0430\u043b\u0430\u0441\u044c. \u041f\u0440\u043e\u0439\u0434\u0438\u0442\u0435 reCAPTCHA \u0438 \u0437\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u0435 \u043a\u043e\u0434 \u0437\u0430\u043d\u043e\u0432\u043e.')
       setError(mapFirebaseError(requestError, 'Не удалось отправить код'))
@@ -443,6 +447,7 @@ export default function AuthModal({
       if (verifyError?.code === 'auth/code-expired' || verifyError?.code === 'auth/session-expired') {
         setCooldownUntil(0)
         setExpiresAt(new Date().toISOString())
+        setConfirmationReady(false)
         refreshRecaptcha()
       }
       setError(mapFirebaseError(verifyError, 'Не удалось подтвердить код'))
