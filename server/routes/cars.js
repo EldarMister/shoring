@@ -284,8 +284,21 @@ function normalizeSearchValue(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/[._-]+/g, ' ')
+    .replace(/[#:/\\]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function compactSearchValue(value) {
+  return normalizeSearchValue(value).replace(/\s+/g, '')
+}
+
+function extractSearchId(value) {
+  const matched = String(value || '').trim().match(/^(?:#\s*|id[\s:#-]*)?(\d+)$/i)
+  if (!matched) return null
+
+  const parsed = Number.parseInt(matched[1], 10)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function tokenizeSearchValue(value) {
@@ -393,6 +406,7 @@ router.get('/', async (req, res) => {
       minYear, maxYear,
       minMileage, maxMileage,
       fuel, drive, body, color, interiorColor, origin,
+      adminSearch,
       sort = 'newest',
       page = 1, limit = 20,
     } = req.query
@@ -406,6 +420,7 @@ router.get('/', async (req, res) => {
     let p = 1
 
     const qText = String(q || '').trim()
+    const isAdminSearch = ['1', 'true', 'yes'].includes(String(adminSearch || '').toLowerCase())
     const brandValues = parseListFilter(brand)
     const fuelValues = parseListFilter(fuel)
     const driveValues = parseListFilter(drive)
@@ -428,8 +443,11 @@ router.get('/', async (req, res) => {
         OR c.model ILIKE ANY($${p}::text[])
         OR REPLACE(COALESCE(c.name, ''), ' ', '') ILIKE ANY($${p}::text[])
         OR REPLACE(COALESCE(c.model, ''), ' ', '') ILIKE ANY($${p}::text[])
+        ${isAdminSearch ? `OR COALESCE(c.id::text, '') ILIKE ANY($${p}::text[])` : ''}
         OR COALESCE(c.vin::text, '') ILIKE ANY($${p}::text[])
+        OR REPLACE(COALESCE(c.vin::text, ''), ' ', '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.encar_id::text, '') ILIKE ANY($${p}::text[])
+        OR REPLACE(COALESCE(c.encar_id::text, ''), ' ', '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.body_type, '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.vehicle_class, '') ILIKE ANY($${p}::text[])
         OR COALESCE(c.drive_type, '') ILIKE ANY($${p}::text[])
@@ -453,8 +471,11 @@ router.get('/', async (req, res) => {
           OR c.model ILIKE $${p}
           OR REPLACE(COALESCE(c.name, ''), ' ', '') ILIKE $${p}
           OR REPLACE(COALESCE(c.model, ''), ' ', '') ILIKE $${p}
+          ${isAdminSearch ? `OR COALESCE(c.id::text, '') ILIKE $${p}` : ''}
           OR COALESCE(c.vin::text, '') ILIKE $${p}
+          OR REPLACE(COALESCE(c.vin::text, ''), ' ', '') ILIKE $${p}
           OR COALESCE(c.encar_id::text, '') ILIKE $${p}
+          OR REPLACE(COALESCE(c.encar_id::text, ''), ' ', '') ILIKE $${p}
           OR COALESCE(c.body_type, '') ILIKE $${p}
           OR COALESCE(c.vehicle_class, '') ILIKE $${p}
           OR COALESCE(c.drive_type, '') ILIKE $${p}
@@ -571,19 +592,48 @@ router.get('/', async (req, res) => {
     let orderBySql = orderBy
 
     if (qText) {
+      const exactSearchId = isAdminSearch ? extractSearchId(qText) : null
       const exactLower = qText.toLowerCase()
+      const exactCompact = compactSearchValue(qText) || exactLower
       const prefix = `${qText}%`
+      const contains = `%${qText}%`
+      const ranking = []
+      let rank = 0
+
+      if (exactSearchId !== null) {
+        ranking.push(`WHEN c.id = $${p} THEN ${rank++}`)
+        params.push(exactSearchId)
+        p++
+      }
+
+      ranking.push(`WHEN LOWER(COALESCE(c.encar_id::text, '')) = $${p} THEN ${rank++}`)
+      params.push(exactCompact)
+      p++
+
+      ranking.push(`WHEN LOWER(COALESCE(c.vin::text, '')) = $${p} THEN ${rank++}`)
+      params.push(exactCompact)
+      p++
+
+      ranking.push(`WHEN c.name ILIKE $${p} THEN ${rank++}`)
+      params.push(prefix)
+      p++
+
+      ranking.push(`WHEN c.model ILIKE $${p} THEN ${rank++}`)
+      params.push(prefix)
+      p++
+
+      ranking.push(`WHEN c.name ILIKE $${p} THEN ${rank++}`)
+      params.push(contains)
+      p++
+
+      ranking.push(`WHEN c.model ILIKE $${p} THEN ${rank++}`)
+      params.push(contains)
+      p++
+
+      ranking.push(`ELSE ${rank}`)
       orderBySql = `CASE
-        WHEN LOWER(COALESCE(c.encar_id::text, '')) = $${p} THEN 0
-        WHEN LOWER(COALESCE(c.vin::text, '')) = $${p} THEN 1
-        WHEN c.name ILIKE $${p + 1} THEN 2
-        WHEN c.model ILIKE $${p + 1} THEN 3
-        WHEN c.name ILIKE $${p + 2} THEN 4
-        WHEN c.model ILIKE $${p + 2} THEN 5
-        ELSE 6
+        ${ranking.join('\n        ')}
       END, ${orderBy}`
-      params.push(exactLower, prefix, `%${qText}%`)
-      p += 3
     }
 
     const offset = (Number(page) - 1) * Number(limit)

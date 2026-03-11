@@ -907,8 +907,9 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
     const load = useCallback(async (pg, sq, so) => {
         setLoading(true); setError(null)
         try {
-            const p = { page: pg, limit: 20, sort: so }
-            if (sq) p.brand = sq
+            const p = { page: pg, limit: 20, sort: so, adminSearch: '1' }
+            const query = String(sq || '').trim()
+            if (query) p.q = query
             const d = await api.getCars(p)
             setCars(d.cars || []); setTotal(d.total || 0); setPages(d.pages || 1)
         } catch (e) { setError(e.message) }
@@ -971,7 +972,13 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
         window.localStorage.setItem(ENRICH_REPORT_VISIBILITY_KEY, isEnrichReportOpen ? '1' : '0')
     }, [isEnrichReportOpen])
 
-    const doSearch = e => { e.preventDefault(); setPage(1); load(1, search, sort) }
+    const doSearch = e => {
+        e.preventDefault()
+        const query = search.trim()
+        setSearch(query)
+        setPage(1)
+        load(1, query, sort)
+    }
     const reset = () => { setSearch(''); setPage(1); load(1, '', sort) }
 
     const save = async data => {
@@ -1147,7 +1154,7 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
                 <form className="adm-search-form" onSubmit={doSearch}>
                     <div className="adm-search-wrap">
                         <Ic d={IC.search} s={15} />
-                        <input className="adm-search-input" placeholder="Поиск по марке..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <input className="adm-search-input" placeholder="Поиск по VIN, названию, ID или Encar ID..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                     <button className="adm-btn adm-btn-sm" type="submit">Найти</button>
                     <button className="adm-btn adm-btn-sm adm-btn-cancel" type="button" onClick={reset}>Сбросить</button>
