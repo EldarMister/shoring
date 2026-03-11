@@ -1906,16 +1906,19 @@ body {
 }
 
 .cat-quick-filter-group {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
+  width: min(100%, 360px);
 }
 
 .cat-quick-filter-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  min-height: 42px;
+  width: 100%;
   padding: 9px 14px;
   border-radius: 999px;
   border: 1.5px solid #d8e1eb;
@@ -1926,6 +1929,10 @@ body {
   line-height: 1;
   cursor: pointer;
   transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.cat-quick-filter-btn-all {
+  grid-column: 1 / -1;
 }
 
 .cat-quick-filter-btn:hover {

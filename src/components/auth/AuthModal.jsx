@@ -125,11 +125,11 @@ export default function AuthModal({
   const expiresSeconds = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000)) : 0
   const hasRequestedCode = authStep === 'code' || Boolean(requestedPhone)
   const activePhone = requestedPhone || composedPhone
+  const hasActiveConfirmation = Boolean(confirmationResultRef.current) && expiresSeconds > 0
   const serverAuthReady = authStatus?.ready !== false
   const shouldShowRecaptcha = !user
     && isFirebaseConfigured
-    && !submittingRequest
-    && (!hasRequestedCode || resendSeconds === 0)
+    && (!hasRequestedCode || resendSeconds === 0 || submittingRequest)
   const canRequestCode = (
     isFirebaseConfigured
     && serverAuthReady
@@ -143,7 +143,7 @@ export default function AuthModal({
   const codeDigitsLength = code.trim().length
   const canVerifyCode = (
     hasRequestedCode
-    && Boolean(confirmationResultRef.current)
+    && hasActiveConfirmation
     && codeDigitsLength >= 4
     && codeDigitsLength <= 6
     && !submittingRequest
@@ -367,7 +367,6 @@ export default function AuthModal({
       setCode('')
       setStatus(`Отправляем SMS-код на ${formatPhoneFull(targetPhone)}...`)
       setNow(Date.now())
-      await signOut(firebaseAuth).catch(() => {})
       const confirmation = await signInWithPhoneNumber(
         firebaseAuth,
         targetPhone,
@@ -409,7 +408,7 @@ export default function AuthModal({
       setExpiresAt('')
       setCooldownUntil(0)
       setNow(Date.now())
-      setStatus('SMS session failed. Complete reCAPTCHA and send the code again.')
+      setStatus('SMS-\u0441\u0435\u0441\u0441\u0438\u044f \u043d\u0435 \u0441\u043e\u0437\u0434\u0430\u043b\u0430\u0441\u044c. \u041f\u0440\u043e\u0439\u0434\u0438\u0442\u0435 reCAPTCHA \u0438 \u0437\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u0435 \u043a\u043e\u0434 \u0437\u0430\u043d\u043e\u0432\u043e.')
       setError(mapFirebaseError(requestError, 'Не удалось отправить код'))
       refreshRecaptcha()
     } finally {
@@ -420,8 +419,8 @@ export default function AuthModal({
   const handleVerifyCode = async (event) => {
     event.preventDefault()
 
-    if (!confirmationResultRef.current) {
-      setError('SMS session is not ready yet. Send the code again.')
+    if (!confirmationResultRef.current || !hasActiveConfirmation) {
+      setError('SMS-\u0441\u0435\u0441\u0441\u0438\u044f \u0435\u0449\u0451 \u043d\u0435 \u0433\u043e\u0442\u043e\u0432\u0430. \u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u0435 \u043a\u043e\u0434 \u0437\u0430\u043d\u043e\u0432\u043e.')
       return
     }
 
@@ -568,7 +567,9 @@ export default function AuthModal({
                     {resendSeconds > 0 ? `Повторная отправка через ${formatSeconds(resendSeconds)}` : 'Можно отправить код повторно'}
                   </span>
                   <span className="auth-timer-pill auth-timer-pill-muted">
-                    Код активен еще {formatSeconds(expiresSeconds)}
+                    {hasActiveConfirmation
+                      ? `\u041a\u043e\u0434 \u0430\u043a\u0442\u0438\u0432\u0435\u043d \u0435\u0449\u0451 ${formatSeconds(expiresSeconds)}`
+                      : '\u0421\u0435\u0441\u0441\u0438\u044f \u043a\u043e\u0434\u0430 \u0435\u0449\u0451 \u043d\u0435 \u0430\u043a\u0442\u0438\u0432\u043d\u0430'}
                   </span>
                 </div>
 

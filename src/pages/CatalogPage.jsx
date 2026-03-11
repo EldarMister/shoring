@@ -305,6 +305,21 @@ function normalizeDisplacementValue(value) {
   return 0
 }
 
+function appendFilterParams(params, filters) {
+  for (const [key, value] of Object.entries(filters || {})) {
+    if (value === undefined || value === null || value === '') continue
+    if (Array.isArray(value)) {
+      value
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .forEach((item) => params.append(key, item))
+      continue
+    }
+    params.set(key, String(value))
+  }
+  return params
+}
+
 function inferEngineLiters(...values) {
   const text = values
     .map((value) => String(value || '').trim())
@@ -663,6 +678,7 @@ export default function CatalogPage() {
   const hasImportedOriginFilter = normalizedOriginFilters.includes('imported')
   const hasKoreanOriginFilter = normalizedOriginFilters.includes('korean')
   const isImportedQuickFilterActive = hasImportedOriginFilter && !hasKoreanOriginFilter
+  const isKoreanQuickFilterActive = hasKoreanOriginFilter && !hasImportedOriginFilter
   const isAllCarsQuickFilterActive = normalizedOriginFilters.length === 0 || (hasImportedOriginFilter && hasKoreanOriginFilter)
 
   const applyQuickOriginFilter = useCallback((mode) => {
@@ -673,6 +689,11 @@ export default function CatalogPage() {
         next.origin = [VEHICLE_ORIGIN_LABELS.imported]
         return next
       }
+      if (mode === 'korean') {
+        next.origin = [VEHICLE_ORIGIN_LABELS.korean]
+        return next
+      }
+
 
       delete next.origin
       return next
@@ -681,22 +702,45 @@ export default function CatalogPage() {
   }, [])
 
   const fetchCarsFallback = useCallback(async () => {
-    const params = new URLSearchParams({ sort, page: 1, limit: 1000, ...filters })
-    const res = await fetch(`/api/cars?${params}`)
-    if (!res.ok) throw new Error('Search fallback failed')
-    const data = await res.json()
-    const mappedCars = data.cars.map(mapCar)
-    const filteredCars = mappedCars.filter((car) => carMatchesSearch(car, searchQuery))
+    const fallbackLimit = 250
+    const fallbackPages = 4
+    const fallbackCars = []
+    let loadedAnyPage = false
+
+    for (let currentPage = 1; currentPage <= fallbackPages; currentPage += 1) {
+      const params = appendFilterParams(new URLSearchParams(), filters)
+      params.set('sort', sort)
+      params.set('page', String(currentPage))
+      params.set('limit', String(fallbackLimit))
+
+      const res = await fetch(`/api/cars?${params}`)
+      if (!res.ok) {
+        if (loadedAnyPage) break
+        throw new Error('\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f \u043e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u0438\u0441\u043a\u0430. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c.')
+      }
+
+      const data = await res.json()
+      const mappedCars = Array.isArray(data.cars) ? data.cars.map(mapCar) : []
+      loadedAnyPage = true
+      fallbackCars.push(...mappedCars)
+
+      if (!mappedCars.length || mappedCars.length < fallbackLimit) break
+    }
+
+    const filteredCars = fallbackCars.filter((car) => carMatchesSearch(car, searchQuery))
     setCars(filteredCars)
     setMeta({ total: filteredCars.length, page: 1, pages: 1 })
-    setError(filteredCars.length ? null : 'Ничего не найдено')
+    setError(filteredCars.length ? null : '\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e')
   }, [sort, filters, searchQuery])
 
   const fetchCars = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ sort, page, limit: 20, ...filters })
+      const params = appendFilterParams(new URLSearchParams(), filters)
+      params.set('sort', sort)
+      params.set('page', String(page))
+      params.set('limit', '20')
       if (searchQuery) params.set('q', searchQuery)
       const res = await fetch(`/api/cars?${params}`)
       if (!res.ok) {
@@ -704,7 +748,7 @@ export default function CatalogPage() {
           await fetchCarsFallback()
           return
         }
-        throw new Error('Ошибка загрузки')
+        throw new Error('\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438')
       }
       const data = await res.json()
 
@@ -810,7 +854,7 @@ export default function CatalogPage() {
           await fetchCarsFallback()
           return
         } catch {
-          setError(e.message)
+          setError('\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f \u043e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u0438\u0441\u043a\u0430. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c.')
         }
       } else {
         setError(e.message)
@@ -872,28 +916,37 @@ export default function CatalogPage() {
           />
         </aside>
 
+
         {sidebarOpen && <div className="cat-sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
         <main className="cat-main">
           <div className="cat-filter-toolbar">
             <button className="cat-filter-btn" onClick={() => setSidebarOpen(true)}>
-            <FilterIcon /> Фильтры
+              <FilterIcon /> {'\u0424\u0438\u043b\u044c\u0442\u0440\u044b'}
             </button>
-            <div className="cat-quick-filter-group" aria-label="Быстрые фильтры каталога">
+            <div className="cat-quick-filter-group" aria-label={'\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u0444\u0438\u043b\u044c\u0442\u0440\u044b \u043a\u0430\u0442\u0430\u043b\u043e\u0433\u0430'}>
               <button
                 type="button"
-                className={`cat-quick-filter-btn${isAllCarsQuickFilterActive ? ' is-active' : ''}`}
+                className={`cat-quick-filter-btn cat-quick-filter-btn-all${isAllCarsQuickFilterActive ? ' is-active' : ''}`}
                 onClick={() => applyQuickOriginFilter('all')}
               >
-                Все машины
+                {'\u0412\u0441\u0435 \u043c\u0430\u0448\u0438\u043d\u044b'}
+              </button>
+              <button
+                type="button"
+                className={`cat-quick-filter-btn${isKoreanQuickFilterActive ? ' is-active is-clearable' : ''}`}
+                onClick={() => applyQuickOriginFilter(isKoreanQuickFilterActive ? 'all' : 'korean')}
+              >
+                <span>{'\u041a\u043e\u0440\u0435\u0439\u0446\u044b'}</span>
+                {isKoreanQuickFilterActive ? <span className="cat-quick-filter-clear" aria-hidden="true">{'\u274c'}</span> : null}
               </button>
               <button
                 type="button"
                 className={`cat-quick-filter-btn${isImportedQuickFilterActive ? ' is-active is-clearable' : ''}`}
                 onClick={() => applyQuickOriginFilter(isImportedQuickFilterActive ? 'all' : 'imported')}
               >
-                <span>Импортные машины</span>
-                {isImportedQuickFilterActive ? <span className="cat-quick-filter-clear" aria-hidden="true">❌</span> : null}
+                <span>{'\u0418\u043c\u043f\u043e\u0440\u0442'}</span>
+                {isImportedQuickFilterActive ? <span className="cat-quick-filter-clear" aria-hidden="true">{'\u274c'}</span> : null}
               </button>
             </div>
           </div>
@@ -990,4 +1043,3 @@ export default function CatalogPage() {
     </div>
   )
 }
-
