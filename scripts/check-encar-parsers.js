@@ -147,10 +147,25 @@ function run() {
   const falsePositiveInterior = extractInteriorColorFromText('blackbox camera QXD7000 with parking assist', '\u0411\u0435\u043B\u044B\u0439')
   assert.equal(falsePositiveInterior, '')
 
+  const bluetoothInterior = extractInteriorColorFromText('Bluetooth package black leather interior with premium audio', '')
+  assert.equal(bluetoothInterior, '\u0427\u0435\u0440\u043D\u044B\u0439')
+
+  const twoToneBySegments = extractInteriorColorFromText('beige leather seats / black dashboard trim', '')
+  assert.equal(twoToneBySegments, '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043D\u044B\u0439')
+
+  const twoToneBySentence = extractInteriorColorFromText('beige seats with black dashboard and red door trim', '')
+  assert.equal(twoToneBySentence, '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043D\u044B\u0439')
+
   const whiteInterior = extractInteriorColorFromPairs([
     { label: 'interior color', value: 'white' },
   ], 'white')
   assert.equal(whiteInterior, '\u0411\u0435\u043B\u044B\u0439')
+
+  const pairedTwoToneInterior = extractInteriorColorFromPairs([
+    { label: 'seat color', value: 'beige leather' },
+    { label: 'door trim', value: 'black' },
+  ], '')
+  assert.equal(pairedTwoToneInterior, '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043D\u044B\u0439')
 
   const distantLeatherInterior = extractInteriorColorFromText('brown nappa leather premium seats with memory package', '\u0411\u0435\u043B\u044B\u0439')
   assert.equal(distantLeatherInterior, '\u041A\u043E\u0440\u0438\u0447\u043D\u0435\u0432\u044B\u0439')
@@ -161,6 +176,8 @@ function run() {
   assert.equal(normalizeInteriorColorName('dark gray'), '\u0422\u0435\u043C\u043D\u043E-\u0441\u0435\u0440\u044B\u0439')
   assert.equal(normalizeInteriorColorName('light gray'), '\u0421\u0432\u0435\u0442\u043B\u043E-\u0441\u0435\u0440\u044B\u0439')
   assert.equal(normalizeInteriorColorName('black leather'), '\u0427\u0435\u0440\u043D\u044B\u0439')
+  assert.equal(normalizeInteriorColorName('light interior package'), '')
+  assert.equal(normalizeInteriorColorName('snow white'), '')
   assert.equal(normalizeInteriorColorName('Gonggan'), '')
   assert.equal(normalizeInteriorColorName('blackbox camera QXD7000 with parking assist'), '')
   assert.equal(normalizeInteriorColorName('Wa Siloega Kkaekkeuthapnida - Gwanrisangtae Modeun Jeongbireul Machin Sangtaeipnida'), '')

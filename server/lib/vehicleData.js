@@ -155,7 +155,9 @@ const INTERIOR_COLOR_TEXT_PATTERNS = Object.freeze([
 const INTERIOR_COLOR_CONTEXT_RE = new RegExp(INTERIOR_COLOR_CONTEXT_MARKERS, 'i')
 const INTERIOR_TWO_TONE_HINT_RE = /(?:\uD22C\s*\uD1A4|\uD22C\uD1A4|\uCEE8\uD2B8\uB77C\uC2A4\uD2B8|two[-\s]*tone|bi[-\s]*tone|dual[-\s]*tone|contrast)/i
 const INTERIOR_COLOR_SEPARATOR_RE = /(?:\/|&|\+|,|\band\b)/i
+const INTERIOR_COLOR_BOUNDARY_RE = /[\p{L}\p{N}]/u
 const INTERIOR_COLOR_VALUE_RE = /(?:\b(?:black|white|beige|brown|gray|grey|red|blue|green|orange|ivory|cream|burgundy|wine|tan|camel|caramel|cognac|charcoal|graphite)\b|(?:\uBE14\uB799|\uAC80\uC815|\uD751\uC0C9|\uD654\uC774\uD2B8|\uD770\uC0C9|\uBC31\uC0C9|\uBCA0\uC774\uC9C0|\uBE0C\uB77C\uC6B4|\uADF8\uB808\uC774|\uD68C\uC0C9|\uB808\uB4DC|\uC801\uC0C9|\uB124\uC774\uBE44|\uCCAD\uC0C9|\uADF8\uB9B0|\uC624\uB80C\uC9C0|\uC544\uC774\uBCF4\uB9AC|\uD06C\uB9BC|\uBC84\uAC74\uB514|\uC640\uC778|\uCE74\uBA5C|\uCE90\uB7EC\uBA5C|\uCF54\uB0D1|\uCC28\uCF5C|\uADF8\uB798\uD53C\uD2B8))/i
+const INTERIOR_MARKETING_WHITE_RE = /\b(?:snow\s*white|pure\s*white|polar\s*white|pearl\s*white)\b/i
 const INTERIOR_MATERIAL_HINT_RE = /(?:\b(?:leather|nappa|alcantara|suede|quilted|perforated|premium|natural|seat(?:s)?|interior|trim|upholstery)\b|(?:\uAC00\uC8FD|\uB098\uD30C|\uC2DC\uD2B8|\uB0B4\uC7A5|\uC778\uD14C\uB9AC\uC5B4))/i
 const INTERIOR_EXPLICIT_VALUE_RES = Object.freeze([
   new RegExp(`${INTERIOR_COLOR_EXPLICIT_LABEL_MARKERS}(?:\\s*(?:\\uC0C9\\uC0C1|\\uCEEC\\uB7EC|color|trim))?\\s*[:=-]?\\s*([^|,;\\n]{2,80})`, 'i'),
@@ -991,9 +993,28 @@ function mapGenericInteriorColor(value) {
   else if (normalized === '\u0412\u0438\u043d\u043d\u044b\u0439') mapped = '\u0411\u043e\u0440\u0434\u043e\u0432\u044b\u0439'
   else if (normalized === '\u0413\u0440\u0430\u0444\u0438\u0442\u043e\u0432\u044b\u0439' || normalized === '\u041c\u043e\u043a\u0440\u044b\u0439 \u0430\u0441\u0444\u0430\u043b\u044c\u0442') mapped = '\u0422\u0435\u043c\u043d\u043e-\u0441\u0435\u0440\u044b\u0439'
   else if (normalized === '\u0421\u0435\u0440\u0435\u0431\u0440\u0438\u0441\u0442\u044b\u0439' || normalized === '\u0421\u0435\u0440\u0435\u0431\u0440\u0438\u0441\u0442\u043e-\u0441\u0435\u0440\u044b\u0439') mapped = '\u0421\u0432\u0435\u0442\u043b\u043e-\u0441\u0435\u0440\u044b\u0439'
-  else if (normalized === '\u0416\u0435\u043c\u0447\u0443\u0436\u043d\u044b\u0439' || normalized === '\u0416\u0435\u043c\u0447\u0443\u0436\u043d\u043e-\u0431\u0435\u043b\u044b\u0439' || normalized === '\u0421\u043d\u0435\u0436\u043d\u044b\u0439 \u0431\u0435\u043b\u044b\u0439') mapped = '\u0411\u0435\u043b\u044b\u0439'
 
   return INTERIOR_ALLOWED_OUTPUTS.has(mapped) ? mapped : ''
+}
+
+function isStandaloneInteriorColorMatch(text, index, matchValue) {
+  const before = text[index - 1] || ''
+  const after = text[index + matchValue.length] || ''
+  return !INTERIOR_COLOR_BOUNDARY_RE.test(before) && !INTERIOR_COLOR_BOUNDARY_RE.test(after)
+}
+
+function getInteriorColorMatchWindow(text, index, matchValue) {
+  const radius = 24
+  const start = Math.max(0, index - radius)
+  const end = Math.min(text.length, index + matchValue.length + radius)
+  return text.slice(start, end)
+}
+
+function isShortInteriorColorValue(value) {
+  const text = cleanText(value)
+  if (!text) return false
+  const tokens = text.split(/\s+/).filter(Boolean)
+  return tokens.length <= 5 && text.length <= 42 && !/[.!?]/.test(text)
 }
 
 function shouldKeepInteriorColorValue(rawValue, normalizedValue) {
@@ -1002,39 +1023,120 @@ function shouldKeepInteriorColorValue(rawValue, normalizedValue) {
   if (!raw || !normalized || !INTERIOR_ALLOWED_OUTPUTS.has(normalized)) return false
   if (raw === normalized) return true
   if (INTERIOR_TWO_TONE_HINT_RE.test(raw)) return true
-  if (INTERIOR_COLOR_CONTEXT_RE.test(raw) || INTERIOR_MATERIAL_HINT_RE.test(raw)) return true
-  if (INTERIOR_COLOR_VALUE_RE.test(raw) && raw.length <= 36 && raw.split(/\s+/).filter(Boolean).length <= 5) return true
-  return raw.length <= 24 && raw.split(/\s+/).filter(Boolean).length <= 3
+  if (isShortInteriorColorValue(raw) && INTERIOR_COLOR_VALUE_RE.test(raw)) return true
+  if (raw.length > 80 || /[.!?]/.test(raw)) return false
+  if (INTERIOR_MATERIAL_HINT_RE.test(raw) && raw.split(/\s+/).filter(Boolean).length <= 10) return true
+  if (INTERIOR_COLOR_CONTEXT_RE.test(raw) && raw.split(/\s+/).filter(Boolean).length <= 8) return true
+  return false
 }
 
-function collectInteriorColorMatches(value) {
+function collectInteriorColorEvidence(value) {
   const text = cleanText(value)
   if (!text) return []
 
   const matches = []
   for (const { color, source } of INTERIOR_COLOR_TEXT_PATTERNS) {
-    const pattern = new RegExp(source, 'i')
-    if (pattern.test(text) && !matches.includes(color)) matches.push(color)
+    const pattern = new RegExp(source, 'ig')
+    let match
+
+    while ((match = pattern.exec(text))) {
+      const matchedValue = cleanText(match[0])
+      if (!matchedValue) continue
+      if (!isStandaloneInteriorColorMatch(text, match.index, matchedValue)) continue
+
+      const window = getInteriorColorMatchWindow(text, match.index, matchedValue)
+      const hasLocalContext =
+        INTERIOR_COLOR_CONTEXT_RE.test(window) ||
+        INTERIOR_MATERIAL_HINT_RE.test(window)
+
+      if (!hasLocalContext && color !== '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439') continue
+
+      matches.push({
+        color,
+        index: match.index,
+        matchedValue,
+        hasLocalContext,
+      })
+    }
   }
 
   return matches
 }
 
+function collectInteriorColorMatches(value) {
+  return [...new Set(collectInteriorColorEvidence(value).map((item) => item.color).filter(Boolean))]
+}
+
+function collectDirectInteriorColorMatches(value) {
+  const text = cleanText(value)
+  if (!text) return []
+
+  const matches = []
+  for (const { color, source } of INTERIOR_COLOR_TEXT_PATTERNS) {
+    if (color === '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439') continue
+
+    const pattern = new RegExp(source, 'ig')
+    let match
+    while ((match = pattern.exec(text))) {
+      const matchedValue = cleanText(match[0])
+      if (!matchedValue) continue
+      if (!isStandaloneInteriorColorMatch(text, match.index, matchedValue)) continue
+      if (!matches.includes(color)) matches.push(color)
+    }
+  }
+
+  return matches
+}
+
+function mergeInteriorColorResults(values = []) {
+  const unique = [...new Set(values.map((value) => cleanText(value)).filter(Boolean))]
+  if (!unique.length) return ''
+  if (unique.includes('\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439')) return '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439'
+  return unique.length > 1 ? '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439' : unique[0]
+}
+
 function normalizeInteriorColorCandidate(value) {
   const text = cleanText(value)
   if (!text) return ''
+  if (INTERIOR_MATERIAL_ONLY_RE.test(text)) return ''
 
-  const matches = collectInteriorColorMatches(text)
+  const shortDirectMatches = isShortInteriorColorValue(text) ? collectDirectInteriorColorMatches(text) : []
+  const shortDirectNormalized = isShortInteriorColorValue(text)
+    ? (
+      shortDirectMatches.length > 1 && (INTERIOR_COLOR_SEPARATOR_RE.test(text) || INTERIOR_TWO_TONE_HINT_RE.test(text))
+        ? '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439'
+        : shortDirectMatches[0] || mapGenericInteriorColor(normalizeColorName(text))
+    )
+    : ''
+  const evidence = collectInteriorColorEvidence(text)
+  const matches = [...new Set(
+    evidence
+      .map((item) => item.color)
+      .filter((color) => color && color !== '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439'),
+  )]
+  const contextualMatches = [...new Set(
+    evidence
+      .filter((item) => item.hasLocalContext)
+      .map((item) => item.color)
+      .filter((color) => color && color !== '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439'),
+  )]
   if (INTERIOR_TWO_TONE_HINT_RE.test(text)) {
     return shouldKeepInteriorColorValue(text, '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439') ? '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439' : ''
   }
-  if (matches.length > 1 && INTERIOR_COLOR_SEPARATOR_RE.test(text)) {
+  if (INTERIOR_MARKETING_WHITE_RE.test(text) && !contextualMatches.length) return ''
+  if (shortDirectNormalized && matches.length > 1 && !contextualMatches.length) {
+    return shouldKeepInteriorColorValue(text, shortDirectNormalized) ? shortDirectNormalized : ''
+  }
+  if (matches.length > 1 && (INTERIOR_COLOR_SEPARATOR_RE.test(text) || contextualMatches.length > 1 || isShortInteriorColorValue(text))) {
     return shouldKeepInteriorColorValue(text, '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439') ? '\u0414\u0432\u0443\u0445\u0446\u0432\u0435\u0442\u043d\u044b\u0439' : ''
   }
-  if (matches.length) return shouldKeepInteriorColorValue(text, matches[0]) ? matches[0] : ''
-  if (INTERIOR_MATERIAL_ONLY_RE.test(text)) return ''
+  if (matches.length === 1) {
+    if (!contextualMatches.length && !isShortInteriorColorValue(text)) return ''
+    return shouldKeepInteriorColorValue(text, matches[0]) ? matches[0] : ''
+  }
+  if (!isShortInteriorColorValue(text)) return ''
 
-  const normalized = mapGenericInteriorColor(normalizeColorName(text))
+  const normalized = shortDirectNormalized || mapGenericInteriorColor(normalizeColorName(text))
   return shouldKeepInteriorColorValue(text, normalized) ? normalized : ''
 }
 
@@ -1086,15 +1188,20 @@ export function extractInteriorColorFromText(value, bodyValue = '') {
   const text = cleanText(value)
   if (!text) return ''
 
+  const segmentMatches = []
   for (const segment of splitInteriorTextSegments(text)) {
     const segmentedMatch = extractInteriorColorFromSegment(segment, bodyValue)
-    if (segmentedMatch) return segmentedMatch
+    if (segmentedMatch) segmentMatches.push(segmentedMatch)
   }
+
+  const mergedSegmentMatch = mergeInteriorColorResults(segmentMatches)
+  if (mergedSegmentMatch) return mergedSegmentMatch
 
   return extractInteriorColorFromSegment(text, bodyValue)
 }
 
 export function extractInteriorColorFromPairs(pairs = [], bodyValue = '') {
+  const pairMatches = []
   for (const pair of pairs) {
     const label = cleanText(pair?.label)
     const value = cleanText(pair?.value)
@@ -1102,13 +1209,16 @@ export function extractInteriorColorFromPairs(pairs = [], bodyValue = '') {
     if (!INTERIOR_COLOR_LABEL_RE.test(label) || INTERIOR_COLOR_REJECT_RE.test(label)) continue
 
     const direct = normalizeInteriorColorName(value, bodyValue, { allowBodyDuplicate: true })
-    if (direct) return direct
+    if (direct) {
+      pairMatches.push(direct)
+      continue
+    }
 
     const contextual = extractInteriorColorFromText(`${label} ${value}`, bodyValue)
-    if (contextual) return contextual
+    if (contextual) pairMatches.push(contextual)
   }
 
-  return ''
+  return mergeInteriorColorResults(pairMatches)
 }
 
 export function isGenericColorLabel(value) {
