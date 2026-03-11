@@ -138,7 +138,14 @@ export default function AuthModal({
     && (IS_FIREBASE_TEST_MODE || recaptchaVerified)
   )
   const codeDigitsLength = code.trim().length
-  const canVerifyCode = hasRequestedCode && codeDigitsLength >= 4 && codeDigitsLength <= 6 && !submittingVerify
+  const canVerifyCode = (
+    hasRequestedCode
+    && Boolean(confirmationResultRef.current)
+    && codeDigitsLength >= 4
+    && codeDigitsLength <= 6
+    && !submittingRequest
+    && !submittingVerify
+  )
   const canResendCode = hasRequestedCode
     && resendSeconds === 0
     && !submittingRequest
@@ -351,6 +358,11 @@ export default function AuthModal({
     try {
       const targetPhone = hasRequestedCode ? requestedPhone : composedPhone
       await reserveSmsRequest(targetPhone)
+      setRequestedPhone(targetPhone)
+      setAuthStep('code')
+      setCode('')
+      setStatus(`Отправляем SMS-код на ${formatPhoneFull(targetPhone)}...`)
+      setNow(Date.now())
       await signOut(firebaseAuth).catch(() => {})
       const confirmation = await signInWithPhoneNumber(
         firebaseAuth,
@@ -359,8 +371,6 @@ export default function AuthModal({
       )
 
       confirmationResultRef.current = confirmation
-      setRequestedPhone(targetPhone)
-      setAuthStep('code')
       setExpiresAt(new Date(Date.now() + CODE_TTL_SECONDS * 1000).toISOString())
       setCooldownUntil(Date.now() + RESEND_SECONDS * 1000)
       setCode('')
@@ -370,6 +380,7 @@ export default function AuthModal({
       setRecaptchaReady(false)
     } catch (requestError) {
       if (requestError?.code === 'sms/request-limit') {
+        resetVerificationState({ preserveStatus: false })
         if (requestError.retryAfterSeconds > 0) {
           setCooldownUntil((current) => Math.max(current, Date.now() + requestError.retryAfterSeconds * 1000))
           setNow(Date.now())
@@ -378,6 +389,7 @@ export default function AuthModal({
         return
       }
 
+      resetVerificationState({ preserveStatus: false })
       setError(mapFirebaseError(requestError, 'Не удалось отправить код'))
       refreshRecaptcha()
     } finally {
