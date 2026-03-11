@@ -6440,6 +6440,37 @@ body {
   flex-wrap: wrap;
 }
 
+.adm-export-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.adm-export-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.adm-export-limit-label,
+.adm-export-limit-suffix {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.adm-export-limit-input {
+  width: 96px;
+  min-width: 96px;
+  padding: 8px 10px;
+}
+
 .adm-search-form {
   display: flex;
   align-items: center;

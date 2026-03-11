@@ -330,6 +330,8 @@ export default function AuthModal({
 
   const handleRequestCode = async (event) => {
     event?.preventDefault?.()
+    const targetPhone = hasRequestedCode ? requestedPhone : composedPhone
+    const resendFromVerificationStep = hasRequestedCode
 
     if (!firebaseAuth || !isFirebaseConfigured) {
       setError(firebaseConfigError || 'Firebase Phone Auth не настроен')
@@ -356,7 +358,6 @@ export default function AuthModal({
     setStatus('')
 
     try {
-      const targetPhone = hasRequestedCode ? requestedPhone : composedPhone
       await reserveSmsRequest(targetPhone)
       setRequestedPhone(targetPhone)
       setAuthStep('code')
@@ -380,7 +381,16 @@ export default function AuthModal({
       setRecaptchaReady(false)
     } catch (requestError) {
       if (requestError?.code === 'sms/request-limit') {
-        resetVerificationState({ preserveStatus: false })
+        if (resendFromVerificationStep) {
+          confirmationResultRef.current = null
+          setAuthStep('code')
+          setRequestedPhone(targetPhone)
+          setCode('')
+          setExpiresAt('')
+          setStatus('')
+        } else {
+          resetVerificationState({ preserveStatus: false })
+        }
         if (requestError.retryAfterSeconds > 0) {
           setCooldownUntil((current) => Math.max(current, Date.now() + requestError.retryAfterSeconds * 1000))
           setNow(Date.now())
@@ -389,7 +399,14 @@ export default function AuthModal({
         return
       }
 
-      resetVerificationState({ preserveStatus: false })
+      confirmationResultRef.current = null
+      setAuthStep('code')
+      setRequestedPhone(targetPhone)
+      setCode('')
+      setExpiresAt('')
+      setCooldownUntil(0)
+      setNow(Date.now())
+      setStatus('SMS session failed. Complete reCAPTCHA and send the code again.')
       setError(mapFirebaseError(requestError, 'Не удалось отправить код'))
       refreshRecaptcha()
     } finally {
@@ -401,7 +418,7 @@ export default function AuthModal({
     event.preventDefault()
 
     if (!confirmationResultRef.current) {
-      setError('Сначала запросите SMS-код')
+      setError('SMS session is not ready yet. Send the code again.')
       return
     }
 

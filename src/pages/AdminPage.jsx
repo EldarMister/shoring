@@ -41,6 +41,8 @@ const ENRICH_SCOPE_ALL = 'all'
 const ENRICH_SCOPE_LATEST = 'latest'
 const DEFAULT_LATEST_ENRICH_LIMIT = 50
 const MAX_LATEST_ENRICH_LIMIT = 50000
+const DEFAULT_CATALOG_EXPORT_LIMIT = 5000
+const MAX_CATALOG_EXPORT_LIMIT = 50000
 const ADMIN_LOGIN_MAX_ATTEMPTS = 3
 const ADMIN_LOGIN_LOCKOUT_KEY = 'tlv-admin-login-lockout-until'
 
@@ -82,6 +84,13 @@ function normalizeLatestEnrichLimit(value) {
     const parsed = Number.parseInt(String(value || DEFAULT_LATEST_ENRICH_LIMIT), 10)
     if (!Number.isFinite(parsed)) return DEFAULT_LATEST_ENRICH_LIMIT
     return Math.min(Math.max(parsed, 1), MAX_LATEST_ENRICH_LIMIT)
+}
+
+function normalizeCatalogExportLimit(value) {
+    if (value === '' || value === null || value === undefined) return null
+    const parsed = Number.parseInt(String(value), 10)
+    if (!Number.isFinite(parsed)) return DEFAULT_CATALOG_EXPORT_LIMIT
+    return Math.min(Math.max(parsed, 1), MAX_CATALOG_EXPORT_LIMIT)
 }
 
 function formatEnrichScopeLabel(scope, latestLimit) {
@@ -128,7 +137,14 @@ const api = {
     getStats: () => apiFetch('/api/admin/stats'),
     getPricingSettings: () => apiFetch('/api/admin/pricing-settings'),
     updatePricingSettings: d => apiFetch('/api/admin/pricing-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) }),
-    downloadCatalogExport: () => fetch('/api/admin/catalog-export'),
+    downloadCatalogExport: (limit) => {
+        const params = new URLSearchParams()
+        if (limit !== null && limit !== undefined && limit !== '') {
+            params.set('limit', String(limit))
+        }
+        const suffix = params.toString()
+        return fetch(`/api/admin/catalog-export${suffix ? `?${suffix}` : ''}`)
+    },
     getEnrichStatus: () => apiFetch('/api/admin/enrich-empty-fields/status'),
     startEnrichEmptyFields: d => apiFetch('/api/admin/enrich-empty-fields/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d || {}) }),
     getNormalizeExistingCarsStatus: () => apiFetch('/api/admin/normalize-existing-cars/status'),
@@ -837,6 +853,7 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
     const [adding, setAdding] = useState(!!initAdd)
     const [busy, setBusy] = useState(false)
     const [exporting, setExporting] = useState(false)
+    const [catalogExportLimit, setCatalogExportLimit] = useState(String(DEFAULT_CATALOG_EXPORT_LIMIT))
     const [enriching, setEnriching] = useState(false)
     const [enrichScope, setEnrichScope] = useState(ENRICH_SCOPE_ALL)
     const [latestEnrichLimit, setLatestEnrichLimit] = useState(String(DEFAULT_LATEST_ENRICH_LIMIT))
@@ -986,12 +1003,14 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
     const downloadCatalogExport = async () => {
         setExporting(true)
         try {
-            const response = await api.downloadCatalogExport()
+            const exportLimit = normalizeCatalogExportLimit(catalogExportLimit)
+            const response = await api.downloadCatalogExport(exportLimit)
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
             const blob = await response.blob()
             const disposition = response.headers.get('Content-Disposition') || ''
-            const fallbackName = `catalog-export-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
+            const fallbackSuffix = exportLimit ? `latest-${exportLimit}-` : ''
+            const fallbackName = `catalog-export-${fallbackSuffix}${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
             const match = disposition.match(/filename="?([^"]+)"?/i)
             const filename = match?.[1] || fallbackName
             const url = window.URL.createObjectURL(blob)
@@ -1002,7 +1021,7 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
             link.click()
             link.remove()
             window.URL.revokeObjectURL(url)
-            toast('JSON каталога скачан', 'success')
+            toast(exportLimit ? `JSON скачан: последние ${exportLimit.toLocaleString('ru-RU')} авто` : 'JSON каталога скачан полностью', 'success')
         } catch {
             toast('Ошибка экспорта JSON', 'error')
         }
@@ -1094,9 +1113,28 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
                     <button className="adm-btn adm-btn-sm" onClick={startEnrichEmptyFields} disabled={enriching || enrichStatus.running || normalizingCars || normalizeCarsStatus.running}>
                         <Ic d={IC.bolt} s={14} /> {enrichStatus.running ? 'Обогащение...' : (enriching ? 'Запуск...' : 'Обогатить пустые поля')}
                     </button>
-                    <button className="adm-btn adm-btn-sm" onClick={downloadCatalogExport} disabled={exporting}>
-                        <Ic d={IC.download} s={14} /> {exporting ? 'Экспорт...' : 'Скачать JSON'}
-                    </button>
+                    <div className="adm-export-controls">
+                        <label className="adm-export-limit">
+                            <span className="adm-export-limit-label">JSON</span>
+                            <input
+                                className="adm-input adm-export-limit-input"
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                max={Math.max(total || DEFAULT_CATALOG_EXPORT_LIMIT, DEFAULT_CATALOG_EXPORT_LIMIT)}
+                                step="1"
+                                value={catalogExportLimit}
+                                onChange={e => setCatalogExportLimit(e.target.value)}
+                                disabled={exporting}
+                                placeholder={String(DEFAULT_CATALOG_EXPORT_LIMIT)}
+                                title="Пусто — скачать весь каталог"
+                            />
+                            <span className="adm-export-limit-suffix">последних</span>
+                        </label>
+                        <button className="adm-btn adm-btn-sm" onClick={downloadCatalogExport} disabled={exporting}>
+                            <Ic d={IC.download} s={14} /> {exporting ? 'Экспорт...' : 'Скачать JSON'}
+                        </button>
+                    </div>
                     {selected.size > 0 && <button className="adm-btn adm-btn-danger" onClick={delSelected}><Ic d={IC.trash} s={14} />Удалить ({selected.size})</button>}
                     <button className="adm-btn adm-btn-primary" onClick={() => { setAdding(true); setEditCar(null) }}>
                         <Ic d={IC.plus} s={15} /> Добавить

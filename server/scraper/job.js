@@ -57,6 +57,8 @@ const IMPORT_ONLY_SCOPES = new Set([PARSE_SCOPE_IMPORTED, PARSE_SCOPE_JAPANESE, 
 const DETAIL_RETRY_ATTEMPTS = 3
 const DETAIL_SOFT_RECHECK_ATTEMPTS = 2
 const PHOTO_LIMIT = 8
+const DETAIL_SUCCESS_PACING_MIN_MS = 300
+const DETAIL_SUCCESS_PACING_MAX_MS = 900
 const STALE_KNOWN_PAGE_LIMIT = 2
 const LOW_YIELD_PAGE_LIMIT = 4
 const LOW_YIELD_MAX_FRESH = 1
@@ -108,6 +110,20 @@ function stripTrailingTrim(text, trimLevel) {
 
 function normalizeParseScope(parseScope) {
   return SUPPORTED_PARSE_SCOPES.has(parseScope) ? parseScope : PARSE_SCOPE_ALL
+}
+
+function getDetailSuccessPacingMs() {
+  if (DETAIL_SUCCESS_PACING_MAX_MS <= DETAIL_SUCCESS_PACING_MIN_MS) {
+    return DETAIL_SUCCESS_PACING_MIN_MS
+  }
+
+  return Math.round(
+    DETAIL_SUCCESS_PACING_MIN_MS + Math.random() * (DETAIL_SUCCESS_PACING_MAX_MS - DETAIL_SUCCESS_PACING_MIN_MS),
+  )
+}
+
+async function paceAfterDetailFlow() {
+  await sleep(getDetailSuccessPacingMs())
 }
 
 function formatParseScopeLabel(parseScope) {
@@ -745,6 +761,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
 
   const sourceMode = globalThis.process?.env?.ENCAR_PROXY_URL ? 'Vercel proxy / direct detail' : 'direct Encar API + detail HTML fallback'
   state.info(`Source mode: ${sourceMode}`)
+  state.info(`Request pacing: ${DETAIL_SUCCESS_PACING_MIN_MS}-${DETAIL_SUCCESS_PACING_MAX_MS}ms between detail requests`)
   const exchangeSnapshot = await getExchangeRateSnapshot()
   const pricingSettings = await getPricingSettings()
   const seenEncarIds = new Set()
@@ -977,6 +994,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
             // Soft re-check recovered the detail payload, continue with enriched data.
           } else if (!canImportPartialCar(car, detailDiagnostic)) {
             recordSkip(detailDiagnostic)
+            await paceAfterDetailFlow()
             continue
           } else {
             state.warn(formatDiagnosticMessage('PARTIAL_IMPORT', detailDiagnostic), {
@@ -999,6 +1017,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
             car: preparedCar,
             raw,
           }))
+          await paceAfterDetailFlow()
           continue
         }
 
@@ -1010,6 +1029,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
             car: preparedCar,
             raw,
           }))
+          await paceAfterDetailFlow()
           continue
         }
 
@@ -1025,6 +1045,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
             car: preparedCar,
             raw,
           }))
+          await paceAfterDetailFlow()
           continue
         }
 
@@ -1037,6 +1058,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
             raw,
             duplicateVinId,
           ))
+          await paceAfterDetailFlow()
           continue
         }
 
@@ -1106,6 +1128,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
               raw,
               dbErr.duplicateId,
             ))
+            await paceAfterDetailFlow()
             continue
           }
 
@@ -1117,6 +1140,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
               raw,
               dbErr.duplicateId,
             ))
+            await paceAfterDetailFlow()
             continue
           }
 
@@ -1128,6 +1152,8 @@ export async function runScrapeJob(limit = 100, options = {}) {
           state.info(`✅ Достигнут лимит новых машин: ${limit}`)
           break
         }
+
+        await paceAfterDetailFlow()
       }
 
       offset += scanned

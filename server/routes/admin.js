@@ -20,6 +20,8 @@ const ENRICH_SCOPE_ALL = 'all'
 const ENRICH_SCOPE_LATEST = 'latest'
 const DEFAULT_LATEST_ENRICH_LIMIT = 50
 const MAX_LATEST_ENRICH_LIMIT = 50000
+const DEFAULT_CATALOG_EXPORT_LIMIT = 5000
+const MAX_CATALOG_EXPORT_LIMIT = 50000
 const WEAK_BODY_TYPES = new Set(['', '-', 'SUV', 'Вэн', 'Малый класс', 'Компактный класс', 'Средний класс', 'Бизнес-класс'])
 const enrichState = {
   running: false,
@@ -324,6 +326,13 @@ function normalizeEnrichOptions(value = {}) {
     : DEFAULT_LATEST_ENRICH_LIMIT
 
   return { scope, latestLimit }
+}
+
+function normalizeCatalogExportLimit(value) {
+  if (value === undefined || value === null || value === '') return null
+  const parsed = Number.parseInt(String(value), 10)
+  if (!Number.isFinite(parsed)) return DEFAULT_CATALOG_EXPORT_LIMIT
+  return Math.min(Math.max(parsed, 1), MAX_CATALOG_EXPORT_LIMIT)
 }
 
 function isWeakBodyTypeForEnrichment(value) {
@@ -1227,9 +1236,24 @@ router.post('/normalize-existing-cars/start', async (_req, res) => {
   return res.json({ ok: true, message: 'РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ СѓР¶Рµ СЃРѕС…СЂР°РЅРµРЅРЅС‹С… РјР°С€РёРЅ Р·Р°РїСѓС‰РµРЅР°' })
 })
 
-router.get('/catalog-export', async (_req, res) => {
+router.get('/catalog-export', async (req, res) => {
   try {
+    const exportLimit = normalizeCatalogExportLimit(req.query?.limit)
+    const queryParams = []
+    const limitSql = exportLimit
+      ? (() => {
+          queryParams.push(exportLimit)
+          return `LIMIT $${queryParams.length}`
+        })()
+      : ''
+
     const result = await pool.query(`
+      WITH export_ids AS (
+        SELECT id
+        FROM cars
+        ORDER BY created_at DESC, id DESC
+        ${limitSql}
+      )
       SELECT
         c.*,
         COALESCE(
@@ -1243,22 +1267,25 @@ router.get('/catalog-export', async (_req, res) => {
           ) FILTER (WHERE ci.id IS NOT NULL),
           '[]'::json
         ) AS images
-      FROM cars c
+      FROM export_ids export_ids
+      JOIN cars c ON c.id = export_ids.id
       LEFT JOIN car_images ci ON ci.car_id = c.id
       GROUP BY c.id
       ORDER BY c.created_at DESC, c.id DESC
-    `)
+    `, queryParams)
 
     const exportedAt = new Date().toISOString()
     const payload = {
       exported_at: exportedAt,
+      requested_limit: exportLimit,
       total: result.rows.length,
       cars: result.rows,
     }
 
     const fileStamp = exportedAt.replace(/[:.]/g, '-')
     res.setHeader('Content-Type', 'application/json; charset=utf-8')
-    res.setHeader('Content-Disposition', `attachment; filename="catalog-export-${fileStamp}.json"`)
+    const filePrefix = exportLimit ? `catalog-export-latest-${exportLimit}` : 'catalog-export'
+    res.setHeader('Content-Disposition', `attachment; filename="${filePrefix}-${fileStamp}.json"`)
     return res.status(200).send(JSON.stringify(payload, null, 2))
   } catch (err) {
     console.error(err)
