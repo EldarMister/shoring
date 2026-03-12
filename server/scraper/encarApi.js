@@ -58,9 +58,51 @@ const IMPORT_ONLY_SCOPES = new Set([
   PARSE_SCOPE_JAPANESE,
   PARSE_SCOPE_GERMAN,
 ])
+const ENCAR_SCOPE_MANUFACTURERS = {
+  [PARSE_SCOPE_JAPANESE]: [
+    '도요타',
+    '렉서스',
+    '혼다',
+    '닛산',
+    '인피니티',
+    '마쯔다',
+    '스바루',
+    '미쯔비시',
+    '스즈키',
+    '이스즈',
+    '다이하쯔',
+    '어큐라',
+  ],
+  [PARSE_SCOPE_GERMAN]: [
+    'BMW',
+    '벤츠',
+    '아우디',
+    '폭스바겐',
+    '포르쉐',
+    '미니',
+    '스마트',
+    '마이바흐',
+    '오펠',
+  ],
+}
 
 function normalizeParseScope(parseScope = PARSE_SCOPE_ALL) {
   return SUPPORTED_PARSE_SCOPES.has(parseScope) ? parseScope : PARSE_SCOPE_ALL
+}
+
+function buildScopedManufacturerOrQuery(parseScope) {
+  const manufacturers = ENCAR_SCOPE_MANUFACTURERS[parseScope]
+  if (!Array.isArray(manufacturers) || manufacturers.length === 0) return ''
+
+  const nodes = manufacturers
+    .map((value) => String(value || '').replace(/\./g, '').trim())
+    .filter(Boolean)
+    .map((value) => `Manufacturer.${value}.`)
+
+  if (nodes.length === 0) return ''
+  if (nodes.length === 1) return nodes[0]
+
+  return `(Or.${nodes.join('_.')})`
 }
 
 function buildEncarListQuery(parseScope = PARSE_SCOPE_ALL) {
@@ -68,6 +110,11 @@ function buildEncarListQuery(parseScope = PARSE_SCOPE_ALL) {
 
   if (normalizedScope === PARSE_SCOPE_DOMESTIC) {
     return '(And.Hidden.N._.CarType.Y._.Year.range(201900..).)'
+  }
+
+  const scopedManufacturerOr = buildScopedManufacturerOrQuery(normalizedScope)
+  if (scopedManufacturerOr) {
+    return `(And.Hidden.N._.CarType.N._.Year.range(201900..)._.${scopedManufacturerOr})`
   }
 
   if (IMPORT_ONLY_SCOPES.has(normalizedScope)) {
