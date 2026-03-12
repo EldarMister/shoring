@@ -1778,6 +1778,8 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                   options={CUSTOMS_DIRECTION_OPTIONS}
                   onChange={(value) => updateCalc({ direction: value })}
                 />
+              </div>
+              <div className="car-details-customs-summary">
                 <label className="car-details-customs-toggle">
                   <input
                     type="checkbox"
@@ -1786,12 +1788,12 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                   />
                   <span>Премиум-класс</span>
                 </label>
+                {customsResult.status === 'success' ? (
+                  <div className="car-details-customs-result">
+                    <strong>{`$${customsResult.amount.toLocaleString('en-US')}`}</strong>
+                  </div>
+                ) : null}
               </div>
-              {customsResult.status === 'success' ? (
-                <div className="car-details-customs-result">
-                  <strong>{`$${customsResult.amount.toLocaleString('en-US')}`}</strong>
-                </div>
-              ) : null}
               {customsResult.status !== 'success' && customsResult.message ? (
                 <p className="car-details-customs-note is-warning">{customsResult.message}</p>
               ) : null}

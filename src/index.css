@@ -3347,12 +3347,12 @@ body {
 }
 
 .car-details-customs-toggle {
-  grid-column: 1 / -1;
   flex-direction: row !important;
   align-items: center;
   gap: 10px !important;
   min-height: 38px;
-  padding: 0 2px;
+  padding: 0;
+  margin: 0;
 }
 
 .car-details-customs-toggle input {
@@ -3509,10 +3509,15 @@ body {
   line-height: 1.2;
 }
 
-.car-details-customs-result {
+.car-details-customs-summary {
   margin-top: 12px;
-  border-top: 1px solid #f4dcae;
-  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.car-details-customs-result {
   display: flex;
   justify-content: flex-end;
 }
