@@ -1,5 +1,5 @@
 import pool from '../server/db.js'
-import { fetchEncarVehicleDetail, fetchEncarVehicleEnrichment } from '../server/lib/encarVehicle.js'
+import { fetchEncarVehicleEnrichment } from '../server/lib/encarVehicle.js'
 import { normalizeDrive, normalizeInteriorColorName } from '../server/lib/vehicleData.js'
 import { isStandardVin, normalizeVin } from '../server/lib/vin.js'
 
@@ -200,6 +200,16 @@ function isCandidateRow(row) {
   )
 }
 
+function buildBackfillFetchTargets(row) {
+  return {
+    vin: isVinCandidate(row),
+    interiorColor: isInteriorCandidate(row),
+    keyInfo: isKeyCandidate(row),
+    driveType: isDriveCandidate(row),
+    optionFeatures: isOptionsCandidate(row),
+  }
+}
+
 async function fetchCandidates() {
   const whereChecks = []
   if (hasTarget('interior')) {
@@ -317,6 +327,7 @@ async function main() {
   }
 
   let nextIndex = 0
+  const vinLookupCache = new Map()
 
   async function worker() {
     while (true) {
@@ -326,9 +337,9 @@ async function main() {
       const row = candidates[currentIndex]
 
       try {
-        const detail = hasTarget('key')
-          ? await fetchEncarVehicleDetail(row.encar_id, { includeInspection: true })
-          : await fetchEncarVehicleEnrichment(row.encar_id)
+        const detail = await fetchEncarVehicleEnrichment(row.encar_id, {
+          targets: buildBackfillFetchTargets(row),
+        })
         const patch = {}
         const nextInterior = normalizeInteriorColorName(
           cleanText(detail.interior_color),
@@ -409,7 +420,13 @@ async function main() {
         } catch (updateError) {
           if (!isVinConstraintError(updateError) || !appliedPatch.vin) throw updateError
 
-          const duplicateId = await getExistingCarIdByVin(appliedPatch.vin, row.id)
+          const normalizedDuplicateVin = normalizeVin(appliedPatch.vin)
+          const duplicateId = vinLookupCache.has(normalizedDuplicateVin)
+            ? vinLookupCache.get(normalizedDuplicateVin)
+            : await getExistingCarIdByVin(appliedPatch.vin, row.id)
+          if (!vinLookupCache.has(normalizedDuplicateVin)) {
+            vinLookupCache.set(normalizedDuplicateVin, duplicateId || null)
+          }
           delete appliedPatch.vin
           stats.vin_filled = Math.max(stats.vin_filled - 1, 0)
 
@@ -420,6 +437,10 @@ async function main() {
             stats.skipped += 1
             console.warn(`Duplicate VIN only for ID ${row.id} / Encar ${row.encar_id}; existing ID ${duplicateId || '-'}`)
           }
+        }
+
+        if (appliedPatch.vin && isStandardVin(normalizeVin(appliedPatch.vin))) {
+          vinLookupCache.set(normalizeVin(appliedPatch.vin), row.id)
         }
       } catch (error) {
         stats.errors += 1

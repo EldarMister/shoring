@@ -292,7 +292,111 @@ function getVehiclePayloadFetchers(encarId, { allowSuppressedProxyProbe = false 
   return fetchers
 }
 
+const VEHICLE_PAYLOAD_CACHE_TTL_MS = 5 * 60 * 1000
+const VEHICLE_PAYLOAD_CACHE_LIMIT = 250
+const vehiclePayloadCache = new Map()
+const vehiclePayloadInFlight = new Map()
+const ENRICHMENT_TARGET_KEYS = ['vin', 'interiorColor', 'keyInfo', 'driveType', 'optionFeatures']
+
+function getVehiclePayloadCacheKey(encarId) {
+  return String(encarId || '').trim()
+}
+
+function pruneVehiclePayloadCache(now = Date.now()) {
+  for (const [key, entry] of vehiclePayloadCache.entries()) {
+    if (!entry || Number(entry.expiresAt) <= now) {
+      vehiclePayloadCache.delete(key)
+    }
+  }
+
+  if (vehiclePayloadCache.size <= VEHICLE_PAYLOAD_CACHE_LIMIT) return
+
+  const staleKeys = [...vehiclePayloadCache.entries()]
+    .sort((left, right) => (Number(left[1]?.storedAt) || 0) - (Number(right[1]?.storedAt) || 0))
+    .slice(0, vehiclePayloadCache.size - VEHICLE_PAYLOAD_CACHE_LIMIT)
+    .map(([key]) => key)
+
+  for (const key of staleKeys) {
+    vehiclePayloadCache.delete(key)
+  }
+}
+
+function readCachedVehiclePayload(encarId) {
+  const key = getVehiclePayloadCacheKey(encarId)
+  if (!key) return null
+
+  pruneVehiclePayloadCache()
+  const cached = vehiclePayloadCache.get(key)
+  if (!cached || Number(cached.expiresAt) <= Date.now()) {
+    vehiclePayloadCache.delete(key)
+    return null
+  }
+
+  return cached.value
+}
+
+function rememberVehiclePayload(encarId, payload) {
+  const key = getVehiclePayloadCacheKey(encarId)
+  if (!key || !payload) return
+
+  const now = Date.now()
+  vehiclePayloadCache.set(key, {
+    value: payload,
+    storedAt: now,
+    expiresAt: now + VEHICLE_PAYLOAD_CACHE_TTL_MS,
+  })
+  pruneVehiclePayloadCache(now)
+}
+
+function createSkippedEvidenceResult() {
+  return {
+    value: '',
+    source: '',
+    diagnostics: [],
+  }
+}
+
+function normalizeEnrichmentTargets(targets, { includeInspection = false } = {}) {
+  if (!targets || typeof targets !== 'object') {
+    return {
+      vin: true,
+      interiorColor: true,
+      keyInfo: true,
+      driveType: true,
+      optionFeatures: true,
+      includeInspection: Boolean(includeInspection),
+    }
+  }
+
+  const normalized = {
+    vin: false,
+    interiorColor: false,
+    keyInfo: false,
+    driveType: false,
+    optionFeatures: false,
+    includeInspection: Boolean(includeInspection),
+  }
+
+  for (const key of ENRICHMENT_TARGET_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(targets, key)) {
+      normalized[key] = Boolean(targets[key])
+    }
+  }
+
+  return normalized
+}
+
+function shouldLoadOptionTexts(targets) {
+  return Boolean(targets?.optionFeatures || targets?.keyInfo || targets?.driveType)
+}
+
 async function fetchEncarVehicleApiData(encarId) {
+  const cacheKey = getVehiclePayloadCacheKey(encarId)
+  const cachedPayload = readCachedVehiclePayload(cacheKey)
+  if (cachedPayload) return cachedPayload
+  if (vehiclePayloadInFlight.has(cacheKey)) return vehiclePayloadInFlight.get(cacheKey)
+
+  const request = (async () => {
   const preferredSource = hasEncarProxy() && !isEncarProxySuppressed()
     ? getPreferredEncarSource('detail')
     : 'direct'
@@ -309,6 +413,7 @@ async function fetchEncarVehicleApiData(encarId) {
     try {
       const payload = await fetcher.run()
       rememberHealthyEncarSource('detail', fetcher.source)
+      rememberVehiclePayload(cacheKey, payload)
       return payload
     } catch (error) {
       const status = Number(error?.response?.status) || Number(error?.encarDiagnostic?.httpStatus) || 0
@@ -335,6 +440,7 @@ async function fetchEncarVehicleApiData(encarId) {
       try {
         const payload = await fetcher.run()
         rememberHealthyEncarSource('detail', 'proxy')
+        rememberVehiclePayload(cacheKey, payload)
         return payload
       } catch (error) {
         suppressEncarProxy(Number(error?.response?.status) || Number(error?.encarDiagnostic?.httpStatus) || 0)
@@ -370,6 +476,14 @@ async function fetchEncarVehicleApiData(encarId) {
   }
 
   throw lastError || new Error(`Failed to fetch Encar detail for ${encarId}`)
+  })()
+
+  vehiclePayloadInFlight.set(cacheKey, request)
+  try {
+    return await request
+  } finally {
+    vehiclePayloadInFlight.delete(cacheKey)
+  }
 }
 
 function toAbsolutePhotoUrl(path) {
@@ -2016,7 +2130,12 @@ async function fetchSupplementalVehiclePayload(encarId) {
   }
 }
 
-async function prepareVehicleEvidence(encarId, primaryPayload, { includeInspection = false, optionTexts = [] } = {}) {
+async function prepareVehicleEvidence(encarId, primaryPayload, { includeInspection = false, optionTexts = [], targets = null } = {}) {
+  const requestedTargets = normalizeEnrichmentTargets(targets, { includeInspection })
+  const shouldResolveVin = requestedTargets.vin
+  const shouldResolveInteriorColor = requestedTargets.interiorColor
+  const shouldResolveKeyInfo = requestedTargets.keyInfo
+  const shouldResolveDriveType = requestedTargets.driveType
   let supplementalPayload = null
   let supplementalError = null
 
@@ -2026,15 +2145,22 @@ async function prepareVehicleEvidence(encarId, primaryPayload, { includeInspecti
     optionTexts,
   })
 
-  let vinResult = resolveVinEvidence(context)
-  let interiorColorResult = resolveInteriorColorEvidence(context)
-  let keyInfoResult = resolveKeyInfoEvidence(context)
-  let driveTypeResult = resolveDriveTypeEvidence(context)
+  let vinResult = shouldResolveVin ? resolveVinEvidence(context) : createSkippedEvidenceResult()
+  let interiorColorResult = shouldResolveInteriorColor ? resolveInteriorColorEvidence(context) : createSkippedEvidenceResult()
+  let keyInfoResult = shouldResolveKeyInfo ? resolveKeyInfoEvidence(context) : createSkippedEvidenceResult()
+  let driveTypeResult = shouldResolveDriveType ? resolveDriveTypeEvidence(context) : createSkippedEvidenceResult()
   let inspection = null
+
+  const needsEvidenceFallback = (
+    (shouldResolveVin && !vinResult.value)
+    || (shouldResolveInteriorColor && !interiorColorResult.value)
+    || (shouldResolveKeyInfo && !keyInfoResult.value)
+    || (shouldResolveDriveType && !driveTypeResult.value)
+  )
 
   const needsSupplementalPayload = primaryPayload?.source === 'api'
     && (!supplementalPayload)
-    && (!vinResult.value || !interiorColorResult.value || !keyInfoResult.value || !driveTypeResult.value)
+    && needsEvidenceFallback
 
   if (needsSupplementalPayload) {
     const supplementalResult = await fetchSupplementalVehiclePayload(encarId)
@@ -2046,17 +2172,25 @@ async function prepareVehicleEvidence(encarId, primaryPayload, { includeInspecti
       supplementalError,
       optionTexts,
     })
-    vinResult = resolveVinEvidence(context)
-    interiorColorResult = resolveInteriorColorEvidence(context)
-    keyInfoResult = resolveKeyInfoEvidence(context)
-    driveTypeResult = resolveDriveTypeEvidence(context)
+    vinResult = shouldResolveVin ? resolveVinEvidence(context) : vinResult
+    interiorColorResult = shouldResolveInteriorColor ? resolveInteriorColorEvidence(context) : interiorColorResult
+    keyInfoResult = shouldResolveKeyInfo ? resolveKeyInfoEvidence(context) : keyInfoResult
+    driveTypeResult = shouldResolveDriveType ? resolveDriveTypeEvidence(context) : driveTypeResult
   }
 
-  if (includeInspection || !vinResult.value || !interiorColorResult.value || !keyInfoResult.value || !driveTypeResult.value) {
+  const needsInspectionFallback = (
+    requestedTargets.includeInspection
+    || (shouldResolveVin && !vinResult.value)
+    || (shouldResolveInteriorColor && !interiorColorResult.value)
+    || (shouldResolveKeyInfo && !keyInfoResult.value)
+    || (shouldResolveDriveType && !driveTypeResult.value)
+  )
+
+  if (needsInspectionFallback) {
     try {
       inspection = await fetchEncarInspection(encarId, {
         vehicleNo: primaryPayload?.data?.vehicleNo || supplementalPayload?.data?.vehicleNo || '',
-        includeHtml: includeInspection
+        includeHtml: requestedTargets.includeInspection
           || Boolean(primaryPayload?.ad?.diagnosisCar || primaryPayload?.view?.encarDiagnosis)
           || Array.isArray(primaryPayload?.condition?.inspection?.formats),
       })
@@ -2071,16 +2205,16 @@ async function prepareVehicleEvidence(encarId, primaryPayload, { includeInspecti
         inspection,
         optionTexts,
       })
-      vinResult = resolveVinEvidence(context)
-      interiorColorResult = resolveInteriorColorEvidence(context)
-      keyInfoResult = resolveKeyInfoEvidence(context)
-      driveTypeResult = resolveDriveTypeEvidence(context)
+      vinResult = shouldResolveVin ? resolveVinEvidence(context) : vinResult
+      interiorColorResult = shouldResolveInteriorColor ? resolveInteriorColorEvidence(context) : interiorColorResult
+      keyInfoResult = shouldResolveKeyInfo ? resolveKeyInfoEvidence(context) : keyInfoResult
+      driveTypeResult = shouldResolveDriveType ? resolveDriveTypeEvidence(context) : driveTypeResult
     }
   }
 
   return {
     context,
-    inspection: includeInspection ? inspection : null,
+    inspection: requestedTargets.includeInspection ? inspection : null,
     vinResult,
     interiorColorResult,
     keyInfoResult,
@@ -2088,7 +2222,8 @@ async function prepareVehicleEvidence(encarId, primaryPayload, { includeInspecti
   }
 }
 
-export async function fetchEncarVehicleDetail(encarId, { includeInspection = false } = {}) {
+export async function fetchEncarVehicleDetail(encarId, { includeInspection = false, targets = null } = {}) {
+  const requestedTargets = normalizeEnrichmentTargets(targets, { includeInspection })
   const vehiclePayload = await fetchEncarVehicleApiData(encarId)
   const {
     url,
@@ -2198,7 +2333,9 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
   const locationRaw = String(contact.address || '').trim()
   const bodyColor = normalizeColorName(spec.colorName)
   const warrantyInfo = extractWarrantyInfo(category)
-  const optionTexts = await resolveEncarOptionTexts(options)
+  const optionTexts = shouldLoadOptionTexts(requestedTargets)
+    ? await resolveEncarOptionTexts(options)
+    : []
   const {
     inspection,
     vinResult,
@@ -2208,6 +2345,7 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
   } = await prepareVehicleEvidence(encarId, vehiclePayload, {
     includeInspection,
     optionTexts,
+    targets: requestedTargets,
   })
   const driveType = driveTypeResult.value
   const fees = resolveVehicleFees({
@@ -2227,15 +2365,17 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
     storage: fees.storage,
   }, exchangeSnapshot)
   const keyInfo = keyInfoResult.value
-  const optionFeatures = extractOptionFeatures({
-    contentsText: contents.text,
-    memoText: ad.memo,
-    titleText: ad.title,
-    subtitleText: ad.subTitle,
-    oneLineText: ad.oneLineText,
-    optionTexts,
-    inspectionRows: inspection?.detailStatus || [],
-  })
+  const optionFeatures = requestedTargets.optionFeatures
+    ? extractOptionFeatures({
+      contentsText: contents.text,
+      memoText: ad.memo,
+      titleText: ad.title,
+      subtitleText: ad.subTitle,
+      oneLineText: ad.oneLineText,
+      optionTexts,
+      inspectionRows: inspection?.detailStatus || [],
+    })
+    : []
 
   return {
     encar_id: String(encarId),
@@ -2321,7 +2461,8 @@ export async function fetchEncarVehicleDetail(encarId, { includeInspection = fal
   }
 }
 
-export async function fetchEncarVehicleEnrichment(encarId) {
+export async function fetchEncarVehicleEnrichment(encarId, { targets = null } = {}) {
+  const requestedTargets = normalizeEnrichmentTargets(targets)
   const vehiclePayload = await fetchEncarVehicleApiData(encarId)
   const { data, category, spec, ad, contact, contents, options, source } = vehiclePayload
   const manufacturerRaw = category.manufacturerEnglishName || category.manufacturerName || ''
@@ -2390,7 +2531,9 @@ export async function fetchEncarVehicleEnrichment(encarId) {
     ad.subTitle,
   )
   const warrantyInfo = extractWarrantyInfo(category)
-  const optionTexts = await resolveEncarOptionTexts(options)
+  const optionTexts = shouldLoadOptionTexts(requestedTargets)
+    ? await resolveEncarOptionTexts(options)
+    : []
   const {
     inspection,
     vinResult,
@@ -2399,18 +2542,21 @@ export async function fetchEncarVehicleEnrichment(encarId) {
     driveTypeResult,
   } = await prepareVehicleEvidence(encarId, vehiclePayload, {
     optionTexts,
+    targets: requestedTargets,
   })
   const driveType = driveTypeResult.value
   const keyInfo = keyInfoResult.value
-  const optionFeatures = extractOptionFeatures({
-    contentsText: contents?.text,
-    memoText: ad.memo,
-    titleText: ad.title,
-    subtitleText: ad.subTitle,
-    oneLineText: ad.oneLineText,
-    optionTexts,
-    inspectionRows: inspection?.detailStatus || [],
-  })
+  const optionFeatures = requestedTargets.optionFeatures
+    ? extractOptionFeatures({
+      contentsText: contents?.text,
+      memoText: ad.memo,
+      titleText: ad.title,
+      subtitleText: ad.subTitle,
+      oneLineText: ad.oneLineText,
+      optionTexts,
+      inspectionRows: inspection?.detailStatus || [],
+    })
+    : []
 
   return {
     name,

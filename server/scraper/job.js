@@ -31,6 +31,11 @@ import {
   retryOperation,
 } from './diagnostics.js'
 import {
+  getListPageSnapshot,
+  loadScraperRuntimeCache,
+  rememberListPageSnapshot,
+} from './runtimeCache.js'
+import {
   MANUFACTURER_MAP,
   tr,
   parseYear,
@@ -63,6 +68,8 @@ const DETAIL_SUCCESS_PACING_MAX_MS = 900
 const STALE_KNOWN_PAGE_LIMIT = 2
 const LOW_YIELD_PAGE_LIMIT = 4
 const LOW_YIELD_MAX_FRESH = 1
+const STABLE_KNOWN_PAGE_LIMIT = 2
+const STABLE_LOW_YIELD_PAGE_LIMIT = 3
 const JAPANESE_BRAND_ALIASES = [
   'toyota',
   'lexus',
@@ -94,6 +101,15 @@ const GERMAN_BRAND_ALIASES = [
 
 function cleanText(value) {
   return repairTextEncoding(String(value || '')).replace(/\s+/g, ' ').trim()
+}
+
+function buildListPageFingerprint(cars = [], scanned = 0) {
+  const ids = cars
+    .map((raw) => cleanText(raw?.Id))
+    .filter(Boolean)
+    .slice(0, PAGE_SIZE)
+
+  return `${Number(scanned) || 0}|${ids.join(',')}`
 }
 
 function escapeRegex(value) {
@@ -340,15 +356,30 @@ async function getExistingEncarIdMap(encarIds = []) {
   return new Map(res.rows.map((row) => [String(row.encar_id || '').trim(), row.id]))
 }
 
-async function getExistingIdByVin(vin) {
+async function getExistingIdByVin(vin, cache = null) {
   const normalizedVin = normalizeVin(vin)
   if (!isStandardVin(normalizedVin)) return null
+
+  if (cache && cache.has(normalizedVin)) {
+    const cached = cache.get(normalizedVin)
+    return {
+      id: cached,
+      fromCache: true,
+      normalizedVin,
+    }
+  }
 
   const res = await pool.query(
     'SELECT id FROM cars WHERE UPPER(BTRIM(vin)) = $1 LIMIT 1',
     [normalizedVin],
   )
-  return res.rows.length ? res.rows[0].id : null
+  const id = res.rows.length ? res.rows[0].id : null
+  if (cache) cache.set(normalizedVin, id)
+  return {
+    id,
+    fromCache: false,
+    normalizedVin,
+  }
 }
 
 function rebuildTags(car) {
@@ -583,6 +614,7 @@ function recordFailure(diagnostic) {
 
 function recordRetryRecovered(stage, car, attempts, details = '') {
   state.setProgress({ retryRecovered: state.progress.retryRecovered + 1 })
+  state.recordRetryRecovered()
   state.success(
     [
       'RECOVERED',
@@ -773,6 +805,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
   state.resetSession({ total: limit, parseScope, limit })
   state.info(`Parse scope: ${formatParseScopeLabel(parseScope)}, limit=${limit}`)
   state.info(`SCRAPER_START | scope=${parseScope} | limit=${limit}`)
+  await loadScraperRuntimeCache()
 
   state.info(`🚀 Запуск парсера: режим ${formatParseScopeLabel(parseScope)}, лимит ${limit} новых машин`)
 
@@ -789,6 +822,9 @@ export async function runScrapeJob(limit = 100, options = {}) {
   let addedThisRun = 0
   let consecutiveKnownOnlyPages = 0
   let consecutiveLowYieldPages = 0
+  let consecutiveStableKnownPages = 0
+  let consecutiveStableLowYieldPages = 0
+  const vinLookupCache = new Map()
 
   try {
     while (addedThisRun < limit && !state.stopReq) {
@@ -833,14 +869,30 @@ export async function runScrapeJob(limit = 100, options = {}) {
       state.info(`📦 Получено ${cars.length} машин из ${scanned} просмотренных (Encar всего: ${Number(total || 0).toLocaleString()})`)
       state.info(`LIST_FETCH_OK | cars=${cars.length} | scanned=${scanned} | total=${Number(total || 0).toLocaleString()} | scope=${parseScope} | source=${listResult.listSource || 'unknown'}`)
       const existingEncarIds = await getExistingEncarIdMap(cars.map((raw) => raw?.Id))
+      const pageFingerprint = buildListPageFingerprint(cars, scanned)
+      const cachedPage = getListPageSnapshot(parseScope, offset)
       const pageKnownCars = cars.reduce((count, raw) => {
         const rawId = cleanText(raw?.Id)
         return existingEncarIds.has(rawId) || seenEncarIds.has(rawId) ? count + 1 : count
       }, 0)
       const pageFreshCars = Math.max(cars.length - pageKnownCars, 0)
+      const isStableKnownOnlyPage = Boolean(
+        cachedPage
+        && cachedPage.fingerprint
+        && cachedPage.fingerprint === pageFingerprint
+        && pageKnownCars === cars.length,
+      )
+      const isStableLowYieldPage = Boolean(
+        cachedPage
+        && cachedPage.fingerprint
+        && cachedPage.fingerprint === pageFingerprint
+        && pageFreshCars <= LOW_YIELD_MAX_FRESH,
+      )
       const useTailStopGuard = shouldUseTailStopGuard(parseScope)
 
       if (pageKnownCars === cars.length) {
+        consecutiveStableKnownPages = isStableKnownOnlyPage ? consecutiveStableKnownPages + 1 : 0
+        consecutiveStableLowYieldPages = isStableKnownOnlyPage ? consecutiveStableLowYieldPages + 1 : 0
         if (useTailStopGuard) {
           consecutiveKnownOnlyPages += 1
           consecutiveLowYieldPages += 1
@@ -851,10 +903,25 @@ export async function runScrapeJob(limit = 100, options = {}) {
         state.setProgress({
           alreadyKnown: state.progress.alreadyKnown + pageKnownCars,
         })
+        rememberListPageSnapshot(parseScope, offset, {
+          fingerprint: pageFingerprint,
+          knownOnly: true,
+          freshCount: pageFreshCars,
+          scanned,
+          total,
+          source: listResult.listSource || 'unknown',
+        })
         state.info(`LIST_ALL_KNOWN_PAGE | scope=${parseScope} | offset=${offset} | known=${pageKnownCars} | consecutive=${consecutiveKnownOnlyPages}`)
 
         if (useTailStopGuard && (consecutiveKnownOnlyPages >= STALE_KNOWN_PAGE_LIMIT || consecutiveLowYieldPages >= LOW_YIELD_PAGE_LIMIT)) {
           state.info(`LIST_STALE_STOP | scope=${parseScope} | offset=${offset} | consecutiveKnownPages=${consecutiveKnownOnlyPages} | consecutiveLowYield=${consecutiveLowYieldPages}`)
+          state.recordOptimizationHit('listTailStops')
+          break
+        }
+
+        if (!useTailStopGuard && consecutiveStableKnownPages >= STABLE_KNOWN_PAGE_LIMIT) {
+          state.info(`LIST_STABLE_STOP | scope=${parseScope} | offset=${offset} | stableKnownPages=${consecutiveStableKnownPages}`)
+          state.recordOptimizationHit('listTailStops')
           break
         }
 
@@ -867,19 +934,46 @@ export async function runScrapeJob(limit = 100, options = {}) {
       }
 
       consecutiveKnownOnlyPages = 0
+      consecutiveStableKnownPages = 0
       if (useTailStopGuard && pageFreshCars <= LOW_YIELD_MAX_FRESH) {
         consecutiveLowYieldPages += 1
+        consecutiveStableLowYieldPages = isStableLowYieldPage ? consecutiveStableLowYieldPages + 1 : 0
         state.info(`LIST_LOW_YIELD_PAGE | scope=${parseScope} | offset=${offset} | fresh=${pageFreshCars} | known=${pageKnownCars} | consecutive=${consecutiveLowYieldPages}`)
         if (consecutiveLowYieldPages >= LOW_YIELD_PAGE_LIMIT) {
           state.info(`LIST_STALE_STOP | scope=${parseScope} | offset=${offset} | consecutiveKnownPages=${consecutiveKnownOnlyPages} | consecutiveLowYield=${consecutiveLowYieldPages}`)
+          state.recordOptimizationHit('listTailStops')
           break
         }
       } else if (!useTailStopGuard && pageFreshCars <= LOW_YIELD_MAX_FRESH) {
         state.info(`LIST_TAIL_GUARD_BYPASSED | scope=${parseScope} | offset=${offset} | reason=low_yield_page | fresh=${pageFreshCars} | known=${pageKnownCars}`)
         consecutiveLowYieldPages = 0
+        consecutiveStableLowYieldPages = isStableLowYieldPage ? consecutiveStableLowYieldPages + 1 : 0
+        if (consecutiveStableLowYieldPages >= STABLE_LOW_YIELD_PAGE_LIMIT) {
+          rememberListPageSnapshot(parseScope, offset, {
+            fingerprint: pageFingerprint,
+            knownOnly: false,
+            freshCount: pageFreshCars,
+            scanned,
+            total,
+            source: listResult.listSource || 'unknown',
+          })
+          state.info(`LIST_STABLE_LOW_YIELD_STOP | scope=${parseScope} | offset=${offset} | stableLowYieldPages=${consecutiveStableLowYieldPages} | fresh=${pageFreshCars}`)
+          state.recordOptimizationHit('listTailStops')
+          break
+        }
       } else {
         consecutiveLowYieldPages = 0
+        consecutiveStableLowYieldPages = 0
       }
+
+      rememberListPageSnapshot(parseScope, offset, {
+        fingerprint: pageFingerprint,
+        knownOnly: false,
+        freshCount: pageFreshCars,
+        scanned,
+        total,
+        source: listResult.listSource || 'unknown',
+      })
 
       for (const raw of cars) {
         if (state.stopReq) {
@@ -1020,6 +1114,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
               diagnostic: detailDiagnostic,
               partialImport: true,
             })
+            state.recordPartialImport()
             preparedCar = normalizeImportedCar(car)
           }
         }
@@ -1068,7 +1163,11 @@ export async function runScrapeJob(limit = 100, options = {}) {
           continue
         }
 
-        const duplicateVinId = await getExistingIdByVin(preparedCar.vin)
+        const vinLookup = await getExistingIdByVin(preparedCar.vin, vinLookupCache)
+        if (vinLookup?.fromCache) {
+          state.recordOptimizationHit('vinCacheHits')
+        }
+        const duplicateVinId = vinLookup?.id || null
         if (duplicateVinId) {
           recordSkip(buildDuplicateDiagnostic(
             'duplicate_vin',
@@ -1128,6 +1227,9 @@ export async function runScrapeJob(limit = 100, options = {}) {
         try {
           const newId = await insertCar(preparedCar, photoUrls)
           seenEncarIds.add(preparedCar.encar_id)
+          if (preparedCar.vin && isStandardVin(preparedCar.vin)) {
+            vinLookupCache.set(normalizeVin(preparedCar.vin), newId)
+          }
           addedThisRun += 1
           state.setProgress({ done: state.progress.done + 1 })
           state.success(`IMPORTED | name=${preparedCar.name} | id=${newId} | photos=${photoUrls.length}`, {

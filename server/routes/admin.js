@@ -503,6 +503,16 @@ function getEnrichCandidatePriority(car) {
   return 9
 }
 
+function buildEnrichFetchTargets(car = {}) {
+  return {
+    vin: shouldRefreshVin(car.vin),
+    interiorColor: shouldRefreshInteriorColor(car.interior_color, car.body_color),
+    keyInfo: shouldRefreshKeyInfo(car.key_info),
+    driveType: shouldRefreshDriveType(car.drive_type),
+    optionFeatures: shouldRefreshOptionFeatures(car.option_features),
+  }
+}
+
 async function updateCarFields(id, patch, meta = {}) {
   const fields = Object.entries(patch).filter(([, value]) => value !== undefined)
 
@@ -536,7 +546,7 @@ async function deleteCarById(id) {
   return Boolean(result.rows.length)
 }
 
-async function enrichCar(car) {
+async function enrichCar(car, context = {}) {
   enrichState.current = {
     id: car.id,
     encar_id: car.encar_id,
@@ -544,7 +554,9 @@ async function enrichCar(car) {
   }
 
   try {
-    const detail = await fetchEncarVehicleEnrichment(car.encar_id)
+    const detail = await fetchEncarVehicleEnrichment(car.encar_id, {
+      targets: buildEnrichFetchTargets(car),
+    })
     const parseNotes = buildEnrichParseNotes(detail, car)
     const patch = {}
 
@@ -613,7 +625,15 @@ async function enrichCar(car) {
       } catch (updateError) {
         if (!isVinConstraintError(updateError) || !appliedPatch.vin) throw updateError
 
-        duplicateVinId = await getExistingCarIdByVin(appliedPatch.vin, car.id)
+        const normalizedDuplicateVin = normalizeVin(appliedPatch.vin)
+        if (context.vinLookupCache?.has(normalizedDuplicateVin)) {
+          duplicateVinId = context.vinLookupCache.get(normalizedDuplicateVin)
+        } else {
+          duplicateVinId = await getExistingCarIdByVin(appliedPatch.vin, car.id)
+          if (context.vinLookupCache && normalizedDuplicateVin) {
+            context.vinLookupCache.set(normalizedDuplicateVin, duplicateVinId || null)
+          }
+        }
         delete appliedPatch.vin
 
         if (!Object.keys(appliedPatch).length) {
@@ -648,6 +668,10 @@ async function enrichCar(car) {
         before: car[field] ?? '',
         after: nextValue ?? '',
       }))
+
+      if (context.vinLookupCache && appliedPatch.vin && isStandardVin(normalizeVin(appliedPatch.vin))) {
+        context.vinLookupCache.set(normalizeVin(appliedPatch.vin), car.id)
+      }
 
       enrichState.updated += 1
       pushEnrichReportItem({
@@ -781,11 +805,14 @@ async function runEmptyFieldEnrichment(options = {}) {
 
     let nextIndex = 0
     const workerCount = Math.min(DEFAULT_ENRICH_CONCURRENCY, candidates.length || 1)
+    const enrichContext = {
+      vinLookupCache: new Map(),
+    }
     const workers = Array.from({ length: workerCount }, async () => {
       while (true) {
         const currentIndex = nextIndex++
         if (currentIndex >= candidates.length) return
-        await enrichCar(candidates[currentIndex])
+        await enrichCar(candidates[currentIndex], enrichContext)
       }
     })
 

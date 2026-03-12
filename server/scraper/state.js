@@ -38,8 +38,28 @@ function createSessionSummary() {
     photos: 0,
     reasons: {},
     topReasons: [],
+    diagnosticBuckets: {
+      alreadyKnown: 0,
+      duplicate: 0,
+      temporaryFail: 0,
+      invalidPage: 0,
+      parseIncomplete: 0,
+      recovered: 0,
+    },
+    optimizationStats: {
+      listTailStops: 0,
+      vinCacheHits: 0,
+    },
   }
 }
+
+const INVALID_PAGE_REASONS = new Set([
+  'detail_not_found',
+  'detail_empty_payload',
+  'detail_empty_html',
+  'detail_index_shell',
+  'detail_preloaded_state_missing',
+])
 
 class ScraperState extends EventEmitter {
   constructor() {
@@ -149,6 +169,40 @@ class ScraperState extends EventEmitter {
     })
     if (this.skipDiagnostics.length > 200) this.skipDiagnostics.length = 200
     this.recordReason(diagnostic)
+    this.recordDiagnosticBuckets(diagnostic)
+  }
+
+  recordDiagnosticBuckets(diagnostic) {
+    if (!diagnostic || typeof diagnostic !== 'object') return
+
+    const reason = String(diagnostic.reason || '').trim()
+    if (reason === 'duplicate_encar_id' || reason === 'duplicate_vin') {
+      this.sessionSummary.diagnosticBuckets.alreadyKnown += 1
+    }
+    if (reason === 'duplicate_vin' || reason === 'db_duplicate_race') {
+      this.sessionSummary.diagnosticBuckets.duplicate += 1
+    }
+    if (diagnostic.temporary) {
+      this.sessionSummary.diagnosticBuckets.temporaryFail += 1
+    }
+    if (INVALID_PAGE_REASONS.has(reason)) {
+      this.sessionSummary.diagnosticBuckets.invalidPage += 1
+    }
+  }
+
+  recordPartialImport() {
+    this.sessionSummary.diagnosticBuckets.parseIncomplete += 1
+  }
+
+  recordRetryRecovered() {
+    this.sessionSummary.diagnosticBuckets.recovered += 1
+  }
+
+  recordOptimizationHit(name, increment = 1) {
+    const key = String(name || '').trim()
+    if (!key) return
+    if (!Object.prototype.hasOwnProperty.call(this.sessionSummary.optimizationStats, key)) return
+    this.sessionSummary.optimizationStats[key] += Math.max(1, Number(increment) || 1)
   }
 
   finishSession() {
@@ -167,6 +221,8 @@ class ScraperState extends EventEmitter {
         ...this.sessionSummary,
         reasons: { ...this.sessionSummary.reasons },
         topReasons: this.sessionSummary.topReasons.slice(0, 20),
+        diagnosticBuckets: { ...this.sessionSummary.diagnosticBuckets },
+        optimizationStats: { ...this.sessionSummary.optimizationStats },
       },
       skipDiagnostics: this.skipDiagnostics.slice(0, 50),
       logs: this.logs.slice(0, 100),

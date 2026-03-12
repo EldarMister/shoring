@@ -531,7 +531,11 @@ export default function AdminEncar() {
     normalSkipped: 0,
     photos: 0,
     topReasons: [],
+    diagnosticBuckets: {},
+    optimizationStats: {},
   }
+  const diagnosticBuckets = sessionSummary.diagnosticBuckets || {}
+  const optimizationStats = sessionSummary.optimizationStats || {}
   const totalSkipped = progress.totalSkipped ?? ((progress.skipped || 0) + (progress.alreadyKnown || 0))
   const summaryTotalSkipped = sessionSummary.totalSkipped ?? ((sessionSummary.skipped || 0) + (sessionSummary.alreadyKnown || 0))
 
@@ -688,14 +692,20 @@ export default function AdminEncar() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: '15px', fontWeight: '700', color: '#f1f5f9' }}>Reason Summary</div>
-              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                Найдено: {sessionSummary.found || 0} • Импортировано: {sessionSummary.imported || 0} • Пропущено всего: {summaryTotalSkipped} • Уже в базе: {sessionSummary.alreadyKnown || 0} • Нормальные skip: {sessionSummary.normalSkipped || 0} • Финально отброшено: {sessionSummary.discarded || 0}
-              </div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+              Найдено: {sessionSummary.found || 0} • Импортировано: {sessionSummary.imported || 0} • Пропущено всего: {summaryTotalSkipped} • Уже в базе: {sessionSummary.alreadyKnown || 0} • Нормальные skip: {sessionSummary.normalSkipped || 0} • Финально отброшено: {sessionSummary.discarded || 0}
             </div>
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              Retry recovered: <span style={{ color: '#c4b5fd' }}>{sessionSummary.retryRecovered || 0}</span> • Фото: <span style={{ color: '#93c5fd' }}>{sessionSummary.photos || 0}</span>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+              already known: <span style={{ color: '#cbd5e1' }}>{diagnosticBuckets.alreadyKnown || 0}</span> • duplicate: <span style={{ color: '#cbd5e1' }}>{diagnosticBuckets.duplicate || 0}</span> • temporary fail: <span style={{ color: '#fda4af' }}>{diagnosticBuckets.temporaryFail || 0}</span> • invalid page: <span style={{ color: '#fbbf24' }}>{diagnosticBuckets.invalidPage || 0}</span> • parse incomplete: <span style={{ color: '#93c5fd' }}>{diagnosticBuckets.parseIncomplete || 0}</span> • recovered: <span style={{ color: '#c4b5fd' }}>{diagnosticBuckets.recovered || 0}</span>
             </div>
           </div>
+          <div style={{ fontSize: '12px', color: '#64748b' }}>
+            Retry recovered: <span style={{ color: '#c4b5fd' }}>{sessionSummary.retryRecovered || 0}</span> • Фото: <span style={{ color: '#93c5fd' }}>{sessionSummary.photos || 0}</span>
+            <div style={{ marginTop: '6px' }}>
+              Tail stops: <span style={{ color: '#cbd5e1' }}>{optimizationStats.listTailStops || 0}</span> • VIN cache hits: <span style={{ color: '#cbd5e1' }}>{optimizationStats.vinCacheHits || 0}</span>
+            </div>
+          </div>
+        </div>
 
           {sessionSummary.topReasons?.length ? (
             <div style={{ display: 'grid', gap: '8px' }}>
