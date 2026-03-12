@@ -698,6 +698,7 @@ function buildDetailDiagnostic(error, car, raw) {
     technical: {
       source: cleanText(error?.encarDiagnostic?.source || ''),
       fallbackFailure: cleanText(error?.encarDiagnostic?.fallbackFailure || ''),
+      sourceFailures: Array.isArray(error?.fetchSourceDiagnostics) ? error.fetchSourceDiagnostics : [],
       error: cleanText(error?.message),
     },
   })
@@ -775,7 +776,9 @@ export async function runScrapeJob(limit = 100, options = {}) {
 
   state.info(`🚀 Запуск парсера: режим ${formatParseScopeLabel(parseScope)}, лимит ${limit} новых машин`)
 
-  const sourceMode = globalThis.process?.env?.ENCAR_PROXY_URL ? 'Vercel proxy / direct detail' : 'direct Encar API + detail HTML fallback'
+  const sourceMode = globalThis.process?.env?.ENCAR_PROXY_URL
+    ? 'auto direct/proxy failover for list and detail'
+    : 'direct Encar API + detail HTML fallback'
   state.info(`Source mode: ${sourceMode}`)
   state.info(`Request pacing: ${DETAIL_SUCCESS_PACING_MIN_MS}-${DETAIL_SUCCESS_PACING_MAX_MS}ms between detail requests`)
   const exchangeSnapshot = await getExchangeRateSnapshot()

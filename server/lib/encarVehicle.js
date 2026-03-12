@@ -1,5 +1,17 @@
 import axios from 'axios'
 import { fetchEncarInspection } from './encarInspection.js'
+import {
+  buildEncarSourceDiagnostic,
+  buildEncarSourceFailureSummary,
+  decorateEncarSourceError,
+  fetchViaEncarProxy,
+  getPreferredEncarSource,
+  hasEncarProxy,
+  isEncarProxySuppressed,
+  rememberHealthyEncarSource,
+  shouldRetryViaAlternateEncarSource,
+  suppressEncarProxy,
+} from './encarSource.js'
 import { computePricing, getExchangeRateSnapshot } from './exchangeRate.js'
 import { getPricingSettings, resolveVehicleFees } from './pricingSettings.js'
 import {
@@ -117,7 +129,7 @@ function extractVehicleDataFromState(state) {
 function buildVehicleApiShape(data, source) {
   if (!data || typeof data !== 'object') {
     throw createVehicleDataError('Empty detail payload', {
-      reason: source === 'html_preloaded_state' ? 'detail_parse_failed' : 'detail_empty_payload',
+      reason: String(source || '').includes('html_preloaded_state') ? 'detail_parse_failed' : 'detail_empty_payload',
       temporary: true,
       retryable: true,
       details: 'detail payload is empty',
@@ -148,17 +160,30 @@ async function fetchEncarVehicleApiPayload(encarId) {
   return buildVehicleApiShape(data, 'api')
 }
 
-async function fetchEncarVehicleHtmlPayload(encarId) {
-  const url = `/cars/detail/${encodeURIComponent(encarId)}`
-  const response = await femDetailClient.get(url)
-  const html = String(response.data || '')
+async function fetchEncarVehicleProxyPayload(encarId) {
+  const data = await fetchViaEncarProxy(
+    {
+      endpoint: 'vehicle',
+      id: encarId,
+    },
+    {
+      timeout: 25000,
+    },
+  )
+
+  return buildVehicleApiShape(data, 'proxy_api')
+}
+
+function parseEncarVehicleHtmlPayload(rawHtml, encarId, { source = 'html_preloaded_state', sourceUrl = '' } = {}) {
+  const html = String(rawHtml || '')
+  const fallbackSourceUrl = sourceUrl || `https://fem.encar.com/cars/detail/${encodeURIComponent(encarId)}`
 
   if (!cleanText(html)) {
     throw createVehicleDataError('Detail HTML is empty', {
       reason: 'detail_empty_html',
       temporary: true,
       retryable: true,
-      details: `empty response from https://fem.encar.com${url}`,
+      details: `empty response from ${fallbackSourceUrl}`,
     })
   }
 
@@ -196,42 +221,155 @@ async function fetchEncarVehicleHtmlPayload(encarId) {
   const shaped = buildVehicleApiShape(data, 'html_preloaded_state')
   return {
     ...shaped,
+    source,
     html,
     preloadedState: state,
-    url: canonicalUrl || `https://fem.encar.com${url}`,
+    url: canonicalUrl || fallbackSourceUrl,
   }
 }
 
-async function fetchEncarVehicleApiData(encarId) {
-  try {
-    return await fetchEncarVehicleApiPayload(encarId)
-  } catch (apiError) {
-    const status = Number(apiError?.response?.status) || 0
-    if (status === 404) throw apiError
+async function fetchEncarVehicleHtmlPayload(encarId) {
+  const url = `/cars/detail/${encodeURIComponent(encarId)}`
+  const response = await femDetailClient.get(url)
+  return parseEncarVehicleHtmlPayload(response.data, encarId, {
+    source: 'html_preloaded_state',
+    sourceUrl: `https://fem.encar.com${url}`,
+  })
+}
 
+async function fetchEncarVehicleProxyHtmlPayload(encarId) {
+  const html = await fetchViaEncarProxy(
+    {
+      endpoint: 'detail-html',
+      id: encarId,
+    },
+    {
+      timeout: 25000,
+      responseType: 'text',
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    },
+  )
+
+  return parseEncarVehicleHtmlPayload(html, encarId, {
+    source: 'proxy_html_preloaded_state',
+    sourceUrl: `https://fem.encar.com/cars/detail/${encodeURIComponent(encarId)}`,
+  })
+}
+
+function getVehiclePayloadFetchers(encarId, { allowSuppressedProxyProbe = false } = {}) {
+  const fetchers = [
+    {
+      name: 'direct_api',
+      source: 'direct',
+      run: () => fetchEncarVehicleApiPayload(encarId),
+    },
+  ]
+
+  if (hasEncarProxy() && (!isEncarProxySuppressed() || allowSuppressedProxyProbe)) {
+    fetchers.push({
+      name: 'proxy_api',
+      source: 'proxy',
+      run: () => fetchEncarVehicleProxyPayload(encarId),
+    })
+  }
+
+  fetchers.push({
+    name: 'direct_html',
+    source: 'direct',
+    run: () => fetchEncarVehicleHtmlPayload(encarId),
+  })
+
+  if (hasEncarProxy() && (!isEncarProxySuppressed() || allowSuppressedProxyProbe)) {
+    fetchers.push({
+      name: 'proxy_html',
+      source: 'proxy',
+      run: () => fetchEncarVehicleProxyHtmlPayload(encarId),
+    })
+  }
+
+  return fetchers
+}
+
+async function fetchEncarVehicleApiData(encarId) {
+  const preferredSource = hasEncarProxy() && !isEncarProxySuppressed()
+    ? getPreferredEncarSource('detail')
+    : 'direct'
+  const sourceDiagnostics = []
+  const fetchers = getVehiclePayloadFetchers(encarId)
+  const orderedFetchers = [
+    ...fetchers.filter((fetcher) => fetcher.source === preferredSource),
+    ...fetchers.filter((fetcher) => fetcher.source !== preferredSource),
+  ]
+
+  let lastError = null
+
+  for (const fetcher of orderedFetchers) {
     try {
-      return await fetchEncarVehicleHtmlPayload(encarId)
-    } catch (htmlError) {
-      if (htmlError?.encarDiagnostic) {
-        apiError.encarDiagnostic = {
-          ...htmlError.encarDiagnostic,
-          source: 'html_preloaded_state',
-          apiFailure: cleanText(apiError.message),
-          fallbackFailure: cleanText(htmlError.message),
-        }
-      } else if (!apiError.encarDiagnostic) {
-        apiError.encarDiagnostic = {
-          reason: status ? 'detail_fetch_failed' : 'detail_network_error',
-          temporary: status !== 404,
-          retryable: status !== 404,
-          httpStatus: status || null,
-          details: cleanText(apiError.message),
-          fallbackFailure: cleanText(htmlError.message),
-        }
+      const payload = await fetcher.run()
+      rememberHealthyEncarSource('detail', fetcher.source)
+      return payload
+    } catch (error) {
+      const status = Number(error?.response?.status) || Number(error?.encarDiagnostic?.httpStatus) || 0
+      if (fetcher.source === 'proxy') {
+        suppressEncarProxy(status)
       }
-      throw apiError
+
+      sourceDiagnostics.push(buildEncarSourceDiagnostic(fetcher.name, error))
+      lastError = error
+
+      if (status === 404 && fetcher.name === 'direct_api') {
+        break
+      }
     }
   }
+
+  if (
+    hasEncarProxy()
+    && isEncarProxySuppressed()
+    && !orderedFetchers.some((fetcher) => fetcher.source === 'proxy')
+    && shouldRetryViaAlternateEncarSource(lastError)
+  ) {
+    for (const fetcher of getVehiclePayloadFetchers(encarId, { allowSuppressedProxyProbe: true }).filter((item) => item.source === 'proxy')) {
+      try {
+        const payload = await fetcher.run()
+        rememberHealthyEncarSource('detail', 'proxy')
+        return payload
+      } catch (error) {
+        suppressEncarProxy(Number(error?.response?.status) || Number(error?.encarDiagnostic?.httpStatus) || 0)
+        sourceDiagnostics.push(buildEncarSourceDiagnostic(fetcher.name, error, 'suppressed_probe'))
+        lastError = error
+      }
+    }
+  }
+
+  if (lastError) {
+    lastError.fetchSourceDiagnostics = sourceDiagnostics
+    const failureSummary = buildEncarSourceFailureSummary(sourceDiagnostics)
+
+    if (lastError?.encarDiagnostic) {
+      lastError.encarDiagnostic = {
+        ...lastError.encarDiagnostic,
+        sourceFailures: sourceDiagnostics,
+        details: [cleanText(lastError.encarDiagnostic.details), failureSummary].filter(Boolean).join(' | '),
+      }
+    } else {
+      const status = Number(lastError?.response?.status) || 0
+      lastError.encarDiagnostic = {
+        reason: status === 404 ? 'detail_not_found' : status ? 'detail_fetch_failed' : 'detail_network_error',
+        temporary: status !== 404,
+        retryable: status !== 404,
+        httpStatus: status || null,
+        details: [cleanText(lastError.message), failureSummary].filter(Boolean).join(' | '),
+        sourceFailures: sourceDiagnostics,
+      }
+    }
+
+    decorateEncarSourceError(lastError, 'detail')
+  }
+
+  throw lastError || new Error(`Failed to fetch Encar detail for ${encarId}`)
 }
 
 function toAbsolutePhotoUrl(path) {

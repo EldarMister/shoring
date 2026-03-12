@@ -75,6 +75,12 @@ export const REASON_DEFINITIONS = Object.freeze({
     temporary: true,
     retryable: true,
   },
+  detail_http_407: {
+    label: '407 proxy/auth challenge на маршруте Encar',
+    classification: 'problem',
+    temporary: true,
+    retryable: true,
+  },
   detail_http_5xx: {
     label: 'Ошибка upstream 5xx',
     classification: 'problem',
@@ -222,6 +228,17 @@ export function classifyDetailError(error, fallbackReason = 'detail_fetch_failed
       retryable: true,
       details: cleanText(error?.message) || '403 Forbidden',
       httpStatus: 403,
+    }
+  }
+
+  if (status === 407) {
+    return {
+      reason: 'detail_http_407',
+      classification: 'problem',
+      temporary: true,
+      retryable: true,
+      details: cleanText(error?.message) || '407 Proxy Authentication Required',
+      httpStatus: 407,
     }
   }
 
