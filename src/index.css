@@ -6470,9 +6470,12 @@ body {
 }
 
 .cat-autoload-status {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
+  width: 100%;
+  min-height: 48px;
   margin: 8px 0 18px;
   padding: 10px 14px;
   border: 1px solid rgba(15, 76, 129, 0.08);

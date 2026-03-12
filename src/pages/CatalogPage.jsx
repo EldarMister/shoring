@@ -23,11 +23,12 @@ import {
 
 const HANGUL_RE = /[\uAC00-\uD7A3]/u
 const MIN_CATALOG_YEAR = '2019'
-const CATALOG_REQUEST_SETTLE_MS = 180
+const CATALOG_REQUEST_SETTLE_MS = 90
 const CATALOG_RETRY_DELAYS_MS = [1000, 2200, 4500]
 const CATALOG_PAGE_SIZE = 20
 const CATALOG_AUTOLOAD_MAX_CARS = 300
 const CATALOG_AUTOLOAD_MAX_PAGES = Math.max(1, Math.floor(CATALOG_AUTOLOAD_MAX_CARS / CATALOG_PAGE_SIZE))
+const CATALOG_SCROLL_AUTOLOAD_THRESHOLD_PX = 320
 const CATALOG_DETAIL_ENRICH_CONCURRENCY = 4
 const TRANSIENT_CATALOG_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 const encarDetailCache = new Map()
@@ -766,6 +767,12 @@ export default function CatalogPage() {
   const activeCatalogQueryKeyRef = useRef('')
   const autoLoadSentinelRef = useRef(null)
   const autoLoadLockRef = useRef(false)
+  const autoLoadStateRef = useRef({
+    canAutoLoadMore: false,
+    visiblePageEnd: 1,
+    metaPages: 1,
+    autoLoadPageLimit: 1,
+  })
   const location = useLocation()
   const searchQuery = new URLSearchParams(location.search).get('q')?.trim() || ''
   const hasSearchQuery = Boolean(searchQuery)
@@ -797,6 +804,15 @@ export default function CatalogPage() {
   useEffect(() => {
     activeCatalogQueryKeyRef.current = catalogRequestKey
   }, [catalogRequestKey])
+
+  useEffect(() => {
+    autoLoadStateRef.current = {
+      canAutoLoadMore,
+      visiblePageEnd,
+      metaPages: meta.pages || 1,
+      autoLoadPageLimit,
+    }
+  }, [autoLoadPageLimit, canAutoLoadMore, meta.pages, visiblePageEnd])
 
   const clearScheduledRetry = useCallback(() => {
     if (!retryTimerRef.current) return
@@ -880,6 +896,144 @@ export default function CatalogPage() {
     return true
   }, [sort, filters, searchQuery])
 
+  const runCatalogEnrichment = useCallback(async ({ carsToEnrich, requestId, append = false } = {}) => {
+    if (!Array.isArray(carsToEnrich) || !carsToEnrich.some(needsEncarEnrichment)) return
+
+    const isStale = () => requestId !== activeCatalogRequestRef.current
+    const patchesToPersist = []
+    const enrichedCars = [...carsToEnrich]
+    const sourceIdsKey = carsToEnrich.map((car) => car.id).join(',')
+
+    for (let index = 0; index < carsToEnrich.length; index += CATALOG_DETAIL_ENRICH_CONCURRENCY) {
+      if (isStale()) return
+
+      const batch = carsToEnrich.slice(index, index + CATALOG_DETAIL_ENRICH_CONCURRENCY)
+      const enrichedBatch = await Promise.all(
+        batch.map(async (car) => {
+          if (isStale() || !needsEncarEnrichment(car)) return car
+
+          const detail = await fetchEncarDetail(car.encarId)
+          if (isStale() || !detail) return car
+
+          const next = { ...car }
+          if (shouldUpgradeVehicleTitle(car.name) && detail.name) next.name = detail.name
+          if (shouldUpgradeVehicleTitle(car.model) && detail.model) next.model = detail.model
+          if (hasUntranslatedTags(car.tags)) {
+            const detailTags = normalizeTags([detail.driveType, detail.fuelType, detail.transmission])
+            if (detailTags.length) next.tags = detailTags
+          }
+          if ((!car.fuelType || car.fuelType === '-') && detail.fuelType) next.fuelType = detail.fuelType
+          if ((!car.transmission || car.transmission === '-') && detail.transmission) next.transmission = detail.transmission
+          if (!next.driveType || next.driveType === '-') {
+            const inferredDrive = detail.driveType || inferDriveType(
+              car.name,
+              car.model,
+              detail.name,
+              detail.model,
+              ...(Array.isArray(car.tags) ? car.tags : []),
+            )
+            if (inferredDrive) next.driveType = inferredDrive
+          }
+          if (isWeakBodyTypeLabel(car.rawBodyType || car.bodyType) && detail.bodyType) {
+            next.bodyType = detail.bodyType
+            next.rawBodyType = detail.bodyType
+          }
+          if ((!car.vehicleClass || car.vehicleClass === '-') && detail.vehicleClass) {
+            next.vehicleClass = detail.vehicleClass
+          }
+          if (!car.trimLevel && detail.trimLevel) next.trimLevel = detail.trimLevel
+          if (!car.keyInfo && detail.keyInfo) next.keyInfo = detail.keyInfo
+          if ((!car.displacement || !car.engineVolume) && detail.displacement) {
+            next.displacement = detail.displacement
+            next.engineVolume = detail.engineVolume || resolveEngineVolume({
+              displacement: detail.displacement,
+              fuelType: next.fuelType || detail.fuelType,
+              name: next.name,
+              model: next.model,
+            })
+          }
+          if (hasWeakImages(car) && detail.images.length) next.images = detail.images
+          if (shouldReplaceColor(car.bodyColor) && detail.bodyColor) next.bodyColor = detail.bodyColor
+          if (shouldReplaceColor(car.interiorColor) && detail.interiorColor) next.interiorColor = detail.interiorColor
+          if (detail.location) next.location = detail.location
+          if (shouldReplaceText(car.vin) && detail.vin) next.vin = sanitizeVin(detail.vin) || next.vin
+          if (!next.engineVolume) {
+            next.engineVolume = resolveEngineVolume({
+              displacement: next.displacement,
+              fuelType: next.fuelType,
+              name: next.name,
+              model: next.model,
+            })
+          }
+          next.detailFlags = detail.flags || next.detailFlags
+          next.inspectionFormats = detail.inspectionFormats || next.inspectionFormats
+          next.imageCount = next.images.length || 1
+
+          const patch = buildCarUpdatePatch(car, next)
+          if (Object.keys(patch).length) {
+            patchesToPersist.push({ id: car.id, patch })
+          }
+          return next
+        })
+      )
+
+      if (isStale()) return
+
+      enrichedBatch.forEach((car, offset) => {
+        enrichedCars[index + offset] = car
+      })
+    }
+
+    if (isStale()) return
+
+    if (append) {
+      setCars((prev) => mergeCatalogCars(prev, enrichedCars))
+    } else {
+      setCars((prev) => {
+        const prevIdsKey = prev.map((car) => car.id).join(',')
+        if (prevIdsKey !== sourceIdsKey) return prev
+        return enrichedCars
+      })
+    }
+
+    if (patchesToPersist.length && !isStale()) {
+      Promise.allSettled(
+        patchesToPersist.map(({ id, patch }) =>
+          fetch(`/api/cars/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+          })
+        )
+      ).catch(() => {})
+    }
+  }, [])
+
+  const triggerAutoLoadNextPage = useCallback(() => {
+    if (autoLoadLockRef.current) return false
+
+    const {
+      canAutoLoadMore: canLoad,
+      visiblePageEnd: currentPageEnd,
+      metaPages,
+      autoLoadPageLimit: pageLimit,
+    } = autoLoadStateRef.current
+
+    if (!canLoad) return false
+
+    const nextPage = currentPageEnd + 1
+    if (nextPage > metaPages || nextPage > pageLimit) return false
+
+    autoLoadLockRef.current = true
+    fetchCarsRef.current?.({
+      retryAttempt: 0,
+      settleMs: 0,
+      pageOverride: nextPage,
+      append: true,
+    })
+    return true
+  }, [])
+
   const fetchCars = useCallback(async ({
     retryAttempt = 0,
     settleMs = CATALOG_REQUEST_SETTLE_MS,
@@ -952,111 +1106,7 @@ export default function CatalogPage() {
       }
       setLoadedPageEnd(targetPage)
       setHasRetryableError(false)
-
-      if (mappedCars.some(needsEncarEnrichment)) {
-        const patchesToPersist = []
-        const enrichedCars = [...mappedCars]
-
-        for (let index = 0; index < mappedCars.length; index += CATALOG_DETAIL_ENRICH_CONCURRENCY) {
-          if (isStale()) return
-
-          const batch = mappedCars.slice(index, index + CATALOG_DETAIL_ENRICH_CONCURRENCY)
-          const enrichedBatch = await Promise.all(
-            batch.map(async (car) => {
-              if (isStale() || !needsEncarEnrichment(car)) return car
-
-              const detail = await fetchEncarDetail(car.encarId)
-              if (isStale() || !detail) return car
-
-              const next = { ...car }
-              if (shouldUpgradeVehicleTitle(car.name) && detail.name) next.name = detail.name
-              if (shouldUpgradeVehicleTitle(car.model) && detail.model) next.model = detail.model
-              if (hasUntranslatedTags(car.tags)) {
-                const detailTags = normalizeTags([detail.driveType, detail.fuelType, detail.transmission])
-                if (detailTags.length) next.tags = detailTags
-              }
-              if ((!car.fuelType || car.fuelType === '-') && detail.fuelType) next.fuelType = detail.fuelType
-              if ((!car.transmission || car.transmission === '-') && detail.transmission) next.transmission = detail.transmission
-              if (!next.driveType || next.driveType === '-') {
-                const inferredDrive = detail.driveType || inferDriveType(
-                  car.name,
-                  car.model,
-                  detail.name,
-                  detail.model,
-                  ...(Array.isArray(car.tags) ? car.tags : []),
-                )
-                if (inferredDrive) next.driveType = inferredDrive
-              }
-              if (isWeakBodyTypeLabel(car.rawBodyType || car.bodyType) && detail.bodyType) {
-                next.bodyType = detail.bodyType
-                next.rawBodyType = detail.bodyType
-              }
-              if ((!car.vehicleClass || car.vehicleClass === '-') && detail.vehicleClass) {
-                next.vehicleClass = detail.vehicleClass
-              }
-              if (!car.trimLevel && detail.trimLevel) next.trimLevel = detail.trimLevel
-              if (!car.keyInfo && detail.keyInfo) next.keyInfo = detail.keyInfo
-              if ((!car.displacement || !car.engineVolume) && detail.displacement) {
-                next.displacement = detail.displacement
-                next.engineVolume = detail.engineVolume || resolveEngineVolume({
-                  displacement: detail.displacement,
-                  fuelType: next.fuelType || detail.fuelType,
-                  name: next.name,
-                  model: next.model,
-                })
-              }
-              if (hasWeakImages(car) && detail.images.length) next.images = detail.images
-              if (shouldReplaceColor(car.bodyColor) && detail.bodyColor) next.bodyColor = detail.bodyColor
-              if (shouldReplaceColor(car.interiorColor) && detail.interiorColor) next.interiorColor = detail.interiorColor
-              if (detail.location) next.location = detail.location
-              if (shouldReplaceText(car.vin) && detail.vin) next.vin = sanitizeVin(detail.vin) || next.vin
-              if (!next.engineVolume) {
-                next.engineVolume = resolveEngineVolume({
-                  displacement: next.displacement,
-                  fuelType: next.fuelType,
-                  name: next.name,
-                  model: next.model,
-                })
-              }
-              next.detailFlags = detail.flags || next.detailFlags
-              next.inspectionFormats = detail.inspectionFormats || next.inspectionFormats
-              next.imageCount = next.images.length || 1
-
-              const patch = buildCarUpdatePatch(car, next)
-              if (Object.keys(patch).length) {
-                patchesToPersist.push({ id: car.id, patch })
-              }
-              return next
-            })
-          )
-
-          if (isStale()) return
-
-          enrichedBatch.forEach((car, offset) => {
-            enrichedCars[index + offset] = car
-          })
-        }
-
-        if (isStale()) return
-
-        if (append) {
-          setCars((prev) => mergeCatalogCars(prev, enrichedCars))
-        } else {
-          setCars(enrichedCars)
-        }
-
-        if (patchesToPersist.length && !isStale()) {
-          Promise.allSettled(
-            patchesToPersist.map(({ id, patch }) =>
-              fetch(`/api/cars/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(patch),
-              })
-            )
-          ).catch(() => {})
-        }
-      }
+      void runCatalogEnrichment({ carsToEnrich: mappedCars, requestId, append })
     } catch (e) {
       if (e?.name === 'AbortError' || isStale()) return
 
@@ -1097,7 +1147,7 @@ export default function CatalogPage() {
         setIsAutoLoadingMore(false)
       }
     }
-  }, [sort, page, filters, searchQuery, fetchCarsFallback, clearScheduledRetry, scheduleCatalogRetry, catalogRequestKey])
+  }, [sort, page, filters, searchQuery, fetchCarsFallback, clearScheduledRetry, scheduleCatalogRetry, catalogRequestKey, runCatalogEnrichment])
 
   useEffect(() => {
     fetchCarsRef.current = fetchCars
@@ -1143,18 +1193,8 @@ export default function CatalogPage() {
 
     const observer = new IntersectionObserver((entries) => {
       const entry = entries[0]
-      if (!entry?.isIntersecting || autoLoadLockRef.current) return
-
-      const nextPage = visiblePageEnd + 1
-      if (nextPage > meta.pages || nextPage > autoLoadPageLimit) return
-
-      autoLoadLockRef.current = true
-      fetchCarsRef.current?.({
-        retryAttempt: 0,
-        settleMs: 0,
-        pageOverride: nextPage,
-        append: true,
-      })
+      if (!entry?.isIntersecting) return
+      triggerAutoLoadNextPage()
     }, {
       rootMargin: '240px 0px',
     })
@@ -1162,7 +1202,30 @@ export default function CatalogPage() {
     observer.observe(sentinel)
 
     return () => observer.disconnect()
-  }, [autoLoadPageLimit, canAutoLoadMore, meta.pages, visiblePageEnd])
+  }, [canAutoLoadMore, triggerAutoLoadNextPage])
+
+  useEffect(() => {
+    if (!canAutoLoadMore) return undefined
+
+    const maybeAutoLoadOnScroll = () => {
+      if (autoLoadLockRef.current) return
+      const doc = document.documentElement
+      const scrollTop = window.scrollY || doc.scrollTop || 0
+      const viewportBottom = scrollTop + window.innerHeight
+      const thresholdPoint = Math.max(0, doc.scrollHeight - CATALOG_SCROLL_AUTOLOAD_THRESHOLD_PX)
+      if (viewportBottom < thresholdPoint) return
+      triggerAutoLoadNextPage()
+    }
+
+    maybeAutoLoadOnScroll()
+    window.addEventListener('scroll', maybeAutoLoadOnScroll, { passive: true })
+    window.addEventListener('resize', maybeAutoLoadOnScroll)
+
+    return () => {
+      window.removeEventListener('scroll', maybeAutoLoadOnScroll)
+      window.removeEventListener('resize', maybeAutoLoadOnScroll)
+    }
+  }, [canAutoLoadMore, triggerAutoLoadNextPage])
 
   useEffect(() => {
     if (!sortOpen) return undefined
