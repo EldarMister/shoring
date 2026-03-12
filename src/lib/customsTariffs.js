@@ -87,15 +87,10 @@ const SPECIAL_CC_ALIASES = {
 const LITER_MATCH_TOLERANCE = 0.05
 const SPECIAL_CC_MATCH_TOLERANCE = 10
 
-export const CUSTOMS_MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => {
-  const month = index + 1
-  return { value: String(month), label: String(month).padStart(2, '0') }
-})
-
 export const CUSTOMS_DIRECTION_OPTIONS = [
-  { value: 'usa', label: DIRECTION_LABELS.usa },
-  { value: 'asia', label: DIRECTION_LABELS.asia },
-  { value: 'japan', label: DIRECTION_LABELS.japan },
+  { value: 'usa', label: DIRECTION_LABELS.usa, flag: '🇺🇸' },
+  { value: 'asia', label: DIRECTION_LABELS.asia, flag: '🇰🇷' },
+  { value: 'japan', label: DIRECTION_LABELS.japan, flag: '🇯🇵' },
 ]
 
 export const CUSTOMS_FUEL_OPTIONS = [
@@ -135,37 +130,11 @@ function parseEngineValue(value) {
   }
 }
 
-function resolveAgeFlags(year, month, currentDate = new Date()) {
-  const numericYear = Number(year)
-  const numericMonth = Number(month)
-  const currentYear = currentDate.getFullYear()
-  const currentMonth = currentDate.getMonth() + 1
-  const hasMonth = Number.isInteger(numericMonth) && numericMonth >= 1 && numericMonth <= 12
-  const yearDiff = currentYear - numericYear
-  const monthDiff = hasMonth ? ((currentYear - numericYear) * 12) + (currentMonth - numericMonth) : null
-
-  let notOlderThan3Years = null
-  if (monthDiff !== null) {
-    notOlderThan3Years = monthDiff <= 36
-  } else if (yearDiff <= 2) {
-    notOlderThan3Years = true
-  } else if (yearDiff >= 4) {
-    notOlderThan3Years = false
-  }
-
-  let olderThan5Years = null
-  if (monthDiff !== null) {
-    olderThan5Years = monthDiff > 60
-  } else if (yearDiff <= 4) {
-    olderThan5Years = false
-  } else if (yearDiff >= 6) {
-    olderThan5Years = true
-  }
-
+function resolveAgeFlags(year, currentDate = new Date()) {
+  const ageYears = currentDate.getFullYear() - Number(year)
   return {
-    hasMonth,
-    notOlderThan3Years,
-    olderThan5Years,
+    notOlderThan3Years: ageYears <= 3,
+    olderThan5Years: ageYears > 5,
   }
 }
 
@@ -223,47 +192,51 @@ function getUnderThreeRowLabel(year) {
   return UNDER_THREE_ROW_BY_YEAR.get(Number(year)) || null
 }
 
-function buildMeta({ fuel, table, row, volume, direction, month }) {
+function buildMeta({ fuel, table, row, volume, direction }) {
   return [
     { label: 'Тип', value: fuel },
     { label: 'Таблица', value: table },
     { label: 'Строка', value: row },
     { label: 'Объём', value: volume },
-    { label: 'Месяц', value: month },
     { label: 'Направление', value: direction },
   ].filter((item) => item.value)
 }
 
-function buildManualResult({ fuel, table, row, volume, direction, month, message }) {
+function buildManualResult({ fuel, table, row, volume, direction, message }) {
   return {
     status: 'manual',
     message,
-    meta: buildMeta({ fuel, table, row, volume, direction, month }),
+    meta: buildMeta({ fuel, table, row, volume, direction }),
   }
 }
 
-function buildSuccessResult({ amount, fuel, table, row, volume, direction, month, message = '' }) {
+function buildSuccessResult({ amount, fuel, table, row, volume, direction, message = '' }) {
   return {
     status: 'success',
     amount,
     message,
-    meta: buildMeta({ fuel, table, row, volume, direction, month }),
+    meta: buildMeta({ fuel, table, row, volume, direction }),
   }
 }
 
 export function resolveCustomsCalculation(input, currentDate = new Date()) {
   const year = Number(input?.year)
-  const month = Number(input?.month) || null
   const fuel = String(input?.fuel || 'gasoline')
   const direction = String(input?.direction || '')
   const isPremium = Boolean(input?.isPremium)
 
   if (!Number.isInteger(year) || year < 1900) {
-    return buildManualResult({ fuel: getCustomsFuelLabel(fuel), message: 'Укажите корректный год выпуска.' })
+    return buildManualResult({
+      fuel: getCustomsFuelLabel(fuel),
+      message: 'Укажите корректный год выпуска.',
+    })
   }
 
   if (!['gasoline', 'lpg', 'diesel', 'hybrid', 'electric'].includes(fuel)) {
-    return buildManualResult({ fuel: getCustomsFuelLabel(fuel), message: 'Для выбранного типа двигателя нет поддерживаемой таблицы.' })
+    return buildManualResult({
+      fuel: getCustomsFuelLabel(fuel),
+      message: 'Для выбранного типа двигателя нет поддерживаемой таблицы.',
+    })
   }
 
   if (fuel === 'electric') {
@@ -273,26 +246,15 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
     })
   }
 
-  const age = resolveAgeFlags(year, month, currentDate)
+  const age = resolveAgeFlags(year, currentDate)
   const fuelLabel = getCustomsFuelLabel(fuel)
-  const monthLabel = age.hasMonth ? String(month).padStart(2, '0') : ''
+  const isGasolineFamily = fuel === 'gasoline' || fuel === 'lpg'
 
-  if (isPremium) {
-    if (age.notOlderThan3Years === null) {
-      return buildManualResult({
-        fuel: fuelLabel,
-        month: monthLabel,
-        message: 'Укажите месяц выпуска, чтобы проверить правило для премиум-класса до 3 лет.',
-      })
-    }
-
-    if (age.notOlderThan3Years) {
-      return buildManualResult({
-        fuel: fuelLabel,
-        month: monthLabel,
-        message: 'Для автомобилей премиум-класса до 3 лет требуется уточнение по ИТС.',
-      })
-    }
+  if (isPremium && age.notOlderThan3Years) {
+    return buildManualResult({
+      fuel: fuelLabel,
+      message: 'Для автомобилей премиум-класса до 3 лет требуется уточнение по ИТС.',
+    })
   }
 
   if (fuel === 'hybrid') {
@@ -304,39 +266,16 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
         fuel: fuelLabel,
         table: 'Гибрид по УСИР, не более 3 лет',
         row: rowLabel || '',
-        month: monthLabel,
         message: 'Для такого объёма гибрида в таблице нет точной колонки, требуется ручной расчёт.',
       })
     }
 
-    if (!rowLabel) {
+    if (!rowLabel || !age.notOlderThan3Years) {
       return buildManualResult({
         fuel: fuelLabel,
         table: 'Гибрид по УСИР, не более 3 лет',
+        row: rowLabel || '',
         volume: volume.label,
-        month: monthLabel,
-        message: 'Для указанного года в таблице гибридов нет подходящей строки.',
-      })
-    }
-
-    if (age.notOlderThan3Years === null) {
-      return buildManualResult({
-        fuel: fuelLabel,
-        table: 'Гибрид по УСИР, не более 3 лет',
-        row: rowLabel,
-        volume: volume.label,
-        month: monthLabel,
-        message: 'Укажите месяц выпуска, чтобы проверить ограничение "не более 3 лет" для гибрида.',
-      })
-    }
-
-    if (!age.notOlderThan3Years) {
-      return buildManualResult({
-        fuel: fuelLabel,
-        table: 'Гибрид по УСИР, не более 3 лет',
-        row: rowLabel,
-        volume: volume.label,
-        month: monthLabel,
         message: 'Для гибридов в таблице есть только расчёт не старше 3 лет.',
       })
     }
@@ -347,7 +286,6 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
         table: 'Гибрид по УСИР, не более 3 лет',
         row: rowLabel,
         volume: volume.label,
-        month: monthLabel,
         message: 'Для гибрида нужно указать направление ввоза.',
       })
     }
@@ -359,50 +297,34 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
       row: rowLabel,
       volume: volume.label,
       direction: DIRECTION_LABELS[direction],
-      month: monthLabel,
       message: 'Расчёт выполнен по отдельной таблице гибридов до 3 лет.',
     })
   }
 
-  if (fuel === 'gasoline') {
+  if (isGasolineFamily) {
     const specialVolume = resolveSpecialCcColumn(input?.engine, ['3000'])
     const specialRowLabel = getUnderThreeRowLabel(year)
 
-    if (specialVolume && specialRowLabel) {
-      if (age.notOlderThan3Years === null) {
+    if (specialVolume && specialRowLabel && age.notOlderThan3Years) {
+      if (!DIRECTION_LABELS[direction]) {
         return buildManualResult({
           fuel: fuelLabel,
-          table: 'Бензин по УСИР, не более 3 лет',
+          table: 'Бензин / газ по УСИР, не более 3 лет',
           row: specialRowLabel,
           volume: specialVolume.label,
-          month: monthLabel,
-          message: 'Укажите месяц выпуска, чтобы определить, подходит ли бензиновый автомобиль под таблицу до 3 лет.',
+          message: 'Для автомобиля до 3 лет нужно указать направление ввоза.',
         })
       }
 
-      if (age.notOlderThan3Years) {
-        if (!DIRECTION_LABELS[direction]) {
-          return buildManualResult({
-            fuel: fuelLabel,
-            table: 'Бензин по УСИР, не более 3 лет',
-            row: specialRowLabel,
-            volume: specialVolume.label,
-            month: monthLabel,
-            message: 'Для бензинового автомобиля до 3 лет нужно указать направление ввоза.',
-          })
-        }
-
-        return buildSuccessResult({
-          amount: GASOLINE_USIR_TARIFFS[specialVolume.key][direction],
-          fuel: fuelLabel,
-          table: 'Бензин по УСИР, не более 3 лет',
-          row: specialRowLabel,
-          volume: specialVolume.label,
-          direction: DIRECTION_LABELS[direction],
-          month: monthLabel,
-          message: 'Расчёт выполнен по отдельной бензиновой таблице до 3 лет.',
-        })
-      }
+      return buildSuccessResult({
+        amount: GASOLINE_USIR_TARIFFS[specialVolume.key][direction],
+        fuel: fuelLabel,
+        table: 'Бензин / газ по УСИР, не более 3 лет',
+        row: specialRowLabel,
+        volume: specialVolume.label,
+        direction: DIRECTION_LABELS[direction],
+        message: 'Расчёт выполнен по отдельной таблице бензина / газа до 3 лет.',
+      })
     }
   }
 
@@ -410,7 +332,6 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
   if (!rowKey) {
     return buildManualResult({
       fuel: fuelLabel,
-      month: monthLabel,
       message: 'Для указанного года в Таблица.md нет подходящей строки, требуется ручной расчёт.',
     })
   }
@@ -426,33 +347,18 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
       fuel: fuelLabel,
       table: tableLabel,
       row: rowKey,
-      month: monthLabel,
       message: 'Для такого объёма двигателя в таблице нет точной колонки, требуется ручной расчёт.',
     })
   }
 
-  if ((fuel === 'gasoline' || fuel === 'lpg') && volume.liters > 2.0) {
-    if (age.olderThan5Years === null) {
-      return buildManualResult({
-        fuel: fuelLabel,
-        table: tableLabel,
-        row: rowKey,
-        volume: volume.label,
-        month: monthLabel,
-        message: 'Укажите месяц выпуска, чтобы проверить правило расчёта по весу для автомобилей старше 5 лет.',
-      })
-    }
-
-    if (age.olderThan5Years) {
-      return buildManualResult({
-        fuel: fuelLabel,
-        table: tableLabel,
-        row: rowKey,
-        volume: volume.label,
-        month: monthLabel,
-        message: 'Для данного автомобиля расчёт идёт по весу, требуется уточнение.',
-      })
-    }
+  if (isGasolineFamily && volume.liters > 2.0 && age.olderThan5Years) {
+    return buildManualResult({
+      fuel: fuelLabel,
+      table: tableLabel,
+      row: rowKey,
+      volume: volume.label,
+      message: 'Для данного автомобиля расчёт идёт по весу, требуется уточнение.',
+    })
   }
 
   return buildSuccessResult({
@@ -461,7 +367,6 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
     table: tableLabel,
     row: rowKey,
     volume: volume.label,
-    month: monthLabel,
     message: fuel === 'lpg'
       ? 'Газ рассчитан по общей бензиновой таблице из Таблица.md.'
       : 'Расчёт выполнен строго по основной таблице из Таблица.md.',

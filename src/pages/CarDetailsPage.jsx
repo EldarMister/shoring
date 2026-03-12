@@ -2,6 +2,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { applyVehicleTitleFixes } from '../../shared/vehicleTextFixes.js'
 import { sanitizeVin } from '../../shared/vin.js'
+import { useRef } from 'react'
 import {
   appendDisplayTrimSuffix,
   VAT_REFUND_RATE,
@@ -20,7 +21,6 @@ import {
 import {
   CUSTOMS_DIRECTION_OPTIONS,
   CUSTOMS_FUEL_OPTIONS,
-  CUSTOMS_MONTH_OPTIONS,
   getCustomsFuelLabel,
   resolveCustomsCalculation,
 } from '../lib/customsTariffs.js'
@@ -159,11 +159,6 @@ function formatCalcEngineInput(value) {
   return String(engine).replace(/\.0$/, '')
 }
 
-function formatCalcMonthInput(value) {
-  const month = Number(value)
-  return Number.isInteger(month) && month >= 1 && month <= 12 ? String(month) : ''
-}
-
 function sanitizeYearInput(value) {
   return String(value || '').replace(/\D/g, '').slice(0, 4)
 }
@@ -206,44 +201,27 @@ function parseCalcEngineInput(value, fallback = DEFAULT_CALC_ENGINE) {
   return Number.isFinite(engine) && engine > 0 ? engine : fallback
 }
 
-function parseCalcMonthInput(value, fallback = null) {
-  const month = Number(value)
-  return Number.isInteger(month) && month >= 1 && month <= 12 ? month : fallback
-}
-
-function extractMonthNumber(...values) {
-  for (const value of values) {
-    if (!value) continue
-
-    const raw = String(value).trim()
-    if (!raw) continue
-
-    const direct = new Date(raw)
-    if (!Number.isNaN(direct.getTime())) return direct.getMonth() + 1
-
-    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (iso) return Number(iso[2])
-
-    const ru = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
-    if (ru) return Number(ru[2])
-  }
-
-  return null
-}
-
-function inferCalcMonth(source) {
-  return extractMonthNumber(
-    source?.inspection?.vehicleHistory?.overview?.firstRegistration,
-    source?.inspection?.vehicleHistory?.overview?.registrationDate,
-    source?.vehicleHistory?.overview?.firstRegistration,
-    source?.vehicleHistory?.overview?.registrationDate,
-    source?.inspection?.overview?.firstRegistration,
-    source?.inspection?.overview?.registrationDate,
-  )
-}
-
 function isPremiumVehicle(source) {
   return /premium|прем/i.test(String(source?.vehicleClass || source?.vehicle_class || ''))
+}
+
+function inferImportDirection(...sources) {
+  const text = sources
+    .flatMap((source) => ([
+      source?.location,
+      source?.name,
+      source?.model,
+      source?.encarUrl,
+      source?.inspection?.sourceUrl,
+    ]))
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  if (/(?:^|\W)(?:usa|u\.s\.a|united states|сша|америк|american)(?:$|\W)/i.test(text)) return 'usa'
+  if (/(?:^|\W)(?:japan|япони|jdm)(?:$|\W)/i.test(text)) return 'japan'
+  if (/(?:encar|korea|коре|china|китай|seoul|busan|incheon|сеул|пусан|инчхон)/i.test(text)) return 'asia'
+  return 'asia'
 }
 
 function resolveDefaultCalcEngineValue({ displacement, name, model }) {
@@ -1410,6 +1388,7 @@ function mergeCarWithNormalizedEncar(baseCar, detail) {
 export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const { id } = useParams()
   const navigate = useNavigate()
+  const calcDirtyRef = useRef(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [car, setCar] = useState(null)
@@ -1417,16 +1396,21 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const [inspectionOpen, setInspectionOpen] = useState(false)
   const [calc, setCalc] = useState({
     year: String(DEFAULT_CALC_YEAR),
-    month: '',
     engine: formatCalcEngineInput(DEFAULT_CALC_ENGINE),
     fuel: 'gasoline',
-    direction: '',
+    direction: 'asia',
     isPremium: false,
   })
-  const [calcDefaults, setCalcDefaults] = useState({ year: DEFAULT_CALC_YEAR, month: null, engine: DEFAULT_CALC_ENGINE })
+  const [calcDefaults, setCalcDefaults] = useState({ year: DEFAULT_CALC_YEAR, engine: DEFAULT_CALC_ENGINE })
+
+  const updateCalc = (patch) => {
+    calcDirtyRef.current = true
+    setCalc((prev) => ({ ...prev, ...patch }))
+  }
 
   useEffect(() => {
     let active = true
+    calcDirtyRef.current = false
     setInspectionOpen(false)
 
     const run = async () => {
@@ -1440,23 +1424,24 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
 
         const mapped = mapCarWithNormalizedSpecs(data)
         const fuel = detectFuel(data)
+        const inferredDirection = inferImportDirection(data, mapped)
         setCar(mapped)
         setImgIdx(0)
         setError('')
         const nextCalcDefaults = {
           year: mapped.yearNum || DEFAULT_CALC_YEAR,
-          month: inferCalcMonth(mapped),
           engine: resolveDefaultCalcEngineValue({ displacement: mapped.displacement, name: mapped.name, model: mapped.model }),
         }
         setCalcDefaults(nextCalcDefaults)
-        setCalc({
-          year: formatCalcYearInput(nextCalcDefaults.year),
-          month: formatCalcMonthInput(nextCalcDefaults.month),
-          engine: formatCalcEngineInput(nextCalcDefaults.engine),
-          fuel,
-          direction: '',
-          isPremium: isPremiumVehicle(mapped),
-        })
+        if (!calcDirtyRef.current) {
+          setCalc({
+            year: formatCalcYearInput(nextCalcDefaults.year),
+            engine: formatCalcEngineInput(nextCalcDefaults.engine),
+            fuel,
+            direction: inferredDirection,
+            isPremium: isPremiumVehicle(mapped),
+          })
+        }
 
         if (mapped.encarId && mapped.encarId !== '-') {
           try {
@@ -1465,11 +1450,12 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
             const detail = await detailRes.json()
             if (!active) return
 
+            const mergedDetailCar = mergeCarWithNormalizedEncar(mapped, detail)
+            const inferredDetailDirection = inferImportDirection(detail, mergedDetailCar, mapped)
             setCar((prev) => (prev ? mergeCarWithNormalizedEncar(prev, detail) : prev))
             setImgIdx(0)
             const nextCalcDefaults = {
               year: parseYear(detail?.year || mapped.year),
-              month: inferCalcMonth(detail) || inferCalcMonth(mapped),
               engine: resolveDefaultCalcEngineValue({
                 displacement: detail?.displacement || mapped.displacement,
                 name: detail?.name || mapped.name,
@@ -1477,14 +1463,15 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
               }),
             }
             setCalcDefaults(nextCalcDefaults)
-            setCalc({
-              year: formatCalcYearInput(nextCalcDefaults.year),
-              month: formatCalcMonthInput(nextCalcDefaults.month),
-              engine: formatCalcEngineInput(nextCalcDefaults.engine),
-              fuel: detectFuel({ fuel_type: detail?.fuel_type || mapped.fuelType, tags: mapped.tags }),
-              direction: '',
-              isPremium: isPremiumVehicle(detail) || isPremiumVehicle(mapped),
-            })
+            if (!calcDirtyRef.current) {
+              setCalc({
+                year: formatCalcYearInput(nextCalcDefaults.year),
+                engine: formatCalcEngineInput(nextCalcDefaults.engine),
+                fuel: detectFuel({ fuel_type: detail?.fuel_type || mapped.fuelType, tags: mapped.tags }),
+                direction: inferredDetailDirection,
+                isPremium: isPremiumVehicle(detail) || isPremiumVehicle(mapped),
+              })
+            }
           } catch {
             // Ignore detail enrichment errors, base card remains available.
           }
@@ -1520,18 +1507,16 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const inspectionSummary = Array.isArray(car?.inspection?.summary) ? car.inspection.summary : []
 
   const calcYearValue = useMemo(() => parseCalcYearInput(calc.year, calcDefaults.year), [calc.year, calcDefaults.year])
-  const calcMonthValue = useMemo(() => parseCalcMonthInput(calc.month, calcDefaults.month), [calc.month, calcDefaults.month])
   const calcEngineValue = useMemo(() => parseCalcEngineInput(calc.engine, calcDefaults.engine), [calc.engine, calcDefaults.engine])
   const customsResult = useMemo(
     () => resolveCustomsCalculation({
       year: calcYearValue,
-      month: calcMonthValue,
       engine: calcEngineValue,
       fuel: calc.fuel,
       direction: calc.direction,
       isPremium: calc.isPremium,
     }),
-    [calc.direction, calc.fuel, calc.isPremium, calcEngineValue, calcMonthValue, calcYearValue]
+    [calc.direction, calc.fuel, calc.isPremium, calcEngineValue, calcYearValue]
   )
 
   if (loading) {
@@ -1666,17 +1651,8 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                     inputMode="numeric"
                     pattern="[0-9]*"
                     value={calc.year}
-                    onChange={(e) => setCalc((p) => ({ ...p, year: sanitizeYearInput(e.target.value) }))}
+                    onChange={(e) => updateCalc({ year: sanitizeYearInput(e.target.value) })}
                   />
-                </label>
-                <label>
-                  <span>Месяц выпуска</span>
-                  <select value={calc.month} onChange={(e) => setCalc((p) => ({ ...p, month: e.target.value }))}>
-                    <option value="">Не указан</option>
-                    {CUSTOMS_MONTH_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
                 </label>
                 <label>
                   <span>Объём двигателя (л или cc)</span>
@@ -1684,31 +1660,51 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                     type="text"
                     inputMode="decimal"
                     value={calc.engine}
-                    onChange={(e) => setCalc((p) => ({ ...p, engine: sanitizeEngineInput(e.target.value) }))}
+                    onChange={(e) => updateCalc({ engine: sanitizeEngineInput(e.target.value) })}
                   />
                 </label>
-                <label>
+                <label className="car-details-customs-choice-field">
                   <span>Тип двигателя</span>
-                  <select value={calc.fuel} onChange={(e) => setCalc((p) => ({ ...p, fuel: e.target.value }))}>
+                  <div className="car-details-customs-choice" role="radiogroup" aria-label="Тип двигателя">
                     {CUSTOMS_FUEL_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`car-details-customs-choice-item${calc.fuel === option.value ? ' is-active' : ''}`}
+                        onClick={() => updateCalc({ fuel: option.value })}
+                        aria-pressed={calc.fuel === option.value}
+                      >
+                        <span className="car-details-customs-choice-text">{option.label}</span>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </label>
-                <label>
+                <label className="car-details-customs-choice-field">
                   <span>Направление ввоза</span>
-                  <select value={calc.direction} onChange={(e) => setCalc((p) => ({ ...p, direction: e.target.value }))}>
-                    <option value="">Не выбрано</option>
+                  <div
+                    className="car-details-customs-choice car-details-customs-choice-country"
+                    role="radiogroup"
+                    aria-label="Направление ввоза"
+                  >
                     {CUSTOMS_DIRECTION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`car-details-customs-choice-item${calc.direction === option.value ? ' is-active' : ''}`}
+                        onClick={() => updateCalc({ direction: option.value })}
+                        aria-pressed={calc.direction === option.value}
+                      >
+                        <span className="car-details-customs-choice-flag" aria-hidden="true">{option.flag}</span>
+                        <span className="car-details-customs-choice-text">{option.label}</span>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </label>
                 <label className="car-details-customs-toggle">
                   <input
                     type="checkbox"
                     checked={calc.isPremium}
-                    onChange={(e) => setCalc((p) => ({ ...p, isPremium: e.target.checked }))}
+                    onChange={(e) => updateCalc({ isPremium: e.target.checked })}
                   />
                   <span>Премиум-класс</span>
                 </label>
@@ -1724,7 +1720,9 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                   <span key={`${item.label}-${item.value}`}>{item.label}: {item.value}</span>
                 ))}
               </div>
-              <p className={`car-details-customs-note${customsResult.status === 'success' ? '' : ' is-warning'}`}>{customsResult.message}</p>
+              {customsResult.status !== 'success' && customsResult.message ? (
+                <p className="car-details-customs-note is-warning">{customsResult.message}</p>
+              ) : null}
             </div>
 
             <div className="car-details-card car-details-specs-card">
