@@ -192,6 +192,19 @@ export default function Header() {
         <div className="header-row">
           <AVTLogo />
 
+          <form className="header-search-mobile" onSubmit={submitSearch}>
+            <span className="header-search-icon">
+              <SearchIcon />
+            </span>
+            <input
+              type="text"
+              placeholder="Марка / модель / VIN"
+              className="search-input"
+              value={effectiveSearchTerm}
+              onChange={(event) => handleSearchChange(event.target.value)}
+            />
+          </form>
+
           <nav className="header-nav">
             {navLinks.map(({ label, to }) => (
               <Link
@@ -221,6 +234,7 @@ export default function Header() {
             className="theme-toggle"
             onClick={(event) => toggle(event)}
             title={theme === 'light' ? 'Темная тема' : 'Светлая тема'}
+            type="button"
           >
             {theme === 'light' ? <MoonIcon /> : <SunIcon />}
           </button>
@@ -229,13 +243,12 @@ export default function Header() {
 
           <div className="header-mobile-controls">
             <button
-              className="header-icon-btn"
-              onClick={() => setMobileOpen((value) => (value === 'search' ? false : 'search'))}
+              className="theme-toggle"
+              onClick={(event) => toggle(event)}
+              title="Сменить тему"
+              style={{ width: 32, height: 32 }}
               type="button"
             >
-              <SearchIcon />
-            </button>
-            <button className="theme-toggle" onClick={(event) => toggle(event)} title="Сменить тему" style={{ width: 32, height: 32 }} type="button">
               {theme === 'light' ? <MoonIcon /> : <SunIcon />}
             </button>
             <button
@@ -247,24 +260,6 @@ export default function Header() {
             </button>
           </div>
         </div>
-
-        {mobileOpen === 'search' && (
-          <div className="header-mobile-menu">
-            <form className="mobile-search-wrap" onSubmit={submitSearch}>
-              <span className="header-search-icon" style={{ top: '50%' }}>
-                <SearchIcon />
-              </span>
-              <input
-                autoFocus
-                type="text"
-                placeholder="Марка / модель / VIN / Encar ID"
-                className="search-input"
-                value={effectiveSearchTerm}
-                onChange={(event) => handleSearchChange(event.target.value)}
-              />
-            </form>
-          </div>
-        )}
 
         {mobileOpen === 'menu' && (
           <div className="header-mobile-menu">

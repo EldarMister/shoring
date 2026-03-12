@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { applyVehicleTitleFixes } from '../../shared/vehicleTextFixes.js'
 import { sanitizeVin } from '../../shared/vin.js'
 import FilterSidebar from '../components/catalog/FilterSidebar'
@@ -555,6 +555,11 @@ const FilterIcon = () => (
     <line x1="11" y1="18" x2="13" y2="18" strokeWidth={2} strokeLinecap="round" />
   </svg>
 )
+const SearchIcon = () => (
+  <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.35-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+)
 const ChevronDownIcon = () => (
   <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <polyline points="6 9 12 15 18 9" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
@@ -668,6 +673,7 @@ const SORT_OPTIONS = [
 ]
 
 export default function CatalogPage() {
+  const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sort, setSort] = useState('newest')
   const [sortOpen, setSortOpen] = useState(false)
@@ -682,6 +688,7 @@ export default function CatalogPage() {
   const activeCatalogRequestRef = useRef(0)
   const location = useLocation()
   const searchQuery = new URLSearchParams(location.search).get('q')?.trim() || ''
+  const hasSearchQuery = Boolean(searchQuery)
   const activeSortOption = SORT_OPTIONS.find((option) => option.value === sort) || SORT_OPTIONS[0]
   const normalizedOriginFilters = normalizeOriginFilterValues(filters.origin)
   const hasImportedOriginFilter = normalizedOriginFilters.includes('imported')
@@ -936,6 +943,10 @@ export default function CatalogPage() {
     }
   }, [sortOpen])
 
+  const clearSearch = () => {
+    navigate('/catalog', { replace: true })
+  }
+
   return (
     <div className="catalog-page">
       <div className="cat-breadcrumb">
@@ -1002,6 +1013,22 @@ export default function CatalogPage() {
 
           <h1 className="cat-title">Каталог автомобилей — Корея</h1>
           <p className="cat-subtitle">Список машин с Encar (переводы ru/en/ko)</p>
+
+          {hasSearchQuery && (
+            <div className="cat-search-summary">
+              <div className="cat-search-summary-main">
+                <span className="cat-search-summary-icon" aria-hidden="true">
+                  <SearchIcon />
+                </span>
+                <div className="cat-search-summary-copy">
+                  <div className="cat-search-summary-label">Поиск: &quot;{searchQuery}&quot;</div>
+                </div>
+              </div>
+              <button type="button" className="cat-search-summary-clear" onClick={clearSearch}>
+                Очистить
+              </button>
+            </div>
+          )}
 
           <div className="cat-results-bar">
             <div>
