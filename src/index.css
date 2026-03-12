@@ -3379,30 +3379,134 @@ body {
   box-shadow: 0 0 0 2px rgba(217, 154, 43, 0.18);
 }
 
-.car-details-customs-select-wrap {
+.car-details-customs-dropdown {
   position: relative;
 }
 
-.car-details-customs-select-wrap::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  width: 14px;
-  height: 14px;
-  pointer-events: none;
-  transform: translateY(-50%);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23915f2d' viewBox='0 0 24 24'%3E%3Cpolyline points='6 9 12 15 18 9' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: center;
+.car-details-customs-dropdown-trigger {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid #edc987;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffaf1 0%, #fff 100%);
+  color: #6f4518;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 6px 18px rgba(121, 72, 17, 0.08);
 }
 
-.car-details-customs-select {
-  appearance: none;
-  cursor: pointer;
-  padding-right: 36px !important;
+.car-details-customs-dropdown-trigger-content {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.car-details-customs-dropdown .car-details-customs-dropdown-trigger-label {
+  min-width: 0;
+  color: inherit;
+  font-size: 16px;
   font-weight: 600;
-  background: linear-gradient(180deg, #fffaf1 0%, #fff 100%);
+  line-height: 1.2;
+}
+
+.car-details-customs-dropdown .car-details-customs-dropdown-trigger-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #b2782a;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.car-details-customs-dropdown.is-open .car-details-customs-dropdown-trigger-icon {
+  transform: rotate(180deg);
+}
+
+.car-details-customs-dropdown-trigger:focus-visible {
+  outline: none;
+  border-color: #d99a2b;
+  box-shadow: 0 0 0 2px rgba(217, 154, 43, 0.18);
+}
+
+.car-details-customs-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #edc987;
+  border-radius: 16px;
+  background: #fffaf1;
+  box-shadow: 0 16px 28px rgba(121, 72, 17, 0.16);
+  z-index: 20;
+}
+
+.car-details-customs-dropdown-option {
+  position: relative;
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 40px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #6f4518;
+  cursor: pointer;
+  text-align: left;
+}
+
+.car-details-customs-dropdown-option:hover:not(.is-active) {
+  background: rgba(217, 154, 43, 0.08);
+}
+
+.car-details-customs-dropdown-option.is-active {
+  background: linear-gradient(180deg, #f2cd86 0%, #e8b456 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(217, 154, 43, 0.24);
+}
+
+.car-details-customs-dropdown-option:focus-visible {
+  outline: 2px solid rgba(217, 154, 43, 0.28);
+  outline-offset: 2px;
+}
+
+.car-details-customs-dropdown .car-details-customs-dropdown-option-check {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: inherit;
+}
+
+.car-details-customs-dropdown .car-details-customs-dropdown-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.car-details-customs-dropdown .car-details-customs-dropdown-option-label {
+  color: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .car-details-customs-result {
@@ -3410,34 +3514,13 @@ body {
   border-top: 1px solid #f4dcae;
   padding-top: 10px;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.car-details-customs-result span {
-  color: #784421;
-  font-size: 13px;
-  font-weight: 600;
+  justify-content: flex-end;
 }
 
 .car-details-customs-result strong {
   color: #c46011;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-}
-
-.car-details-customs-result strong.is-manual {
-  font-size: 18px;
-}
-
-.car-details-customs-meta {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: #7b5532;
-  font-size: 11px;
 }
 
 .car-details-customs-note {
@@ -6305,8 +6388,7 @@ body {
   background: linear-gradient(180deg, #2a241a 0%, #1f1d18 100%);
 }
 
-[data-theme="dark"] .car-details-customs-grid span,
-[data-theme="dark"] .car-details-customs-meta {
+[data-theme="dark"] .car-details-customs-grid span {
   color: #d6b37c;
 }
 
@@ -6321,28 +6403,50 @@ body {
   color: #f4e3c4;
 }
 
-[data-theme="dark"] .car-details-customs-select {
+[data-theme="dark"] .car-details-customs-dropdown-trigger {
   background: linear-gradient(180deg, #241d12 0%, #17130e 100%);
+  border-color: #6a5322;
+  color: #f4e3c4;
 }
 
-[data-theme="dark"] .car-details-customs-select-wrap::after {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23d6b37c' viewBox='0 0 24 24'%3E%3Cpolyline points='6 9 12 15 18 9' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+[data-theme="dark"] .car-details-customs-dropdown-trigger-icon {
+  color: #d6b37c;
+}
+
+[data-theme="dark"] .car-details-customs-dropdown-trigger:focus-visible {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .car-details-customs-dropdown-menu {
+  border-color: #6a5322;
+  background: #241d12;
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .car-details-customs-dropdown-option {
+  color: #f4e3c4;
+}
+
+[data-theme="dark"] .car-details-customs-dropdown-option:hover:not(.is-active) {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+[data-theme="dark"] .car-details-customs-dropdown-option.is-active {
+  background: linear-gradient(180deg, #8a5d17 0%, #6d480f 100%);
+  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.22);
+}
+
+[data-theme="dark"] .car-details-customs-dropdown-option:focus-visible {
+  outline-color: rgba(245, 158, 11, 0.32);
 }
 
 [data-theme="dark"] .car-details-customs-result {
   border-top-color: #4e3e1b;
 }
 
-[data-theme="dark"] .car-details-customs-result span {
-  color: #d6b37c;
-}
-
 [data-theme="dark"] .car-details-customs-result strong {
   color: #f59e0b;
-}
-
-[data-theme="dark"] .car-details-customs-result strong.is-manual {
-  color: #f7d8a8;
 }
 
 [data-theme="dark"] .car-details-customs-note {

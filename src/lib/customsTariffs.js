@@ -84,6 +84,9 @@ const SPECIAL_CC_ALIASES = {
   '3000': { cc: 3000, liters: 3.0, label: '3000 cc' },
 }
 
+const HYBRID_VOLUME_HINT = '1801 cc, 2000 cc, 2500 cc, 3000 cc'
+const DIESEL_VOLUME_HINT = '1.6, 1.7, 2.0, 2.2, 2501 cc, 2.7, 3.3; 2.8 -> 2.7, 2.9-3.1 -> 3.3'
+
 const LITER_MATCH_TOLERANCE = 0.05
 const SPECIAL_CC_MATCH_TOLERANCE = 10
 
@@ -165,6 +168,22 @@ function resolveDieselVolumeColumn(engineValue) {
       key: '2501',
       liters: special.liters,
       label: special.label,
+    }
+  }
+
+  if (parsed.cc >= 2750 && parsed.cc < 2900) {
+    return {
+      key: '2.7',
+      liters: 2.7,
+      label: '2.7',
+    }
+  }
+
+  if (parsed.cc >= 2900 && parsed.cc <= 3199) {
+    return {
+      key: '3.3',
+      liters: 3.3,
+      label: '3.3',
     }
   }
 
@@ -265,7 +284,7 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
         fuel: fuelLabel,
         table: 'Гибрид по УСИР, не более 3 лет',
         row: rowLabel || '',
-        message: 'Для такого объёма гибрида в таблице нет точной колонки, требуется ручной расчёт.',
+        message: `Для гибрида в таблице доступны только объёмы ${HYBRID_VOLUME_HINT}, требуется ручной расчёт.`,
       })
     }
 
@@ -346,7 +365,9 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
       fuel: fuelLabel,
       table: tableLabel,
       row: rowKey,
-      message: 'Для такого объёма двигателя в таблице нет точной колонки, требуется ручной расчёт.',
+      message: fuel === 'diesel'
+        ? `Для дизеля в таблице доступны только объёмы ${DIESEL_VOLUME_HINT}, требуется ручной расчёт.`
+        : 'Для такого объёма двигателя в таблице нет точной колонки, требуется ручной расчёт.',
     })
   }
 

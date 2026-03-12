@@ -114,6 +114,103 @@ const ShieldSmallIcon = () => (
   </svg>
 )
 
+const ChevronDownSmallIcon = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <polyline points="6 9 12 15 18 9" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+const CheckSmallIcon = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <polyline points="20 6 9 17 4 12" strokeWidth={2.3} strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+function CustomsDropdown({ label, ariaLabel, value, options, onChange }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+  const activeOption = useMemo(
+    () => options.find((option) => option.value === value) || options[0] || null,
+    [options, value]
+  )
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handlePointerDown = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  return (
+    <label className="car-details-customs-select-field">
+      <span>{label}</span>
+      <div className={`car-details-customs-dropdown${open ? ' is-open' : ''}`} ref={rootRef}>
+        <button
+          type="button"
+          className="car-details-customs-dropdown-trigger"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span className="car-details-customs-dropdown-trigger-content">
+            {activeOption?.flag ? (
+              <span className="car-details-customs-dropdown-badge" aria-hidden="true">{activeOption.flag}</span>
+            ) : null}
+            <span className="car-details-customs-dropdown-trigger-label">{activeOption?.label || ''}</span>
+          </span>
+          <span className="car-details-customs-dropdown-trigger-icon" aria-hidden="true">
+            <ChevronDownSmallIcon />
+          </span>
+        </button>
+        {open && (
+          <div className="car-details-customs-dropdown-menu" role="listbox" aria-label={ariaLabel}>
+            {options.map((option) => {
+              const isActive = option.value === value
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  className={`car-details-customs-dropdown-option${isActive ? ' is-active' : ''}`}
+                  onClick={() => {
+                    onChange(option.value)
+                    setOpen(false)
+                  }}
+                >
+                  <span className="car-details-customs-dropdown-option-check" aria-hidden="true">
+                    {isActive ? <CheckSmallIcon /> : null}
+                  </span>
+                  {option.flag ? (
+                    <span className="car-details-customs-dropdown-badge" aria-hidden="true">{option.flag}</span>
+                  ) : null}
+                  <span className="car-details-customs-dropdown-option-label">{option.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </label>
+  )
+}
+
 function parseYear(value) {
   const m = String(value || '').match(/\d{4}/)
   return m ? Number(m[0]) : new Date().getFullYear()
@@ -1667,34 +1764,20 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                     onChange={(e) => updateCalc({ engine: sanitizeEngineInput(e.target.value) })}
                   />
                 </label>
-                <label className="car-details-customs-select-field">
-                  <span>Тип двигателя</span>
-                  <div className="car-details-customs-select-wrap">
-                    <select
-                      className="car-details-customs-select"
-                      value={calc.fuel}
-                      onChange={(e) => updateCalc({ fuel: e.target.value })}
-                    >
-                    {CUSTOMS_FUEL_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                    </select>
-                  </div>
-                </label>
-                <label className="car-details-customs-select-field">
-                  <span>Направление ввоза</span>
-                  <div className="car-details-customs-select-wrap">
-                    <select
-                      className="car-details-customs-select"
-                      value={calc.direction}
-                      onChange={(e) => updateCalc({ direction: e.target.value })}
-                    >
-                    {CUSTOMS_DIRECTION_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{`${option.flag} ${option.label}`}</option>
-                    ))}
-                    </select>
-                  </div>
-                </label>
+                <CustomsDropdown
+                  label="Тип двигателя"
+                  ariaLabel="Тип двигателя"
+                  value={calc.fuel}
+                  options={CUSTOMS_FUEL_OPTIONS}
+                  onChange={(value) => updateCalc({ fuel: value })}
+                />
+                <CustomsDropdown
+                  label="Направление ввоза"
+                  ariaLabel="Направление ввоза"
+                  value={calc.direction}
+                  options={CUSTOMS_DIRECTION_OPTIONS}
+                  onChange={(value) => updateCalc({ direction: value })}
+                />
                 <label className="car-details-customs-toggle">
                   <input
                     type="checkbox"
@@ -1704,17 +1787,11 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                   <span>Премиум-класс</span>
                 </label>
               </div>
-              <div className="car-details-customs-result">
-                <span>{customsResult.status === 'success' ? 'Итог по таблице' : 'Нужен ручной расчёт'}</span>
-                <strong className={customsResult.status === 'success' ? '' : 'is-manual'}>
-                  {customsResult.status === 'success' ? `$${customsResult.amount.toLocaleString('en-US')}` : 'Уточнение'}
-                </strong>
-              </div>
-              <div className="car-details-customs-meta">
-                {customsResult.meta.map((item) => (
-                  <span key={`${item.label}-${item.value}`}>{item.label}: {item.value}</span>
-                ))}
-              </div>
+              {customsResult.status === 'success' ? (
+                <div className="car-details-customs-result">
+                  <strong>{`$${customsResult.amount.toLocaleString('en-US')}`}</strong>
+                </div>
+              ) : null}
               {customsResult.status !== 'success' && customsResult.message ? (
                 <p className="car-details-customs-note is-warning">{customsResult.message}</p>
               ) : null}
