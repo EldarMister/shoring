@@ -151,7 +151,9 @@ export default function Header() {
 
     const currentQuery = locationQuery
     const nextQuery = searchTerm.trim()
-    if (currentQuery === nextQuery && location.pathname === searchTargetPath) {
+    const hasPendingWhitespace = searchTerm !== nextQuery
+
+    if (!hasPendingWhitespace && currentQuery === nextQuery && location.pathname === searchTargetPath) {
       const timer = setTimeout(() => {
         setSearchDirty(false)
       }, 0)
@@ -170,7 +172,9 @@ export default function Header() {
       params.delete('page')
 
       navigate(`${searchTargetPath}${params.toString() ? `?${params}` : ''}`, { replace: true })
-      setSearchDirty(false)
+      if (!hasPendingWhitespace) {
+        setSearchDirty(false)
+      }
     }, 250)
 
     return () => clearTimeout(timer)
