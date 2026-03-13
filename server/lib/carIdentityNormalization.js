@@ -7,6 +7,42 @@ const CANONICAL_DRIVE_TYPES = new Set([
   'Полный (4WD)',
 ])
 
+const SAFE_WORD_REPLACEMENTS = Object.freeze([
+  [/\bMaibaheu\b/gi, 'Maybach'],
+  [/\bAekseolreonseu\b/gi, 'Excellence'],
+  [/\bEodeubaentiji\b/gi, 'Advantage'],
+  [/\bPaekiji\b/gi, 'Package'],
+  [/\bPeulraedeu\b/gi, 'Plaid'],
+  [/\bObeoraendeu\b/gi, 'Overland'],
+  [/\bPawo\b/gi, 'Power'],
+  [/\bRonjityudeu\b/gi, 'Longitude'],
+  [/\bKeonbeoteobeul\b/gi, 'Convertible'],
+  [/\bHaechibaek\b/gi, 'Hatchback'],
+  [/\bKabeuriolre\b/gi, 'Cabriolet'],
+  [/\bReibeul\b/gi, 'Label'],
+  [/\bRijeobeu\b/gi, 'Reserve'],
+  [/\bGeuraebiti\b/gi, 'Gravity'],
+  [/\bRedeurain\b/gi, 'Redline'],
+  [/\bKeuroseu\b/gi, 'Cross'],
+  [/\bAltityudeu\b/gi, 'Altitude'],
+  [/\bGeuranrusso\b/gi, 'GranLusso'],
+  [/\bBeiseu\b/gi, 'Base'],
+  [/\bReonchi\b/gi, 'Launch'],
+  [/\bKweseuteu\b/gi, 'Quest'],
+  [/\bBijeuniseu\b/gi, 'Business'],
+  [/\bEeo\b/gi, 'Air'],
+  [/\bUlteura\b/gi, 'Ultra'],
+  [/\bDakeu\b/gi, 'Dark'],
+  [/\bDyueolmoteo\b/gi, 'Dual Motor'],
+  [/\bSinggeulmoteo\b/gi, 'Single Motor'],
+  [/\bAuteo\b/gi, 'Outer'],
+  [/\bBaengkeuseu\b/gi, 'Banks'],
+  [/\bEkobuseuteu\b/gi, 'EcoBoost'],
+  [/\bKarera\b/gi, 'Carrera'],
+  [/\bNobleless\b/gi, 'Noblesse'],
+  [/\bManupaktueo\b/gi, 'MANUFAKTUR'],
+])
+
 const BRAND_RULES = Object.freeze([
   {
     brand: 'Honda',
@@ -43,6 +79,13 @@ const BRAND_RULES = Object.freeze([
     matcher: /\bKia\b/i,
     replacements: [],
   },
+  {
+    brand: 'Polestar',
+    matcher: /\bPolestar\b/i,
+    replacements: [
+      [/\bPolestar\s+Polestar\b/gi, 'Polestar'],
+    ],
+  },
 ])
 
 const HONDA_ACCORD_HYBRID_TOURING_RE = /\bAccord\b.*\bHybrid\b.*\bTouring\b|\bTouring\b.*\bHybrid\b.*\bAccord\b/i
@@ -53,6 +96,36 @@ const KIA_CARNIVAL_RE = /\bCarnival\b/i
 const KIA_CARNIVAL_FWD_HINT_RE = /\b(?:Gasoline|HEV|Signature|Noblesse|Prestige|Luxury|Gravity)\b|\bX\s*Line\b|\bHi[-\s]*Limousine\b|\b(?:4|7|9|11)\s*seats?\b/i
 const HYUNDAI_INSPIRATION_RE = /\bInspiration\b/i
 const HYUNDAI_INSPIRE_RE = /\bInspire\b/gi
+const EXPLICIT_AWD_RE = /\bAWD\b|\bxDrive\b|\bquattro\b|\b4MATIC(?:\+)?\b/i
+const EXPLICIT_4WD_RE = /\b4WD\b/i
+const EXPLICIT_2WD_RE = /\b2WD\b/i
+const IDENTITY_2WD_DRIVE_RULES = Object.freeze([
+  { matcher: /\bHonda\b.*\bAccord\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bHonda\b.*\bCR[\s-]?V\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bToyota\b.*\bRAV4\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bToyota\b.*\bSienna\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bLexus\b.*\bUX\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bKia\b.*\bCarnival\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bKia\b.*\bSportage\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bKia\b.*\bNiro\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bKia\b.*\bRAY\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bHyundai\b.*\bTucson\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bGenesis\b.*\bG70\b/i, drive: 'Задний (RWD)' },
+  { matcher: /\bGenesis\b.*\bG80\b/i, drive: 'Задний (RWD)' },
+  { matcher: /\bGenesis\b.*\bG90\b/i, drive: 'Задний (RWD)' },
+  { matcher: /\bGenesis\b.*\bGV70\b/i, drive: 'Задний (RWD)' },
+  { matcher: /\bGenesis\b.*\bGV80\b/i, drive: 'Задний (RWD)' },
+  { matcher: /\bRenault\s+Samsung\b.*\bQM6\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bRenault\s+Samsung\b.*\bGrand\s+Koleos\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bRenault\s+Samsung\b.*\bArkana\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bRenault\s+Samsung\b.*\bXM3\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bSsangYong\b.*\bTivoli\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bSsangYong\b.*\bKORANDO\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bJeep\b.*\bCherokee\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bJeep\b.*\bCompass\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bChevrolet\b.*\bEquinox\b/i, drive: 'Передний (FWD)' },
+  { matcher: /\bChevrolet\b.*\bColorado\b/i, drive: 'Задний (RWD)' },
+])
 
 function cleanText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
@@ -77,15 +150,32 @@ function detectBrand(...values) {
 
 function applyBrandReplacements(value, brand) {
   const text = cleanText(value)
-  if (!text || !brand) return text
+  if (!text) return text
 
-  const rule = BRAND_RULES.find((entry) => entry.brand === brand)
-  if (!rule?.replacements?.length) return text
-
-  return rule.replacements.reduce(
+  let normalized = SAFE_WORD_REPLACEMENTS.reduce(
     (current, [pattern, replacement]) => current.replace(pattern, replacement),
     text,
-  ).replace(/\s+/g, ' ').trim()
+  )
+
+  if (!brand) return normalized.replace(/\s+/g, ' ').trim()
+
+  const rule = BRAND_RULES.find((entry) => entry.brand === brand)
+  if (!rule?.replacements?.length) return normalized.replace(/\s+/g, ' ').trim()
+
+  normalized = rule.replacements.reduce(
+    (current, [pattern, replacement]) => current.replace(pattern, replacement),
+    normalized,
+  )
+
+  return normalized.replace(/\s+/g, ' ').trim()
+}
+
+function resolveMapped2wdDrive(combined) {
+  for (const rule of IDENTITY_2WD_DRIVE_RULES) {
+    if (rule.matcher.test(combined)) return rule.drive
+  }
+
+  return ''
 }
 
 function normalizeTrimWithContext(value, brand, name, model) {
@@ -100,13 +190,34 @@ function normalizeTrimWithContext(value, brand, name, model) {
 
 function resolveIdentityDrive({ brand, name, model, trim_level, drive_type }) {
   const currentDrive = cleanText(drive_type)
-  if (CANONICAL_DRIVE_TYPES.has(currentDrive)) return currentDrive
-
   const normalizedCurrentDrive = normalizeDrive(currentDrive)
-  if (CANONICAL_DRIVE_TYPES.has(normalizedCurrentDrive)) return normalizedCurrentDrive
 
   const combined = [name, model, trim_level].map((value) => cleanText(value)).filter(Boolean).join(' ')
   if (!combined) return drive_type
+
+  if (EXPLICIT_4WD_RE.test(combined)) {
+    return 'Полный (4WD)'
+  }
+
+  if (EXPLICIT_AWD_RE.test(combined)) {
+    return 'Полный (AWD)'
+  }
+
+  if (EXPLICIT_2WD_RE.test(combined)) {
+    const mapped2wdDrive = resolveMapped2wdDrive(combined)
+    if (mapped2wdDrive) {
+      if (!CANONICAL_DRIVE_TYPES.has(currentDrive)) return mapped2wdDrive
+      if (currentDrive === 'Полный (AWD)' || currentDrive === 'Полный (4WD)') return mapped2wdDrive
+      return currentDrive
+    }
+
+    if (CANONICAL_DRIVE_TYPES.has(currentDrive)) return currentDrive
+    if (CANONICAL_DRIVE_TYPES.has(normalizedCurrentDrive)) return normalizedCurrentDrive
+    return drive_type
+  }
+
+  if (CANONICAL_DRIVE_TYPES.has(currentDrive)) return currentDrive
+  if (CANONICAL_DRIVE_TYPES.has(normalizedCurrentDrive)) return normalizedCurrentDrive
 
   if (brand === 'Honda' && HONDA_ACCORD_HYBRID_TOURING_RE.test(combined)) {
     return 'Передний (FWD)'

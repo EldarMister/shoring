@@ -447,6 +447,38 @@ function run() {
   assert.equal(compactBmwXdrive.name, 'BMW X5 xDrive40i M Sport')
   assert.equal(compactBmwXdrive.trim_level, 'xDrive40i M Sport')
 
+  const maybachMercedes = normalizeCarTextFields({
+    name: 'Mercedes-Benz S-Class Maibaheu S580 4MATIC',
+  })
+  assert.equal(maybachMercedes.name, 'Mercedes-Benz S-Class Maybach S580 4MATIC')
+
+  const excellenceVolvo = normalizeCarTextFields({
+    name: 'Volvo S90 T8 AWD Aekseolreonseu',
+  })
+  assert.equal(excellenceVolvo.name, 'Volvo S90 T8 AWD Excellence')
+
+  const redlineChevrolet = normalizeCarTextFields({
+    name: 'Chevrolet Traverse 3.6 AWD Redeurain',
+  })
+  assert.equal(redlineChevrolet.name, 'Chevrolet Traverse 3.6 AWD Redline')
+
+  const carreraPorsche = normalizeCarTextFields({
+    name: 'Porsche 911 Karera 4S Kabeuriolre',
+  })
+  assert.equal(carreraPorsche.name, 'Porsche 911 Carrera 4S Cabriolet')
+
+  const noblessKia = normalizeCarTextFields({
+    name: 'Kia Sportage Nobleless',
+  })
+  assert.equal(noblessKia.name, 'Kia Sportage Noblesse')
+
+  const polestarMotors = normalizeCarTextFields({
+    name: 'Polestar Polestar 4 Long Range Dyueolmoteo',
+    model: 'Polestar Polestar 4 Long Range Singgeulmoteo',
+  })
+  assert.equal(polestarMotors.name, 'Polestar 4 Long Range Dual Motor')
+  assert.equal(polestarMotors.model, 'Polestar 4 Long Range Single Motor')
+
   const hondaCrv2wd = normalizeCarTextFields({
     name: 'Honda CR-V 1.5 EX-L 2WD',
     drive_type: '',
@@ -476,6 +508,25 @@ function run() {
     drive_type: 'Полный (AWD)',
   })
   assert.equal(canonicalDrivePreserved.drive_type, 'Полный (AWD)')
+
+  const explicitAwDrive = normalizeCarTextFields({
+    name: 'Audi A6 45 TFSI quattro',
+    drive_type: '',
+  })
+  assert.equal(explicitAwDrive.drive_type, 'Полный (AWD)')
+
+  const kiaSportage2wdFix = normalizeCarTextFields({
+    name: 'Kia Sportage Signature Geuraebiti 2WD',
+    drive_type: 'Полный (4WD)',
+  })
+  assert.equal(kiaSportage2wdFix.name, 'Kia Sportage Signature Gravity 2WD')
+  assert.equal(kiaSportage2wdFix.drive_type, 'Передний (FWD)')
+
+  const genesis2wdFix = normalizeCarTextFields({
+    name: 'Genesis G80 2.5 Turbo 2WD',
+    drive_type: '',
+  })
+  assert.equal(genesis2wdFix.drive_type, 'Задний (RWD)')
 
   const unrelatedTitle = normalizeCarTextFields({
     name: 'Generic Tueoring Package',
