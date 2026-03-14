@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { VAT_REFUND_RATE, getColorSwatch, normalizeKeyInfoLabel, normalizeTrimLabel } from '../../lib/vehicleDisplay'
 import { useDeliveryContext } from '../../context/DeliveryContext.jsx'
-import { resolveDeliveryForCar, resolveDeliveryTypeLabel } from '../../lib/delivery.js'
+import { resolveDeliveryForCar } from '../../lib/delivery.js'
 
 const HANGUL_RE = /[\uAC00-\uD7A3]/u
 
@@ -197,7 +197,6 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
     () => resolveDeliveryForCar({ car, settings: deliverySettings, countryCode: selectedCountryCode }),
     [car, deliverySettings, selectedCountryCode],
   )
-  const deliveryTypeLabel = resolveDeliveryTypeLabel(deliveryInfo.country || selectedCountry)
   const resolvedDelivery = deliveryInfo.price
   const deliveryDisplayValue = Number.isFinite(resolvedDelivery)
     ? `$${Number(resolvedDelivery).toLocaleString()}`
@@ -396,7 +395,7 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
               <span>${Number(car.commission || 0).toLocaleString()}</span>
             </div>
             <div className="car-price-row">
-              <span>{`???????? (${deliveryTypeLabel}):`}</span>
+              <span>Доставка:</span>
               <span>{deliveryDisplayValue}</span>
             </div>
             <div className="car-price-row">

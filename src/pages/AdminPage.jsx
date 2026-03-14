@@ -1087,83 +1087,83 @@ function Settings({ toast, pricingSettings, pricingLoaded, onSavePricingSettings
                 </div>
             </div>
             <div className="adm-chart-box" style={{ marginTop: 20 }}>
-                <div className="adm-chart-title">?????? ????????</div>
+                <div className="adm-chart-title">Страны доставки</div>
                 <div className="adm-price-grid">
                     {settings.delivery_countries.map((country, index) => (
                         <div key={country.code || index} className="adm-settings-card" style={{ padding: 14 }}>
                             <div className="adm-field" style={{ marginBottom: 10 }}>
-                                <label className="adm-label">??????</label>
+                                <label className="adm-label">Страна</label>
                                 <input className="adm-input" value={country.label} onChange={e => setCountry(index, { label: e.target.value })} />
                             </div>
                             <div className="adm-field" style={{ marginBottom: 10 }}>
-                                <label className="adm-label">????</label>
-                                <input className="adm-input" value={country.flag || ''} onChange={e => setCountry(index, { flag: e.target.value })} placeholder="????" />
+                                <label className="adm-label">Флаг</label>
+                                <input className="adm-input" value={country.flag || ''} onChange={e => setCountry(index, { flag: e.target.value })} placeholder="🇰🇬" />
                             </div>
                             <div className="adm-field" style={{ marginBottom: 10 }}>
-                                <label className="adm-label">??? ????????</label>
+                                <label className="adm-label">Тип доставки</label>
                                 <select
                                     className="adm-select"
                                     value={country.code === 'kg' ? 'container' : (country.shipping_type || 'ro_ro')}
                                     onChange={e => setCountry(index, { shipping_type: e.target.value })}
                                     disabled={country.code === 'kg'}
                                 >
-                                    <option value="container">?????????</option>
+                                    <option value="container">Контейнер</option>
                                     <option value="ro_ro">Ro-Ro</option>
                                 </select>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                                <div className="adm-car-sub">???: {country.code}</div>
+                                <div className="adm-car-sub">Код: {country.code}</div>
                                 <button
                                     className="adm-btn adm-btn-cancel"
                                     type="button"
                                     onClick={() => removeCountry(index)}
                                     disabled={country.code === 'kg'}
                                 >
-                                    ???????
+                                    Удалить
                                 </button>
                             </div>
                         </div>
                     ))}
                 </div>
                 <div style={{ marginTop: 12 }}>
-                    <button className="adm-btn adm-btn-sm" type="button" onClick={addCountry}>???????? ??????</button>
+                    <button className="adm-btn adm-btn-sm" type="button" onClick={addCountry}>Добавить страну</button>
                 </div>
             </div>
             <div className="adm-chart-box" style={{ marginTop: 20 }}>
-                <div className="adm-chart-title">????????? ????????</div>
+                <div className="adm-chart-title">Профили доставки</div>
                 <div className="adm-price-grid">
                     {settings.delivery_profiles.map((profile, index) => (
                         <div key={profile.code || index} className="adm-settings-card" style={{ padding: 14 }}>
                             <div className="adm-field" style={{ marginBottom: 10 }}>
-                                <label className="adm-label">???????? ?????????</label>
+                                <label className="adm-label">Название профиля</label>
                                 <input className="adm-input" value={profile.label} onChange={e => setProfile(index, { label: e.target.value })} />
                             </div>
                             <div className="adm-field" style={{ marginBottom: 10 }}>
-                                <label className="adm-label">??????? / ????????</label>
+                                <label className="adm-label">Модели / примеры</label>
                                 <input className="adm-input" value={profile.description} onChange={e => setProfile(index, { description: e.target.value })} />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                                <div className="adm-car-sub">???: {profile.code}</div>
-                                <button className="adm-btn adm-btn-cancel" type="button" onClick={() => removeProfile(index)}>???????</button>
+                                <div className="adm-car-sub">Код: {profile.code}</div>
+                                <button className="adm-btn adm-btn-cancel" type="button" onClick={() => removeProfile(index)}>Удалить</button>
                             </div>
                         </div>
                     ))}
                 </div>
                 <div style={{ marginTop: 12 }}>
-                    <button className="adm-btn adm-btn-sm" type="button" onClick={addProfile}>???????? ?????????</button>
+                    <button className="adm-btn adm-btn-sm" type="button" onClick={addProfile}>Добавить профиль</button>
                 </div>
             </div>
             <div className="adm-chart-box" style={{ marginTop: 20 }}>
-                <div className="adm-chart-title">???? ???????? ?? ???????</div>
+                <div className="adm-chart-title">Цены доставки по странам</div>
                 <div className="adm-table-wrap adm-delivery-matrix">
                     <table className="adm-table">
                         <thead>
                             <tr>
-                                <th>?????????</th>
+                                <th>Профиль</th>
                                 {settings.delivery_countries.map((country) => (
                                     <th key={country.code}>
                                         <span className="adm-delivery-country-head">
-                                            <span className="adm-delivery-country-flag">{country.flag || '???'}</span>
+                                            <span className="adm-delivery-country-flag">{country.flag || '-'}</span>
                                             <span>{country.label}</span>
                                         </span>
                                     </th>
@@ -1194,7 +1194,7 @@ function Settings({ toast, pricingSettings, pricingLoaded, onSavePricingSettings
                     </table>
                 </div>
                 <div className="adm-car-sub" style={{ marginTop: 10 }}>
-                    ???? ???? ??? ?????? ?? ???????, ?? ?????? ????? ???????? ????????????. ??? ??????????? ?????? ???????????? ??? ???????? ???????????.
+                    Если цена для страны не указана, будет использоваться цена доставки по умолчанию. Эти значения можно настраивать для каждого профиля.
                 </div>
             </div>
             <div style={{ marginTop: 20 }}>

@@ -27,7 +27,7 @@ import {
 import { CAR_SECTION_CONFIG } from '../lib/catalogSections.js'
 import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
 import { useDeliveryContext } from '../context/DeliveryContext.jsx'
-import { resolveDeliveryForCar, resolveDeliveryTypeLabel } from '../lib/delivery.js'
+import { resolveDeliveryForCar } from '../lib/delivery.js'
 
 const VAT_REFUND_PERCENT = Math.round(VAT_REFUND_RATE * 100)
 
@@ -1621,7 +1621,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     () => resolveDeliveryForCar({ car, settings: deliverySettings, countryCode: selectedCountryCode }),
     [car, deliverySettings, selectedCountryCode],
   )
-  const deliveryTypeLabel = resolveDeliveryTypeLabel(deliveryInfo.country || selectedCountry)
   const resolvedDelivery = deliveryInfo.price
   const resolvedTotal = useMemo(() => {
     if (!car) return null
@@ -1778,7 +1777,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 <div className="car-price-row"><span>Финальная цена (USD):</span><span>${car.priceUSD.toLocaleString()}</span></div>
                 <div className="car-price-row car-price-vat"><span>{`Возврат НДС:`}</span><span>-${car.vatRefund.toLocaleString()}</span></div>
                 <div className="car-price-row"><span>Комиссия компании:</span><span>${car.commission.toLocaleString()}</span></div>
-                <div className="car-price-row"><span>{`Доставка (${deliveryTypeLabel}):`}</span><span>{deliveryDisplayValue}</span></div>
+                <div className="car-price-row"><span>Доставка:</span><span>{deliveryDisplayValue}</span></div>
                 <div className="car-price-row"><span>Погрузка:</span><span>${car.loading.toLocaleString()}</span></div>
                 <div className="car-price-row"><span>Выгрузка:</span><span>${car.unloading.toLocaleString()}</span></div>
                 <div className="car-price-row"><span>Стоянка:</span><span>${car.storage.toLocaleString()}</span></div>
