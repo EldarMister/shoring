@@ -129,23 +129,23 @@ const SUSPICIOUS_DUPLICATE_INTERIOR_COLORS = new Set([
   'Графитовый',
 ])
 
-const INTERIOR_COLOR_TEXT_MARKERS = '(?:\\uC2DC\\uD2B8|\\uB0B4\\uC7A5(?:\\s*\\uC0AC\\uC591)?|\\uC2E4\\uB0B4(?:\\s*\\uC0C9\\uC0C1|\\s*\\uCEEC\\uB7EC)?|\\uC778\\uD14C\\uB9AC\\uC5B4|seat(?:s)?(?:\\s*(?:color|trim))?|interior(?:\\s*color)?|upholstery|trim(?:\\s*color)?|seat\\s*cover|dashboard|door\\s*trim|headliner|siteu(?:\\s*(?:color|trim))?|silnae(?:\\s*(?:saeksang|keolreo))?|naejang(?:\\s*sayang)?|inteorieo|upeolseuteori)'
-const INTERIOR_COLOR_CONTEXT_MARKERS = `(?:${INTERIOR_COLOR_TEXT_MARKERS}|\\uAC00\\uC8FD|\\uB098\\uD30C|\\uBAA8\\uB178\\uD1A4|\\uD22C\\uD1A4|\\uCEE8\\uD2B8\\uB77C\\uC2A4\\uD2B8|leather|nappa|alcantara|suede|monotone|two[-\\s]*tone|bi[-\\s]*tone|dual[-\\s]*tone|contrast|cabin|cockpit)`
-const INTERIOR_COLOR_EXPLICIT_LABEL_MARKERS = '(?:\\uB0B4\\uC7A5(?:\\s*\\uC0C9\\uC0C1|\\s*\\uC0AC\\uC591)?|\\uC2E4\\uB0B4(?:\\s*\\uC0C9\\uC0C1|\\s*\\uCEEC\\uB7EC)?|\\uC2DC\\uD2B8\\s*(?:\\uC0C9\\uC0C1|\\uCEEC\\uB7EC)|interior(?:\\s*color)?|seat\\s*color|trim\\s*color|upholstery)'
-const INTERIOR_COLOR_LABEL_RE = /(?:\uB0B4\uC7A5(?:\s*\uC0AC\uC591|\s*\uC0C9\uC0C1)?|\uC2E4\uB0B4(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|\uC2DC\uD2B8(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|interior(?:\s*color)?|seat(?:s)?(?:\s*(?:color|trim))?|trim\s*color|upholstery|headliner|door\s*trim)/i
+const INTERIOR_COLOR_TEXT_MARKERS = '(?:\\uC2DC\\uD2B8(?:\\s*(?:\\uC0C9\\uC0C1|\\uCEEC\\uB7EC))?|\\uB0B4\\uC7A5(?:\\s*\\uC0AC\\uC591|\\s*\\uC0C9\\uC0C1)?|\\uC2E4\\uB0B4(?:\\s*\\uC0C9\\uC0C1|\\s*\\uCEEC\\uB7EC)?|\\uC778\\uD14C\\uB9AC\\uC5B4|\\uAC00\\uC8FD(?:\\s*\\uC0C9\\uC0C1)?|\\uB098\\uD30C(?:\\s*\\uAC00\\uC8FD)?|seat(?:s)?(?:\\s*(?:color|trim|upholstery))?|interior(?:\\s*(?:color|trim|material))?|upholstery(?:\\s*color)?|trim(?:\\s*color)?|seat\\s*cover|dashboard(?:\\s*trim)?|door\\s*trim|headliner|material(?:\\s*color)?|siteu(?:\\s*(?:color|trim))?|silnae(?:\\s*(?:saeksang|keolreo))?|naejang(?:\\s*sayang)?|inteorieo|gajuk(?:\\s*saeksang)?|napa|upeolseuteori)'
+const INTERIOR_COLOR_CONTEXT_MARKERS = `(?:${INTERIOR_COLOR_TEXT_MARKERS}|\\uAC00\\uC8FD|\\uB098\\uD30C|\\uBAA8\\uB178\\uD1A4|\\uD22C\\uD1A4|\\uCEE8\\uD2B8\\uB77C\\uC2A4\\uD2B8|leather|nappa|alcantara|suede|merino|vernasca|sensatec|monotone|two[-\\s]*tone|bi[-\\s]*tone|dual[-\\s]*tone|contrast|cabin|cockpit|colorway)`
+const INTERIOR_COLOR_EXPLICIT_LABEL_MARKERS = '(?:\\uB0B4\\uC7A5(?:\\s*\\uC0C9\\uC0C1|\\s*\\uC0AC\\uC591)?|\\uC2E4\\uB0B4(?:\\s*\\uC0C9\\uC0C1|\\s*\\uCEEC\\uB7EC)?|\\uC2DC\\uD2B8\\s*(?:\\uC0C9\\uC0C1|\\uCEEC\\uB7EC)?|\\uAC00\\uC8FD(?:\\s*\\uC0C9\\uC0C1)?|\\uB098\\uD30C(?:\\s*\\uAC00\\uC8FD)?|interior(?:\\s*(?:color|trim|material))?|seat\\s*(?:color|trim|upholstery)|trim\\s*color|upholstery(?:\\s*color)?|material(?:\\s*color)?)'
+const INTERIOR_COLOR_LABEL_RE = /(?:\uB0B4\uC7A5(?:\s*\uC0AC\uC591|\s*\uC0C9\uC0C1)?|\uC2E4\uB0B4(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|\uC2DC\uD2B8(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|\uAC00\uC8FD(?:\s*\uC0C9\uC0C1)?|\uB098\uD30C(?:\s*\uAC00\uC8FD)?|interior(?:\s*(?:color|trim|material))?|seat(?:s)?(?:\s*(?:color|trim|upholstery))?|trim\s*color|upholstery(?:\s*color)?|material(?:\s*color)?|headliner|door\s*trim)/i
 const INTERIOR_COLOR_REJECT_RE = /(?:body\s*color|exterior|paint|outer\s*color|\uC678\uC7A5|\uC678\uC7A5\s*\uC0C9\uC0C1|\uCC28\uCCB4\s*\uC0C9\uC0C1)/i
 const INTERIOR_COLOR_SEGMENT_SPLIT_RE = /(?:\r?\n|[|,;]|\/|▶|★|◈|▪|•|\u2022)+/g
 const INTERIOR_COLOR_TEXT_PATTERNS = Object.freeze([
   { color: 'Двухцветный', source: '(?:\\uD22C\\s*\\uD1A4|\\uD22C\\uD1A4|\\uCEE8\\uD2B8\\uB77C\\uC2A4\\uD2B8|two[-\\s]*tone|bi[-\\s]*tone|dual[-\\s]*tone|contrast)' },
-  { color: 'Кремовый', source: '(?:\\uC544\\uC774\\uBCF4\\uB9AC|\\uD06C\\uB9BC|\\uC624\\uD504\\s*\\uD654\\uC774\\uD2B8|ivory|cream|oyster|porcelain|parchment|off\\s*white|bone|vanilla|macchiato|aibori|keurim|opeu\\s*hwaiteu)' },
+  { color: 'Кремовый', source: '(?:\\uC544\\uC774\\uBCF4\\uB9AC|\\uD06C\\uB9BC|\\uC624\\uD504\\s*\\uD654\\uC774\\uD2B8|ivory|cream|oyster|porcelain|parchment|off\\s*white|bone|vanilla|macchiato|magnolia|cashmere\\s*beige|silk\\s*beige|aibori|keurim|opeu\\s*hwaiteu)' },
   { color: 'Светло-серый', source: '(?:light\\s*(?:gray|grey)|silverstone|ash\\s*(?:gray|grey)|platinum\\s*(?:gray|grey)|\\uB77C\\uC774\\uD2B8\\s*\\uADF8\\uB808\\uC774)' },
   { color: 'Темно-серый', source: '(?:dark\\s*(?:gray|grey)|deep\\s*(?:gray|grey)|charcoal|anthracite|graphite|slate|basalt|space\\s*(?:gray|grey)|\\uCC28\\uCF5C|\\uADF8\\uB798\\uD53C\\uD2B8)' },
-  { color: 'Рыжий / карамельный', source: '(?:\\uCE74\\uBA5C|\\uCE90\\uB7EC\\uBA5C|\\uCF54\\uB0D1|tan|camel|caramel|cognac|saddle|chestnut|nougat|whisk(?:e)?y|tobacco|ginger|peanut\\s*butter|kamel|konyak|kkonyak|konnyak)' },
+  { color: 'Рыжий / карамельный', source: '(?:\\uCE74\\uBA5C|\\uCE90\\uB7EC\\uBA5C|\\uCF54\\uB0D1|tan|camel|caramel|cognac|saddle|chestnut|nougat|whisk(?:e)?y|tobacco|ginger|peanut\\s*butter|brandy|toffee|cohiba|kamel|konyak|kkonyak|konnyak)' },
   { color: 'Бордовый', source: '(?:\\uBC84\\uAC74\\uB514|\\uC640\\uC778|burgundy|bordeaux|wine|merlot|claret|oxblood|maroon|sakhir)' },
   { color: 'Черный', source: '(?:\\uBE14\\uB799|\\uAC80\\uC815|\\uD751\\uC0C9|black|jet\\s*black|obsidian|onyx|ebony|beullaek|geomjeong|heuksaek)' },
   { color: 'Белый', source: '(?:\\uD654\\uC774\\uD2B8|\\uD770\\uC0C9|\\uBC31\\uC0C9|white|pure\\s*white|snow\\s*white|polar\\s*white|hwaiteu|huinsaek|baegsaek)' },
   { color: 'Бежевый', source: '(?:\\uBCA0\\uC774\\uC9C0|\\uC0CC\\uB4DC\\s*\\uBCA0\\uC774\\uC9C0|beige|sand\\s*beige|linen|cashmere|savanna|dune|beiji|saendeu\\s*beiji)' },
-  { color: 'Коричневый', source: '(?:\\uBE0C\\uB77C\\uC6B4|\\uD1A0\\uD504|\\uBAA8\\uCE74|\\uCEE4\\uD53C|brown|taupe|mocha|mokka|coffee|espresso|walnut|chocolate|beuraun|galsaek|topeu|moka)' },
+  { color: 'Коричневый', source: '(?:\\uBE0C\\uB77C\\uC6B4|\\uD1A0\\uD504|\\uBAA8\\uCE74|\\uCEE4\\uD53C|brown|taupe|mocha|mokka|coffee|espresso|walnut|chocolate|mahogany|havana|truffle|tartufo|criollo|beuraun|galsaek|topeu|moka)' },
   { color: 'Серый', source: '(?:\\uADF8\\uB808\\uC774|\\uBAA8\\uB358\\s*\\uADF8\\uB808\\uC774|\\uADF8\\uB808\\uC774\\uC9C0|\\uD68C\\uC0C9|gray|grey|greige|stone|modern\\s*gray|geurei|geureiji|hoesaek|modeon\\s*geurei)' },
   { color: 'Красный', source: '(?:\\uB808\\uB4DC|\\uC801\\uC0C9|red|crimson|scarlet|carmine|magma\\s*red|redeu)' },
   { color: 'Синий', source: '(?:\\uB124\\uC774\\uBE44|\\uCCAD\\uC0C9|blue|navy|marine|indigo|neibi|cheongsaek|parangsaek)' },
@@ -156,10 +156,14 @@ const INTERIOR_COLOR_CONTEXT_RE = new RegExp(INTERIOR_COLOR_CONTEXT_MARKERS, 'i'
 const INTERIOR_TWO_TONE_HINT_RE = /(?:\uD22C\s*\uD1A4|\uD22C\uD1A4|\uCEE8\uD2B8\uB77C\uC2A4\uD2B8|two[-\s]*tone|bi[-\s]*tone|dual[-\s]*tone|contrast)/i
 const INTERIOR_COLOR_SEPARATOR_RE = /(?:\/|&|\+|,|\band\b)/i
 const INTERIOR_COLOR_BOUNDARY_RE = /[\p{L}\p{N}]/u
-const INTERIOR_COMPOUND_EDGE_CONTEXT_RE = /(?:\uC2DC\uD2B8|\uB0B4\uC7A5(?:\s*\uC0AC\uC591)?|\uC2E4\uB0B4(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|\uC778\uD14C\uB9AC\uC5B4|\uAC00\uC8FD|\uB098\uD30C|\uBAA8\uB178\uD1A4|\uD22C\uD1A4|seat(?:s)?|interior|trim|upholstery|leather|nappa|monotone|two[-\s]*tone|bi[-\s]*tone|dual[-\s]*tone|contrast|siteu|silnae|naejang|inteorieo|gajuk|upeolseuteori)/i
-const INTERIOR_COLOR_VALUE_RE = /(?:\b(?:black|white|beige|brown|gray|grey|red|blue|green|orange|ivory|cream|burgundy|wine|tan|camel|caramel|cognac|charcoal|graphite)\b|(?:\uBE14\uB799|\uAC80\uC815|\uD751\uC0C9|\uD654\uC774\uD2B8|\uD770\uC0C9|\uBC31\uC0C9|\uBCA0\uC774\uC9C0|\uBE0C\uB77C\uC6B4|\uADF8\uB808\uC774|\uD68C\uC0C9|\uB808\uB4DC|\uC801\uC0C9|\uB124\uC774\uBE44|\uCCAD\uC0C9|\uADF8\uB9B0|\uC624\uB80C\uC9C0|\uC544\uC774\uBCF4\uB9AC|\uD06C\uB9BC|\uBC84\uAC74\uB514|\uC640\uC778|\uCE74\uBA5C|\uCE90\uB7EC\uBA5C|\uCF54\uB0D1|\uCC28\uCF5C|\uADF8\uB798\uD53C\uD2B8))/i
+const INTERIOR_COMPOUND_EDGE_CONTEXT_RE = /(?:\uC2DC\uD2B8|\uB0B4\uC7A5(?:\s*\uC0AC\uC591)?|\uC2E4\uB0B4(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|\uC778\uD14C\uB9AC\uC5B4|\uAC00\uC8FD|\uB098\uD30C|\uBAA8\uB178\uD1A4|\uD22C\uD1A4|seat(?:s)?|interior|trim|upholstery|leather|nappa|merino|vernasca|sensatec|monotone|two[-\s]*tone|bi[-\s]*tone|dual[-\s]*tone|contrast|siteu|silnae|naejang|inteorieo|gajuk|upeolseuteori)/i
+const INTERIOR_COLOR_VALUE_RE = /(?:\b(?:black|white|beige|brown|gray|grey|red|blue|green|orange|ivory|cream|oyster|porcelain|macchiato|burgundy|bordeaux|wine|tan|camel|caramel|cognac|charcoal|graphite|cohiba|mahogany|havana|truffle|tartufo|brandy|linen|cashmere)\b|(?:\uBE14\uB799|\uAC80\uC815|\uD751\uC0C9|\uD654\uC774\uD2B8|\uD770\uC0C9|\uBC31\uC0C9|\uBCA0\uC774\uC9C0|\uBE0C\uB77C\uC6B4|\uADF8\uB808\uC774|\uD68C\uC0C9|\uB808\uB4DC|\uC801\uC0C9|\uB124\uC774\uBE44|\uCCAD\uC0C9|\uADF8\uB9B0|\uC624\uB80C\uC9C0|\uC544\uC774\uBCF4\uB9AC|\uD06C\uB9BC|\uBC84\uAC74\uB514|\uC640\uC778|\uCE74\uBA5C|\uCE90\uB7EC\uBA5C|\uCF54\uB0D1|\uCC28\uCF5C|\uADF8\uB798\uD53C\uD2B8|\uC624\uC774\uC2A4\uD130|\uD3EC\uC140\uB9B0|\uB9C8\uCE74\uC544\uD1A0|\uCF54\uD788\uBC14|\uD2B8\uB7EC\uD50C|\uD558\uBC14\uB098|\uB9C8\uD638\uAC00\uB2C8))/i
 const INTERIOR_MARKETING_WHITE_RE = /\b(?:snow\s*white|pure\s*white|polar\s*white|pearl\s*white)\b/i
-const INTERIOR_MATERIAL_HINT_RE = /(?:\b(?:leather|nappa|alcantara|suede|quilted|perforated|premium|natural|seat(?:s)?|interior|trim|upholstery)\b|(?:\uAC00\uC8FD|\uB098\uD30C|\uC2DC\uD2B8|\uB0B4\uC7A5|\uC778\uD14C\uB9AC\uC5B4))/i
+const INTERIOR_MATERIAL_HINT_RE = /(?:\b(?:leather|nappa|alcantara|suede|quilted|perforated|premium|natural|seat(?:s)?|interior|trim|upholstery|merino|vernasca|sensatec|material)\b|(?:\uAC00\uC8FD|\uB098\uD30C|\uC2DC\uD2B8|\uB0B4\uC7A5|\uC778\uD14C\uB9AC\uC5B4))/i
+const INTERIOR_COMPOUND_COLOR_MARKERS = '(?:black|white|beige|brown|gray|grey|red|blue|green|orange|yellow|ivory|cream|oyster|porcelain|macchiato|burgundy|bordeaux|wine|tan|camel|caramel|cognac|charcoal|graphite|cohiba|mahogany|havana|truffle|tartufo|brandy|linen|cashmere|beullaek|geomjeong|heuksaek|beiji|beuraun|geurei|geureiji|redeu|neibi|geurin|orenji|aibori|keurim|beogeondi|wain|kamel|konyak|kkonyak|konnyak|moka|mokka|topeu|\uBE14\uB799|\uAC80\uC815|\uD751\uC0C9|\uD654\uC774\uD2B8|\uD770\uC0C9|\uBC31\uC0C9|\uBCA0\uC774\uC9C0|\uBE0C\uB77C\uC6B4|\uADF8\uB808\uC774|\uD68C\uC0C9|\uB808\uB4DC|\uC801\uC0C9|\uB124\uC774\uBE44|\uCCAD\uC0C9|\uADF8\uB9B0|\uC624\uB80C\uC9C0|\uC544\uC774\uBCF4\uB9AC|\uD06C\uB9BC|\uBC84\uAC74\uB514|\uC640\uC778|\uCE74\uBA5C|\uCE90\uB7EC\uBA5C|\uCF54\uB0D1|\uCC28\uCF5C|\uADF8\uB798\uD53C\uD2B8|\uC624\uC774\uC2A4\uD130|\uD3EC\uC140\uB9B0|\uB9C8\uCE74\uC544\uD1A0|\uCF54\uD788\uBC14|\uD2B8\uB7EC\uD50C|\uD558\uBC14\uB098|\uB9C8\uD638\uAC00\uB2C8)'
+const INTERIOR_COMPOUND_CONTEXT_MARKERS = '(?:seat(?:s)?|seatcover|interior|trim|upholstery|leather|nappa|merino|vernasca|sensatec|material|dashboard|headliner|doortrim|cabin|cockpit|siteu|naejang|silnae|inteorieo|gajuk|napa|upeolseuteori|\uC2DC\uD2B8|\uB0B4\uC7A5|\uC2E4\uB0B4|\uC778\uD14C\uB9AC\uC5B4|\uAC00\uC8FD|\uB098\uD30C)'
+const INTERIOR_COMPOUND_COLOR_TO_CONTEXT_RE = new RegExp(`(${INTERIOR_COMPOUND_COLOR_MARKERS})(?=${INTERIOR_COMPOUND_CONTEXT_MARKERS})`, 'ig')
+const INTERIOR_COMPOUND_CONTEXT_TO_COLOR_RE = new RegExp(`(${INTERIOR_COMPOUND_CONTEXT_MARKERS})(?=${INTERIOR_COMPOUND_COLOR_MARKERS})`, 'ig')
 const INTERIOR_EXPLICIT_VALUE_RES = Object.freeze([
   new RegExp(`${INTERIOR_COLOR_EXPLICIT_LABEL_MARKERS}(?:\\s*(?:\\uC0C9\\uC0C1|\\uCEEC\\uB7EC|color|trim))?\\s*[:=-]?\\s*([^|,;\\n]{2,80})`, 'i'),
 ])
@@ -485,6 +489,18 @@ const COLOR_EXACT = new Map([
 
 function cleanText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function normalizeInteriorSourceText(value) {
+  const text = cleanText(value)
+  if (!text) return ''
+
+  return cleanText(
+    text
+      .replace(INTERIOR_COMPOUND_COLOR_TO_CONTEXT_RE, '$1 ')
+      .replace(INTERIOR_COMPOUND_CONTEXT_TO_COLOR_RE, '$1 ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2'),
+  )
 }
 
 function normalizeRomanizedColorAlias(value) {
@@ -1048,14 +1064,14 @@ function getInteriorColorMatchWindow(text, index, matchValue) {
 }
 
 function isShortInteriorColorValue(value) {
-  const text = cleanText(value)
+  const text = normalizeInteriorSourceText(value)
   if (!text) return false
   const tokens = text.split(/\s+/).filter(Boolean)
   return tokens.length <= 5 && text.length <= 42 && !/[.!?]/.test(text)
 }
 
 function shouldKeepInteriorColorValue(rawValue, normalizedValue) {
-  const raw = cleanText(rawValue)
+  const raw = normalizeInteriorSourceText(rawValue)
   const normalized = cleanText(normalizedValue)
   if (!raw || !normalized || !INTERIOR_ALLOWED_OUTPUTS.has(normalized)) return false
   if (raw === normalized) return true
@@ -1068,7 +1084,7 @@ function shouldKeepInteriorColorValue(rawValue, normalizedValue) {
 }
 
 function collectInteriorColorEvidence(value) {
-  const text = cleanText(value)
+  const text = normalizeInteriorSourceText(value)
   if (!text) return []
 
   const matches = []
@@ -1108,7 +1124,7 @@ function UNUSED_collectInteriorColorMatches(value) {
 }
 
 function collectDirectInteriorColorMatches(value) {
-  const text = cleanText(value)
+  const text = normalizeInteriorSourceText(value)
   if (!text) return []
 
   const matches = []
@@ -1136,7 +1152,7 @@ function mergeInteriorColorResults(values = []) {
 }
 
 function normalizeInteriorColorCandidate(value) {
-  const text = cleanText(value)
+  const text = normalizeInteriorSourceText(value)
   if (!text) return ''
   if (INTERIOR_MATERIAL_ONLY_RE.test(text)) return ''
 
@@ -1182,7 +1198,7 @@ function normalizeInteriorColorCandidate(value) {
 
 export function normalizeInteriorColorName(value, bodyValue = '') {
   const options = arguments[2] && typeof arguments[2] === 'object' ? arguments[2] : {}
-  const rawInterior = cleanText(value)
+  const rawInterior = normalizeInteriorSourceText(value)
   if (!rawInterior) return ''
 
   const normalizedInterior = normalizeInteriorColorCandidate(rawInterior)
@@ -1213,7 +1229,7 @@ export function isInteriorColorRejectLabel(value) {
 }
 
 export function hasInteriorColorContext(value) {
-  return INTERIOR_COLOR_CONTEXT_RE.test(cleanText(value))
+  return INTERIOR_COLOR_CONTEXT_RE.test(normalizeInteriorSourceText(value))
 }
 
 function splitInteriorTextSegments(value) {
@@ -1224,7 +1240,7 @@ function splitInteriorTextSegments(value) {
 }
 
 function extractInteriorColorFromSegment(value, bodyValue = '') {
-  const text = cleanText(value)
+  const text = normalizeInteriorSourceText(value)
   if (!text) return ''
 
   for (const pattern of INTERIOR_EXPLICIT_VALUE_RES) {
@@ -1239,7 +1255,7 @@ function extractInteriorColorFromSegment(value, bodyValue = '') {
 }
 
 export function extractInteriorColorFromText(value, bodyValue = '') {
-  const text = cleanText(value)
+  const text = normalizeInteriorSourceText(value)
   if (!text) return ''
 
   const segmentMatches = []

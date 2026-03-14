@@ -1560,9 +1560,31 @@ function buildInteriorTextCandidate(textSources = [], options = {}) {
     .map((source) => ({
       ...source,
       text: cleanText(source?.text),
+      path_or_label: cleanText(source?.path_or_label),
+      pathSignal: normalizePathSignal(source?.path_or_label || source?.label || ''),
     }))
     .filter((source) => source.text)
-    .filter((source) => hasInteriorColorContext(source.text) && !isInteriorColorRejectLabel(source.text))
+    .map((source) => {
+      const textHasContext = hasInteriorColorContext(source.text)
+      const pathHasContext =
+        (!!source.pathSignal && INTERIOR_KEY_CONTEXT_RE.test(source.pathSignal))
+        || isInteriorColorLabel(source.path_or_label)
+      const hasReject =
+        isInteriorColorRejectLabel(source.text)
+        || (!!source.pathSignal && INTERIOR_KEY_REJECT_RE.test(source.pathSignal))
+        || isInteriorColorRejectLabel(source.path_or_label)
+
+      return {
+        ...source,
+        textHasContext,
+        pathHasContext,
+        contextualText: pathHasContext && !textHasContext
+          ? cleanText([source.path_or_label, source.text].filter(Boolean).join(' '))
+          : source.text,
+        hasReject,
+      }
+    })
+    .filter((source) => !source.hasReject && (source.textHasContext || source.pathHasContext))
 
   if (!relevantTexts.length) {
     return buildEvidenceCandidate({
@@ -1574,8 +1596,17 @@ function buildInteriorTextCandidate(textSources = [], options = {}) {
     })
   }
 
-  const mergedText = relevantTexts.map((source) => source.text).join(' | ')
-  const normalized = extractInteriorColorFromText(mergedText, options.bodyColor)
+  const perSourceMatches = [...new Set(
+    relevantTexts
+      .map((source) => extractInteriorColorFromText(source.contextualText || source.text, options.bodyColor))
+      .filter(Boolean),
+  )]
+  const mergedText = relevantTexts.map((source) => source.contextualText || source.text).join(' | ')
+  const normalized = perSourceMatches.includes('Двухцветный')
+    ? 'Двухцветный'
+    : perSourceMatches.length > 1
+      ? 'Двухцветный'
+      : perSourceMatches[0] || extractInteriorColorFromText(mergedText, options.bodyColor)
 
   return buildEvidenceCandidate({
     field: 'interior_color',

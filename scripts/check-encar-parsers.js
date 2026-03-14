@@ -317,6 +317,9 @@ function run() {
   assert.equal(extractInteriorColorFromText('\uBE0C\uB77C\uC6B4\uC2DC\uD2B8'), '\u041A\u043E\u0440\u0438\u0447\u043D\u0435\u0432\u044B\u0439')
   assert.equal(extractInteriorColorFromText('\uBE14\uB799\uB0B4\uC7A5'), '\u0427\u0435\u0440\u043D\u044B\u0439')
   assert.equal(extractInteriorColorFromText('\uCE74\uBA5C\uC2DC\uD2B8'), '\u0420\u044B\u0436\u0438\u0439 / \u043A\u0430\u0440\u0430\u043C\u0435\u043B\u044C\u043D\u044B\u0439')
+  assert.equal(extractInteriorColorFromText('cognacinterior'), '\u0420\u044B\u0436\u0438\u0439 / \u043A\u0430\u0440\u0430\u043C\u0435\u043B\u044C\u043D\u044B\u0439')
+  assert.equal(extractInteriorColorFromText('ivorynappa'), '\u041A\u0440\u0435\u043C\u043E\u0432\u044B\u0439')
+  assert.equal(extractInteriorColorFromText('brownleatherseat'), '\u041A\u043E\u0440\u0438\u0447\u043D\u0435\u0432\u044B\u0439')
 
   const compoundOptionInterior = resolveInteriorColorEvidence(createResolverContext({
     primaryPayload: {
@@ -330,6 +333,18 @@ function run() {
   }))
   assert.equal(compoundOptionInterior.value, '\u041A\u043E\u0440\u0438\u0447\u043D\u0435\u0432\u044B\u0439')
   assert.equal(compoundOptionInterior.source, 'raw-option-text')
+
+  const pathDrivenInterior = resolveInteriorColorEvidence(createResolverContext({
+    primaryPayload: {
+      source: 'api',
+      data: {},
+      spec: {},
+    },
+    textSources: [
+      { source: 'text-fallback', path_or_label: 'spec.interiorColorName', text: 'Cognac' },
+    ],
+  }))
+  assert.equal(pathDrivenInterior.value, '\u0420\u044B\u0436\u0438\u0439 / \u043A\u0430\u0440\u0430\u043C\u0435\u043B\u044C\u043D\u044B\u0439')
 
   const rejectedBodyColorInterior = resolveInteriorColorEvidence(createResolverContext({
     primaryPayload: {
