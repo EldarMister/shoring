@@ -19,6 +19,7 @@ import { normalizeCarTextFields } from '../lib/carRecordNormalization.js'
 import { isStandardVin, normalizeVin, sanitizeVin } from '../lib/vin.js'
 import { requireAdminSession } from '../lib/adminAuth.js'
 import { CAR_LISTING_TYPES, normalizeCarListingType } from '../../shared/catalogTypes.js'
+import { BODY_TYPE_LABELS } from '../../shared/vehicleTaxonomy.js'
 
 const router = Router()
 const MIN_CAR_YEAR = 2019
@@ -193,8 +194,17 @@ function drivePatterns(value) {
 }
 
 function bodyPatterns(value) {
-  const low = String(value || '').toLowerCase().trim()
+  const raw = String(value || '').trim()
+  const low = raw.toLowerCase()
   if (!low) return []
+
+  const normalized = raw.replace(/\s+/g, ' ').trim()
+  if (normalized.toLowerCase() === BODY_TYPE_LABELS.businessSedan.toLowerCase() || low.includes('бизнес')) {
+    return [BODY_TYPE_LABELS.businessSedan]
+  }
+  if (normalized.toLowerCase() === BODY_TYPE_LABELS.executiveSedan.toLowerCase() || low.includes('представитель')) {
+    return [BODY_TYPE_LABELS.executiveSedan]
+  }
 
   if (low.includes('кроссов') || low.includes('внедорож') || low.includes('suv')) {
     return ['%suv%', '%внедорож%', '%кроссов%', `%${KO.crossover}%`, '%rv%']

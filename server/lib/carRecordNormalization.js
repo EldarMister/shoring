@@ -32,6 +32,7 @@ const EXECUTIVE_SEDAN_MODEL_RE = [
   /\bAudi\s+A8\b/i,
   /\bGenesis\s+G90\b/i,
   /\bLexus\s+LS\b/i,
+  /\bRolls-?Royce\s+Ghost(?:\s+EWB)?\b/i,
 ]
 
 const BODY_TYPE_MODEL_OVERRIDES = [
@@ -44,6 +45,8 @@ const BODY_TYPE_MODEL_OVERRIDES = [
   { pattern: /\bJaguar\s+F-?TYPE\b/i, body: BODY_TYPE_LABELS.coupe },
   { pattern: /\bMaserati\s+MC20\b/i, body: BODY_TYPE_LABELS.coupe },
   { pattern: /\bRolls-?Royce\s+Wraith\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bRolls-?Royce\s+Spectre\b.*\bCoupe\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bBentley\s+Continental\b.*\bGTC\b/i, body: BODY_TYPE_LABELS.cabriolet },
   { pattern: /\bHyundai\s+Solati\b/i, body: BODY_TYPE_LABELS.minivan },
   { pattern: /\bMercedes[-\s]?Benz\s+V-Class\b/i, body: BODY_TYPE_LABELS.minivan },
   { pattern: /\bDodge\s+Ram\s+Pick\s+Up\b/i, body: BODY_TYPE_LABELS.pickup },
@@ -53,6 +56,10 @@ const BODY_TYPE_MODEL_OVERRIDES = [
   { pattern: /\bSsangYong\s+Rexton\b/i, body: BODY_TYPE_LABELS.suv },
   { pattern: /\bSuzuki\s+Jimny\b/i, body: BODY_TYPE_LABELS.suv },
   { pattern: /\bIneos\s+Grenadier\b.*\bStation\s+Wagon\b/i, body: BODY_TYPE_LABELS.suv },
+  { pattern: /\bRolls-?Royce\s+Cullinan\b/i, body: BODY_TYPE_LABELS.suv },
+  { pattern: /\bBMW\s+X5\b/i, body: BODY_TYPE_LABELS.suv },
+  { pattern: /\bLamborghini\s+Revuelto\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bLamborghini\s+Huracan\b.*\bSTO\b/i, body: BODY_TYPE_LABELS.coupe },
 ]
 
 function matchesAny(text, patterns) {
@@ -65,9 +72,16 @@ function applyBodyTypeOverrides(bodyType, context) {
 
   const isExecutive = matchesAny(text, EXECUTIVE_SEDAN_MODEL_RE)
   const isBusiness = matchesAny(text, BUSINESS_SEDAN_MODEL_RE)
+  const isSf90 = /\bFerrari\s+SF90\b/i.test(text)
+  const isSpider = /\bSpider\b/i.test(text)
 
   for (const rule of BODY_TYPE_MODEL_OVERRIDES) {
     if (rule.pattern.test(text)) return rule.body
+  }
+
+  if (isSf90) {
+    if (isSpider) return BODY_TYPE_LABELS.cabriolet
+    if (!bodyType || bodyType === BODY_TYPE_LABELS.sedan) return BODY_TYPE_LABELS.coupe
   }
 
   if (bodyType === BODY_TYPE_LABELS.executiveSedan && !isExecutive) {
@@ -77,7 +91,7 @@ function applyBodyTypeOverrides(bodyType, context) {
     return BODY_TYPE_LABELS.sedan
   }
 
-  if (bodyType === BODY_TYPE_LABELS.sedan) {
+  if (!bodyType || bodyType === BODY_TYPE_LABELS.sedan) {
     if (isExecutive) return BODY_TYPE_LABELS.executiveSedan
     if (isBusiness) return BODY_TYPE_LABELS.businessSedan
   }
