@@ -3,6 +3,9 @@ import { VAT_REFUND_RATE } from '../../lib/vehicleDisplay'
 
 const PRIMARY_WHATSAPP_URL = 'https://wa.me/821056650943'
 const VAT_REFUND_PERCENT = Math.round(VAT_REFUND_RATE * 100)
+const FLAG_CDN_BASE = 'https://flagcdn.com'
+
+const getFlagUrl = (code, width) => `${FLAG_CDN_BASE}/w${width}/${code}.png`
 
 const CarIcon = () => (
   <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
@@ -90,10 +93,21 @@ const stats = [
     cardClass: 'stat-card-clickable',
   },
   {
-    value: '🛠️',
-    label: 'Битые авто и запчасти',
+    value: '🚗',
+    label: 'Битые авто',
     to: '/damaged-stock',
     extra: <div className="stat-note">Нажмите чтобы перейти</div>,
+    cardClass: 'stat-card-clickable',
+  },
+  {
+    value: '⚙️',
+    label: 'Запчасти',
+    to: '/damaged-stock/parts',
+    extra: (
+      <div className="stat-note">
+        <span>Нажмите чтобы перейти</span>
+      </div>
+    ),
     cardClass: 'stat-card-clickable',
   },
 ]
@@ -113,7 +127,16 @@ const whyReasons = [
   'Доставка в любую точку мира',
 ]
 
-const logisticsFlags = ['🇰🇬', '🇰🇿', '🇷🇺', '🇺🇿', '🇹🇯', '🇧🇾', '🇦🇿', '🇺🇦', '🇬🇪']
+const logisticsFlags = [
+  { code: 'kg', label: 'Кыргызстан' },
+  { code: 'kz', label: 'Казахстан' },
+  { code: 'ru', label: 'Россия' },
+  { code: 'uz', label: 'Узбекистан' },
+  { code: 'tj', label: 'Таджикистан' },
+  { code: 'by', label: 'Беларусь' },
+  { code: 'az', label: 'Азербайджан' },
+  { code: 'ua', label: 'Украина' },
+]
 
 export default function Hero() {
   return (
@@ -126,6 +149,24 @@ export default function Hero() {
         <div className="hero-inner">
           <div className="hero-delivery-badge">
             <span className="badge-globe">🌍</span> Доставка в любую точку мира
+          </div>
+          <div className="why-logistics-card hero-logistics-card">
+            <div className="why-logistics-title">SHORING-LOGISTICS</div>
+            <div className="why-logistics-flags" aria-label="SHORING logistics countries">
+              {logisticsFlags.map(({ code, label }) => (
+                <img
+                  key={code}
+                  className="why-logistics-flag"
+                  src={getFlagUrl(code, 160)}
+                  srcSet={`${getFlagUrl(code, 320)} 2x`}
+                  width="56"
+                  height="36"
+                  alt={label}
+                  loading="lazy"
+                  decoding="async"
+                />
+              ))}
+            </div>
           </div>
 
           <h1 className="hero-title">
@@ -191,15 +232,6 @@ export default function Hero() {
               </li>
             ))}
           </ul>
-
-          <div className="why-logistics-card">
-            <div className="why-logistics-title">SHORING-LOGISTICS</div>
-            <div className="why-logistics-flags" aria-label="SHORING logistics countries">
-              {logisticsFlags.map((flag) => (
-                <span key={flag} className="why-logistics-flag">{flag}</span>
-              ))}
-            </div>
-          </div>
 
           <div className="advantages-grid">
             {advantages.map(({ icon, value, label, labelCls }) => (

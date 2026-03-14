@@ -4,6 +4,7 @@ import { applyVehicleTitleFixes } from '../../shared/vehicleTextFixes.js'
 import { sanitizeVin } from '../../shared/vin.js'
 import FilterSidebar from '../components/catalog/FilterSidebar'
 import CarCard from '../components/catalog/CarCard'
+import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
 import { CAR_SECTION_CONFIG, buildCarDetailsPath } from '../lib/catalogSections.js'
 import {
   appendDisplayTrimSuffix,
@@ -724,6 +725,9 @@ function mapCar(c) {
     storage,
     vatRefund,
     total,
+    deliveryProfileCode: c.delivery_profile_code || '',
+    deliveryProfileLabel: c.delivery_profile_label || '',
+    pricingLocked: Boolean(c.pricing_locked),
     encarUrl: c.encar_url,
     encarId: c.encar_id || '-',
     canNegotiate: c.can_negotiate,
@@ -1364,43 +1368,46 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
                   : `Найдено: ${meta.total.toLocaleString()} • Стр. ${pageRangeLabel} из ${meta.pages}`}
               </div>
             </div>
-            <div className={`cat-sort-wrap${sortOpen ? ' is-open' : ''}`} ref={sortRef}>
-              <button
-                type="button"
-                className="cat-sort-trigger"
-                aria-haspopup="listbox"
-                aria-expanded={sortOpen}
-                onClick={() => setSortOpen((open) => !open)}
-              >
-                <span className="cat-sort-trigger-label">{activeSortOption.label}</span>
-                <span className="cat-sort-trigger-icon" aria-hidden="true"><ChevronDownIcon /></span>
-              </button>
-              {sortOpen && (
-                <div className="cat-sort-menu" role="listbox" aria-label="Сортировка">
-                  {SORT_OPTIONS.map((option) => {
-                    const isActive = option.value === sort
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        role="option"
-                        aria-selected={isActive}
-                        className={`cat-sort-option${isActive ? ' is-active' : ''}`}
-                        onClick={() => {
-                          setSort(option.value)
-                          setPage(1)
-                          setSortOpen(false)
-                        }}
-                      >
-                        <span className="cat-sort-option-check" aria-hidden="true">
-                          {isActive ? <CheckIcon /> : null}
-                        </span>
-                        <span className="cat-sort-option-label">{option.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+            <div className="cat-results-actions">
+              <DeliveryCountrySelect compact label="Страна доставки" />
+              <div className={`cat-sort-wrap${sortOpen ? ' is-open' : ''}`} ref={sortRef}>
+                <button
+                  type="button"
+                  className="cat-sort-trigger"
+                  aria-haspopup="listbox"
+                  aria-expanded={sortOpen}
+                  onClick={() => setSortOpen((open) => !open)}
+                >
+                  <span className="cat-sort-trigger-label">{activeSortOption.label}</span>
+                  <span className="cat-sort-trigger-icon" aria-hidden="true"><ChevronDownIcon /></span>
+                </button>
+                {sortOpen && (
+                  <div className="cat-sort-menu" role="listbox" aria-label="Сортировка">
+                    {SORT_OPTIONS.map((option) => {
+                      const isActive = option.value === sort
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="option"
+                          aria-selected={isActive}
+                          className={`cat-sort-option${isActive ? ' is-active' : ''}`}
+                          onClick={() => {
+                            setSort(option.value)
+                            setPage(1)
+                            setSortOpen(false)
+                          }}
+                        >
+                          <span className="cat-sort-option-check" aria-hidden="true">
+                            {isActive ? <CheckIcon /> : null}
+                          </span>
+                          <span className="cat-sort-option-label">{option.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

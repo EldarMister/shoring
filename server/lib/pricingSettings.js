@@ -3,62 +3,169 @@ import { resolveBodyType } from './vehicleData.js'
 
 const SETTINGS_CACHE_TTL_MS = 5 * 60 * 1000
 
-export const DEFAULT_DELIVERY_PROFILES = [
+export const DEFAULT_DELIVERY_COUNTRIES = [
   {
-    code: 'suv_big',
-    label: 'SUV BIG',
-    description: 'Highlander, Carnival',
-    price: 1800,
+    code: 'kg',
+    label: 'Кыргызстан',
+    flag: '🇰🇬',
+    shipping_type: 'container',
     sort_order: 10,
+    is_default: true,
   },
   {
-    code: 'suv_middle',
-    label: 'SUV MIDDLE',
-    description: 'Santafe, Sorento',
-    price: 1700,
+    code: 'kz',
+    label: 'Казахстан',
+    flag: '🇰🇿',
+    shipping_type: 'ro_ro',
     sort_order: 20,
   },
   {
+    code: 'ru',
+    label: 'Россия',
+    flag: '🇷🇺',
+    shipping_type: 'ro_ro',
+    sort_order: 30,
+  },
+  {
+    code: 'uz',
+    label: 'Узбекистан',
+    flag: '🇺🇿',
+    shipping_type: 'ro_ro',
+    sort_order: 40,
+  },
+  {
+    code: 'tj',
+    label: 'Таджикистан',
+    flag: '🇹🇯',
+    shipping_type: 'ro_ro',
+    sort_order: 50,
+  },
+  {
+    code: 'by',
+    label: 'Беларусь',
+    flag: '🇧🇾',
+    shipping_type: 'ro_ro',
+    sort_order: 60,
+  },
+  {
+    code: 'az',
+    label: 'Азербайджан',
+    flag: '🇦🇿',
+    shipping_type: 'ro_ro',
+    sort_order: 70,
+  },
+  {
+    code: 'ua',
+    label: 'Украина',
+    flag: '🇺🇦',
+    shipping_type: 'ro_ro',
+    sort_order: 80,
+  },
+  {
+    code: 'ge',
+    label: 'Грузия',
+    flag: '🇬🇪',
+    shipping_type: 'ro_ro',
+    sort_order: 90,
+  },
+]
+
+export const DEFAULT_DELIVERY_PROFILES = [
+  {
+    code: 'mini_car',
+    label: 'Малолитражка',
+    description: 'Morning, Spark',
+    price: 1000,
+    prices: { kg: 1000 },
+    sort_order: 10,
+  },
+  {
+    code: 'sedan_bishkek',
+    label: 'Седан',
+    description: '',
+    price: 1450,
+    prices: { kg: 1450 },
+    sort_order: 20,
+  },
+  {
+    code: 'sedan_lux',
+    label: 'Бизнес седан',
+    description: '',
+    price: 1600,
+    prices: { kg: 1600 },
+    sort_order: 30,
+  },
+  {
     code: 'suv_small',
-    label: 'SUV SMALL',
+    label: 'Кроссовер',
     description: 'Tivoli, Seltos',
     price: 1600,
-    sort_order: 30,
+    prices: { kg: 1600 },
+    sort_order: 40,
+  },
+  {
+    code: 'suv_middle',
+    label: 'SUV',
+    description: 'Santafe, Sorento',
+    price: 1700,
+    prices: { kg: 1700 },
+    sort_order: 50,
+  },
+  {
+    code: 'suv_big',
+    label: 'Внедорожник',
+    description: 'Highlander, Carnival',
+    price: 1800,
+    prices: { kg: 1800 },
+    sort_order: 60,
+  },
+  {
+    code: 'minivan',
+    label: 'Минивэн',
+    description: '',
+    price: 1900,
+    prices: { kg: 1900 },
+    sort_order: 70,
+  },
+  {
+    code: 'pickup',
+    label: 'Пикап',
+    description: '',
+    price: 2000,
+    prices: { kg: 2000 },
+    sort_order: 80,
+  },
+  {
+    code: 'electric',
+    label: 'Электромобиль',
+    description: '',
+    price: 1700,
+    prices: { kg: 1700 },
+    sort_order: 90,
+  },
+  {
+    code: 'commercial',
+    label: 'Коммерческий транспорт',
+    description: '',
+    price: 2200,
+    prices: { kg: 2200 },
+    sort_order: 100,
   },
   {
     code: 'sedan_osh',
     label: 'SEDAN OSH',
     description: '',
     price: 1500,
-    sort_order: 40,
-  },
-  {
-    code: 'sedan_bishkek',
-    label: 'SEDAN BISHKEK',
-    description: '',
-    price: 1450,
-    sort_order: 50,
-  },
-  {
-    code: 'sedan_lux',
-    label: 'SEDAN LUX',
-    description: '',
-    price: 1600,
-    sort_order: 60,
+    prices: { kg: 1500 },
+    sort_order: 110,
   },
   {
     code: 'half_container',
     label: 'HALF CONTAINER',
     description: '',
     price: 3000,
-    sort_order: 70,
-  },
-  {
-    code: 'mini_car',
-    label: 'MINI CAR',
-    description: 'Morning, Spark',
-    price: 1000,
-    sort_order: 80,
+    prices: { kg: 3000 },
+    sort_order: 120,
   },
 ]
 
@@ -69,6 +176,7 @@ export const DEFAULT_PRICING_SETTINGS = {
   storage: 310,
   default_delivery: 1450,
   whatsapp_number: '821056650943',
+  delivery_countries: DEFAULT_DELIVERY_COUNTRIES,
   delivery_profiles: DEFAULT_DELIVERY_PROFILES,
 }
 
@@ -115,24 +223,38 @@ function slugifyCode(value, index = 0) {
   return text || `profile_${index + 1}`
 }
 
-function normalizeProfile(profile, index = 0) {
+function normalizeProfile(profile, index = 0, { countries, defaultCountryCode } = {}) {
   const fallback = DEFAULT_DELIVERY_PROFILES[index] || DEFAULT_DELIVERY_PROFILES[0]
+  const rawPrices = profile?.prices && typeof profile.prices === 'object' ? profile.prices : {}
+  const safeCountries = Array.isArray(countries) && countries.length ? countries : DEFAULT_DELIVERY_COUNTRIES
+  const prices = {}
+  safeCountries.forEach((country) => {
+    const value = toNumber(rawPrices?.[country.code], null)
+    if (Number.isFinite(value) && value > 0) {
+      prices[country.code] = value
+    }
+  })
+  const basePrice = toNumber(profile?.price, fallback.price)
+  if (defaultCountryCode && Number.isFinite(basePrice) && basePrice > 0 && !prices[defaultCountryCode]) {
+    prices[defaultCountryCode] = basePrice
+  }
 
   return {
     code: slugifyCode(profile?.code || profile?.label || fallback.code, index),
     label: toText(profile?.label, fallback.label),
     description: toText(profile?.description, fallback.description),
-    price: toNumber(profile?.price, fallback.price),
+    price: basePrice,
+    prices,
     sort_order: toNumber(profile?.sort_order, (index + 1) * 10),
   }
 }
 
-function normalizeProfiles(input) {
+function normalizeProfiles(input, { countries, defaultCountryCode } = {}) {
   const source = Array.isArray(input) && input.length ? input : DEFAULT_DELIVERY_PROFILES
   const uniqueCodes = new Set()
 
   return source
-    .map((profile, index) => normalizeProfile(profile, index))
+    .map((profile, index) => normalizeProfile(profile, index, { countries, defaultCountryCode }))
     .filter((profile) => {
       if (!profile.code || uniqueCodes.has(profile.code)) return false
       uniqueCodes.add(profile.code)
@@ -141,7 +263,59 @@ function normalizeProfiles(input) {
     .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label))
 }
 
+function normalizeCountry(country, index = 0) {
+  const fallback = DEFAULT_DELIVERY_COUNTRIES[index] || DEFAULT_DELIVERY_COUNTRIES[0]
+  const code = slugifyCode(country?.code || country?.label || fallback.code, index)
+  const label = toText(country?.label, fallback.label)
+  const flag = toText(country?.flag, fallback.flag)
+  const normalizedType = toText(country?.shipping_type || country?.delivery_type, fallback.shipping_type)
+  const shippingType = normalizedType === 'container' || normalizedType === 'ro_ro'
+    ? normalizedType
+    : fallback.shipping_type
+
+  return {
+    code,
+    label,
+    flag,
+    shipping_type: shippingType,
+    sort_order: toNumber(country?.sort_order, (index + 1) * 10),
+  }
+}
+
+function normalizeCountries(input) {
+  const source = Array.isArray(input) && input.length ? input : DEFAULT_DELIVERY_COUNTRIES
+  const uniqueCodes = new Set()
+
+  const normalized = source
+    .map((country, index) => normalizeCountry(country, index))
+    .filter((country) => {
+      if (!country.code || uniqueCodes.has(country.code)) return false
+      uniqueCodes.add(country.code)
+      return true
+    })
+    .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label))
+
+  if (!normalized.find((country) => country.code === 'kg')) {
+    normalized.unshift(normalizeCountry(DEFAULT_DELIVERY_COUNTRIES[0], 0))
+  }
+
+  return normalized.map((country) => ({
+    ...country,
+    shipping_type: country.code === 'kg' ? 'container' : country.shipping_type,
+    is_default: country.code === 'kg',
+  }))
+}
+
+function resolveDefaultCountryCode(settings) {
+  const countries = settings?.delivery_countries || []
+  const defaultCountry = countries.find((country) => country.is_default) || countries.find((country) => country.code === 'kg')
+  return defaultCountry?.code || countries[0]?.code || 'kg'
+}
+
 function normalizeSettings(payload = {}) {
+  const countries = normalizeCountries(payload.delivery_countries)
+  const defaultCountryCode = resolveDefaultCountryCode({ delivery_countries: countries })
+
   return {
     commission: toNumber(payload.commission, DEFAULT_PRICING_SETTINGS.commission),
     loading: toNumber(payload.loading, DEFAULT_PRICING_SETTINGS.loading),
@@ -149,7 +323,8 @@ function normalizeSettings(payload = {}) {
     storage: toNumber(payload.storage, DEFAULT_PRICING_SETTINGS.storage),
     default_delivery: toNumber(payload.default_delivery, DEFAULT_PRICING_SETTINGS.default_delivery),
     whatsapp_number: toText(payload.whatsapp_number, DEFAULT_PRICING_SETTINGS.whatsapp_number),
-    delivery_profiles: normalizeProfiles(payload.delivery_profiles),
+    delivery_countries: countries,
+    delivery_profiles: normalizeProfiles(payload.delivery_profiles, { countries, defaultCountryCode }),
   }
 }
 
@@ -157,6 +332,22 @@ function findProfile(settings, code) {
   const profileCode = toText(code)
   if (!profileCode) return null
   return settings.delivery_profiles.find((profile) => profile.code === profileCode) || null
+}
+
+function resolveProfileCountryPrice(profile, settings, countryCode) {
+  if (!profile) return null
+  const requestedCode = toText(countryCode)
+  if (!requestedCode) return null
+  const price = toNumber(profile.prices?.[requestedCode], null)
+  if (Number.isFinite(price) && price > 0) return price
+
+  const defaultCountryCode = resolveDefaultCountryCode(settings)
+  if (requestedCode === defaultCountryCode) {
+    const legacy = toNumber(profile.price, null)
+    if (Number.isFinite(legacy) && legacy > 0) return legacy
+  }
+
+  return null
 }
 
 function buildVehicleSearchText(vehicle = {}) {
@@ -209,7 +400,9 @@ export function resolveVehicleFees(vehicle = {}, settings = DEFAULT_PRICING_SETT
   const profileCode = inferDeliveryProfileCode(vehicle, settings)
   const profile = findProfile(settings, profileCode)
   const pricingLocked = Boolean(vehicle.pricing_locked)
-  const resolvedDelivery = profile?.price ?? settings.default_delivery
+  const defaultCountryCode = resolveDefaultCountryCode(settings)
+  const resolvedProfileDelivery = resolveProfileCountryPrice(profile, settings, defaultCountryCode)
+  const resolvedDelivery = resolvedProfileDelivery ?? settings.default_delivery
 
   return {
     pricing_locked: pricingLocked,
@@ -258,8 +451,8 @@ export async function savePricingSettings(payload = {}) {
 
   await pool.query(
     `INSERT INTO pricing_settings
-      (id, commission, loading, unloading, storage, default_delivery, whatsapp_number, delivery_profiles, updated_at)
-     VALUES (1, $1, $2, $3, $4, $5, $6, $7::jsonb, NOW())
+      (id, commission, loading, unloading, storage, default_delivery, whatsapp_number, delivery_countries, delivery_profiles, updated_at)
+     VALUES (1, $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, NOW())
      ON CONFLICT (id) DO UPDATE
      SET commission = EXCLUDED.commission,
          loading = EXCLUDED.loading,
@@ -267,6 +460,7 @@ export async function savePricingSettings(payload = {}) {
          storage = EXCLUDED.storage,
          default_delivery = EXCLUDED.default_delivery,
          whatsapp_number = EXCLUDED.whatsapp_number,
+         delivery_countries = EXCLUDED.delivery_countries,
          delivery_profiles = EXCLUDED.delivery_profiles,
          updated_at = NOW()`,
     [
@@ -276,6 +470,7 @@ export async function savePricingSettings(payload = {}) {
       normalized.storage,
       normalized.default_delivery,
       normalized.whatsapp_number,
+      JSON.stringify(normalized.delivery_countries),
       JSON.stringify(normalized.delivery_profiles),
     ]
   )

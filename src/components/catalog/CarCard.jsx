@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { VAT_REFUND_RATE, getColorSwatch, normalizeKeyInfoLabel, normalizeTrimLabel } from '../../lib/vehicleDisplay'
+import { useDeliveryContext } from '../../context/DeliveryContext.jsx'
+import { resolveDeliveryForCar, resolveDeliveryTypeLabel } from '../../lib/delivery.js'
 
 const HANGUL_RE = /[\uAC00-\uD7A3]/u
 
@@ -165,6 +167,10 @@ function buildServiceBadges(car) {
 
 export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, listingBadgeLabel = '' }) {
   const navigate = useNavigate()
+  const deliveryContext = useDeliveryContext()
+  const deliverySettings = deliveryContext?.settings
+  const selectedCountryCode = deliveryContext?.countryCode
+  const selectedCountry = deliveryContext?.selectedCountry
   const [imgIdx, setImgIdx] = useState(0)
   const [failedUrls, setFailedUrls] = useState([])
   const vatRefundPercent = Math.round(VAT_REFUND_RATE * 100)
@@ -187,6 +193,33 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
   )
   const trimLabel = normalizeTrimLabel(car.trimLevel || '')
   const keyLabel = normalizeKeyInfoLabel(car.keyInfo || '')
+  const deliveryInfo = useMemo(
+    () => resolveDeliveryForCar({ car, settings: deliverySettings, countryCode: selectedCountryCode }),
+    [car, deliverySettings, selectedCountryCode],
+  )
+  const deliveryTypeLabel = resolveDeliveryTypeLabel(deliveryInfo.country || selectedCountry)
+  const resolvedDelivery = deliveryInfo.price
+  const deliveryDisplayValue = Number.isFinite(resolvedDelivery)
+    ? `$${Number(resolvedDelivery).toLocaleString()}`
+    : 'Уточняется'
+  const resolvedTotal = useMemo(() => {
+    if (!Number.isFinite(resolvedDelivery)) return null
+    return Math.round(
+      (Number(car.priceUSD) || 0) +
+      (Number(car.commission) || 0) +
+      resolvedDelivery +
+      (Number(car.loading) || 0) +
+      (Number(car.unloading) || 0) +
+      (Number(car.storage) || 0) -
+      (Number(car.vatRefund) || 0)
+    )
+  }, [car, resolvedDelivery])
+  const totalLabel = selectedCountry?.code === 'kg'
+    ? 'До Бишкек'
+    : `До ${selectedCountry?.label || 'страны'}`
+  const totalDisplayValue = Number.isFinite(resolvedTotal)
+    ? `$${resolvedTotal.toLocaleString()}`
+    : 'Уточняется'
 
   useEffect(() => {
     setImgIdx(0)
@@ -363,8 +396,8 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
               <span>${Number(car.commission || 0).toLocaleString()}</span>
             </div>
             <div className="car-price-row">
-              <span>Доставка:</span>
-              <span>${Number(car.delivery || 0).toLocaleString()}</span>
+              <span>{`???????? (${deliveryTypeLabel}):`}</span>
+              <span>{deliveryDisplayValue}</span>
             </div>
             <div className="car-price-row">
               <span>Погрузка:</span>
@@ -385,8 +418,8 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
           </div>
 
           <div className="car-price-total">
-            <span>До Бишкека:</span>
-            <span>${Number(car.total || 0).toLocaleString()}</span>
+            <span>{totalLabel}:</span>
+            <span>{totalDisplayValue}</span>
           </div>
         </div>
       </div>

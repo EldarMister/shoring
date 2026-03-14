@@ -25,6 +25,9 @@ import {
   resolveCustomsCalculation,
 } from '../lib/customsTariffs.js'
 import { CAR_SECTION_CONFIG } from '../lib/catalogSections.js'
+import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
+import { useDeliveryContext } from '../context/DeliveryContext.jsx'
+import { resolveDeliveryForCar, resolveDeliveryTypeLabel } from '../lib/delivery.js'
 
 const VAT_REFUND_PERCENT = Math.round(VAT_REFUND_RATE * 100)
 
@@ -1352,6 +1355,9 @@ function mapCar(c) {
     storage,
     vatRefund,
     total,
+    deliveryProfileCode: c.delivery_profile_code || '',
+    deliveryProfileLabel: c.delivery_profile_label || '',
+    pricingLocked: Boolean(c.pricing_locked),
     exchangeRateCurrent: Number(c.exchange_rate_current) || 0,
     exchangeRateSite: Number(c.exchange_rate_site) || 0,
     encarUrl: c.encar_url || '',
@@ -1489,6 +1495,10 @@ function mergeCarWithNormalizedEncar(baseCar, detail) {
 export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const { id } = useParams()
   const navigate = useNavigate()
+  const deliveryContext = useDeliveryContext()
+  const deliverySettings = deliveryContext?.settings
+  const selectedCountryCode = deliveryContext?.countryCode
+  const selectedCountry = deliveryContext?.selectedCountry
   const calcDirtyRef = useRef(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1607,18 +1617,50 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const inspectionPhotos = Array.isArray(car?.inspection?.photos) ? car.inspection.photos : []
   const inspectionSummary = Array.isArray(car?.inspection?.summary) ? car.inspection.summary : []
 
+  const deliveryInfo = useMemo(
+    () => resolveDeliveryForCar({ car, settings: deliverySettings, countryCode: selectedCountryCode }),
+    [car, deliverySettings, selectedCountryCode],
+  )
+  const deliveryTypeLabel = resolveDeliveryTypeLabel(deliveryInfo.country || selectedCountry)
+  const resolvedDelivery = deliveryInfo.price
+  const resolvedTotal = useMemo(() => {
+    if (!car) return null
+    if (!Number.isFinite(resolvedDelivery)) return null
+    return Math.round(
+      (Number(car.priceUSD) || 0) +
+      (Number(car.commission) || 0) +
+      resolvedDelivery +
+      (Number(car.loading) || 0) +
+      (Number(car.unloading) || 0) +
+      (Number(car.storage) || 0) -
+      (Number(car.vatRefund) || 0)
+    )
+  }, [car, resolvedDelivery])
+  const deliveryDisplayValue = Number.isFinite(resolvedDelivery)
+    ? `$${Number(resolvedDelivery).toLocaleString()}`
+    : 'Уточняется'
+  const totalDisplayValue = Number.isFinite(resolvedTotal)
+    ? `$${resolvedTotal.toLocaleString()}`
+    : 'Уточняется'
+
   const calcYearValue = useMemo(() => parseCalcYearInput(calc.year, calcDefaults.year), [calc.year, calcDefaults.year])
   const calcEngineValue = useMemo(() => parseCalcEngineInput(calc.engine, calcDefaults.engine), [calc.engine, calcDefaults.engine])
-  const customsResult = useMemo(
-    () => resolveCustomsCalculation({
+  const customsAvailable = (selectedCountry?.code || selectedCountryCode) === 'kg'
+  const customsUnavailableMessage = selectedCountry?.label
+    ? `Растаможка для ${selectedCountry.label} уточняется.`
+    : 'Растаможка для выбранной страны уточняется.'
+  const customsResult = useMemo(() => {
+    if (!customsAvailable) {
+      return { status: 'pending', message: customsUnavailableMessage }
+    }
+    return resolveCustomsCalculation({
       year: calcYearValue,
       engine: calcEngineValue,
       fuel: calc.fuel,
       direction: calc.direction,
       isPremium: calc.isPremium,
-    }),
-    [calc.direction, calc.fuel, calc.isPremium, calcEngineValue, calcYearValue]
-  )
+    })
+  }, [calc.direction, calc.fuel, calc.isPremium, calcEngineValue, calcYearValue, customsAvailable, customsUnavailableMessage])
 
   if (loading) {
     return (
@@ -1722,6 +1764,9 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
               <p className="car-details-price-note">
                 Цена в корейских вонах (KRW) и долларах США (USD)
               </p>
+              <div className="car-details-delivery-select">
+                <DeliveryCountrySelect />
+              </div>
 
               <div className="car-details-breakdown">
                 <div className="car-details-breakdown-title">Расчет стоимости:</div>
@@ -1733,70 +1778,76 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 <div className="car-price-row"><span>Финальная цена (USD):</span><span>${car.priceUSD.toLocaleString()}</span></div>
                 <div className="car-price-row car-price-vat"><span>{`Возврат НДС:`}</span><span>-${car.vatRefund.toLocaleString()}</span></div>
                 <div className="car-price-row"><span>Комиссия компании:</span><span>${car.commission.toLocaleString()}</span></div>
-                <div className="car-price-row"><span>Доставка:</span><span>${car.delivery.toLocaleString()}</span></div>
+                <div className="car-price-row"><span>{`Доставка (${deliveryTypeLabel}):`}</span><span>{deliveryDisplayValue}</span></div>
                 <div className="car-price-row"><span>Погрузка:</span><span>${car.loading.toLocaleString()}</span></div>
                 <div className="car-price-row"><span>Выгрузка:</span><span>${car.unloading.toLocaleString()}</span></div>
                 <div className="car-price-row"><span>Стоянка:</span><span>${car.storage.toLocaleString()}</span></div>
               </div>
-              <div className="car-price-total"><span>Итого</span><span>${car.total.toLocaleString()}</span></div>
+              <div className="car-price-total"><span>Итого</span><span>{totalDisplayValue}</span></div>
               {car.canNegotiate && <div className="car-details-negotiate">Возможен торг</div>}
             </div>
 
             <div className="car-details-card car-details-customs">
-              <h3 className="car-details-card-title">Калькулятор растаможки (Кыргызстан)</h3>
-              <div className="car-details-customs-grid">
-                <label>
-                  <span>Год выпуска</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={calc.year}
-                    onChange={(e) => updateCalc({ year: sanitizeYearInput(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  <span>Объём двигателя (л или cc)</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={calc.engine}
-                    onChange={(e) => updateCalc({ engine: sanitizeEngineInput(e.target.value) })}
-                  />
-                </label>
-                <CustomsDropdown
-                  label="Тип двигателя"
-                  ariaLabel="Тип двигателя"
-                  value={calc.fuel}
-                  options={CUSTOMS_FUEL_OPTIONS}
-                  onChange={(value) => updateCalc({ fuel: value })}
-                />
-                <CustomsDropdown
-                  label="Направление ввоза"
-                  ariaLabel="Направление ввоза"
-                  value={calc.direction}
-                  options={CUSTOMS_DIRECTION_OPTIONS}
-                  onChange={(value) => updateCalc({ direction: value })}
-                />
-              </div>
-              <div className="car-details-customs-summary">
-                <label className="car-details-customs-toggle">
-                  <input
-                    type="checkbox"
-                    checked={calc.isPremium}
-                    onChange={(e) => updateCalc({ isPremium: e.target.checked })}
-                  />
-                  <span>Премиум-класс</span>
-                </label>
-                {customsResult.status === 'success' ? (
-                  <div className="car-details-customs-result">
-                    <strong>{`$${customsResult.amount.toLocaleString('en-US')}`}</strong>
+              <h3 className="car-details-card-title">Калькулятор растаможки{customsAvailable ? ' (Кыргызстан)' : ''}</h3>
+              {customsAvailable ? (
+                <>
+                  <div className="car-details-customs-grid">
+                    <label>
+                      <span>Год выпуска</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={calc.year}
+                        onChange={(e) => updateCalc({ year: sanitizeYearInput(e.target.value) })}
+                      />
+                    </label>
+                    <label>
+                      <span>Объём двигателя (л или cc)</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={calc.engine}
+                        onChange={(e) => updateCalc({ engine: sanitizeEngineInput(e.target.value) })}
+                      />
+                    </label>
+                    <CustomsDropdown
+                      label="Тип двигателя"
+                      ariaLabel="Тип двигателя"
+                      value={calc.fuel}
+                      options={CUSTOMS_FUEL_OPTIONS}
+                      onChange={(value) => updateCalc({ fuel: value })}
+                    />
+                    <CustomsDropdown
+                      label="Направление ввоза"
+                      ariaLabel="Направление ввоза"
+                      value={calc.direction}
+                      options={CUSTOMS_DIRECTION_OPTIONS}
+                      onChange={(value) => updateCalc({ direction: value })}
+                    />
                   </div>
-                ) : null}
-              </div>
-              {customsResult.status !== 'success' && customsResult.message ? (
+                  <div className="car-details-customs-summary">
+                    <label className="car-details-customs-toggle">
+                      <input
+                        type="checkbox"
+                        checked={calc.isPremium}
+                        onChange={(e) => updateCalc({ isPremium: e.target.checked })}
+                      />
+                      <span>Премиум-класс</span>
+                    </label>
+                    {customsResult.status === 'success' ? (
+                      <div className="car-details-customs-result">
+                        <strong>{`$${customsResult.amount.toLocaleString('en-US')}`}</strong>
+                      </div>
+                    ) : null}
+                  </div>
+                  {customsResult.status !== 'success' && customsResult.message ? (
+                    <p className="car-details-customs-note is-warning">{customsResult.message}</p>
+                  ) : null}
+                </>
+              ) : (
                 <p className="car-details-customs-note is-warning">{customsResult.message}</p>
-              ) : null}
+              )}
             </div>
 
             <div className="car-details-card car-details-specs-card">

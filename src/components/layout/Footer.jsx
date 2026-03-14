@@ -202,7 +202,7 @@ export default function Footer() {
       {/* Bottom bar */}
       <div className="footer-bottom">
         <div className="footer-bottom-inner">
-          <span className="footer-copy">© 2025 AVT Auto V Korea. Все права защищены.</span>
+          <span className="footer-copy">© 2026 AVT Auto V Korea. Все права защищены.</span>
           <a href={PRIMARY_PHONE_URL} className="footer-phone-link">
             <ChatIcon />
             {PRIMARY_PHONE_LABEL}

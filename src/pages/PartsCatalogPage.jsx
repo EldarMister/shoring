@@ -154,7 +154,7 @@ export default function PartsCatalogPage({ introContent = null }) {
         <div className="cat-breadcrumb-inner">
           <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>
           <span className="cat-bc-sep"><ChevronRightIcon /></span>
-          <Link to="/damaged-stock" className="cat-bc-link">Битые авто и запчасти</Link>
+          <Link to="/damaged-stock" className="cat-bc-link">Битые авто</Link>
           <span className="cat-bc-sep"><ChevronRightIcon /></span>
           <span className="cat-bc-current">{PARTS_SECTION_CONFIG.breadcrumbLabel}</span>
         </div>

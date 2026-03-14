@@ -62,9 +62,19 @@ const navLinks = [
   { label: 'Главная', to: '/' },
   { label: 'Каталог', to: '/catalog' },
   { label: 'Срочная продажа', to: '/urgent-sale' },
-  { label: 'Битые авто и запчасти', to: '/damaged-stock' },
+  { label: 'Битые авто', to: '/damaged-stock' },
+  { label: 'Запчасти', to: '/damaged-stock/parts' },
   { label: 'Контакты', to: '/contacts' },
 ]
+
+const isNavLinkActive = (to, pathname) => {
+  if (to === '/') return pathname === '/'
+  if (to === '/damaged-stock') {
+    if (pathname.startsWith('/damaged-stock/parts')) return false
+    return pathname === '/damaged-stock' || pathname.startsWith('/damaged-stock/')
+  }
+  return pathname === to || pathname.startsWith(`${to}/`)
+}
 
 function AuthButtonContent({ label }) {
   return (
@@ -219,7 +229,7 @@ export default function Header() {
               <Link
                 key={to}
                 to={to}
-                className={location.pathname === to || (to !== '/' && location.pathname.startsWith(`${to}/`)) ? 'active' : ''}
+                className={isNavLinkActive(to, location.pathname) ? 'active' : ''}
               >
                 {label}
               </Link>
@@ -276,7 +286,7 @@ export default function Header() {
               <Link
                 key={to}
                 to={to}
-                className={`mobile-nav-link${location.pathname === to || (to !== '/' && location.pathname.startsWith(`${to}/`)) ? ' active' : ''}`}
+                className={`mobile-nav-link${isNavLinkActive(to, location.pathname) ? ' active' : ''}`}
                 onClick={() => setMobileOpen(false)}
               >
                 {label}

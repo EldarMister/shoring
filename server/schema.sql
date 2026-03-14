@@ -161,9 +161,12 @@ CREATE TABLE IF NOT EXISTS pricing_settings (
   storage           NUMERIC(10,2) DEFAULT 310,
   default_delivery  NUMERIC(10,2) DEFAULT 1450,
   whatsapp_number   VARCHAR(50) DEFAULT '821056650943',
+  delivery_countries JSONB NOT NULL DEFAULT '[]'::jsonb,
   delivery_profiles JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at        TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE pricing_settings ADD COLUMN IF NOT EXISTS delivery_countries JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 INSERT INTO pricing_settings (
   id,
@@ -173,6 +176,7 @@ INSERT INTO pricing_settings (
   storage,
   default_delivery,
   whatsapp_number,
+  delivery_countries,
   delivery_profiles
 )
 VALUES (
@@ -184,14 +188,29 @@ VALUES (
   1450,
   '821056650943',
   $$[
-    {"code":"suv_big","label":"SUV BIG","description":"Highlander, Carnival","price":1800,"sort_order":10},
-    {"code":"suv_middle","label":"SUV MIDDLE","description":"Santafe, Sorento","price":1700,"sort_order":20},
-    {"code":"suv_small","label":"SUV SMALL","description":"Tivoli, Seltos","price":1600,"sort_order":30},
-    {"code":"sedan_osh","label":"SEDAN OSH","description":"","price":1500,"sort_order":40},
-    {"code":"sedan_bishkek","label":"SEDAN BISHKEK","description":"","price":1450,"sort_order":50},
-    {"code":"sedan_lux","label":"SEDAN LUX","description":"","price":1600,"sort_order":60},
-    {"code":"half_container","label":"HALF CONTAINER","description":"","price":3000,"sort_order":70},
-    {"code":"mini_car","label":"MINI CAR","description":"Morning, Spark","price":1000,"sort_order":80}
+    {"code":"kg","label":"Кыргызстан","flag":"🇰🇬","shipping_type":"container","sort_order":10,"is_default":true},
+    {"code":"kz","label":"Казахстан","flag":"🇰🇿","shipping_type":"ro_ro","sort_order":20},
+    {"code":"ru","label":"Россия","flag":"🇷🇺","shipping_type":"ro_ro","sort_order":30},
+    {"code":"uz","label":"Узбекистан","flag":"🇺🇿","shipping_type":"ro_ro","sort_order":40},
+    {"code":"tj","label":"Таджикистан","flag":"🇹🇯","shipping_type":"ro_ro","sort_order":50},
+    {"code":"by","label":"Беларусь","flag":"🇧🇾","shipping_type":"ro_ro","sort_order":60},
+    {"code":"az","label":"Азербайджан","flag":"🇦🇿","shipping_type":"ro_ro","sort_order":70},
+    {"code":"ua","label":"Украина","flag":"🇺🇦","shipping_type":"ro_ro","sort_order":80},
+    {"code":"ge","label":"Грузия","flag":"🇬🇪","shipping_type":"ro_ro","sort_order":90}
+  ]$$::jsonb,
+  $$[
+    {"code":"mini_car","label":"Малолитражка","description":"Morning, Spark","price":1000,"prices":{"kg":1000},"sort_order":10},
+    {"code":"sedan_bishkek","label":"Седан","description":"","price":1450,"prices":{"kg":1450},"sort_order":20},
+    {"code":"sedan_lux","label":"Бизнес седан","description":"","price":1600,"prices":{"kg":1600},"sort_order":30},
+    {"code":"suv_small","label":"Кроссовер","description":"Tivoli, Seltos","price":1600,"prices":{"kg":1600},"sort_order":40},
+    {"code":"suv_middle","label":"SUV","description":"Santafe, Sorento","price":1700,"prices":{"kg":1700},"sort_order":50},
+    {"code":"suv_big","label":"Внедорожник","description":"Highlander, Carnival","price":1800,"prices":{"kg":1800},"sort_order":60},
+    {"code":"minivan","label":"Минивэн","description":"","price":1900,"prices":{"kg":1900},"sort_order":70},
+    {"code":"pickup","label":"Пикап","description":"","price":2000,"prices":{"kg":2000},"sort_order":80},
+    {"code":"electric","label":"Электромобиль","description":"","price":1700,"prices":{"kg":1700},"sort_order":90},
+    {"code":"commercial","label":"Коммерческий транспорт","description":"","price":2200,"prices":{"kg":2200},"sort_order":100},
+    {"code":"sedan_osh","label":"SEDAN OSH","description":"","price":1500,"prices":{"kg":1500},"sort_order":110},
+    {"code":"half_container","label":"HALF CONTAINER","description":"","price":3000,"prices":{"kg":3000},"sort_order":120}
   ]$$::jsonb
 )
 ON CONFLICT (id) DO NOTHING;
