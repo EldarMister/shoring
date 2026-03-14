@@ -30,3 +30,5 @@ server/uploads/cars/
 *.njsproj
 *.sln
 *.sw?
+
+/.claude/
