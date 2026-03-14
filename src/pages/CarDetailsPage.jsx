@@ -253,6 +253,7 @@ function normalizeCustomsFuel(value) {
 
 const DEFAULT_CALC_YEAR = new Date().getFullYear()
 const DEFAULT_CALC_ENGINE = 2.0
+const KZ_UNION_CUSTOMS_USD_TO_EUR_RATIO = 0.92
 
 function formatCalcYearInput(value) {
   const year = parseYear(value)
@@ -290,10 +291,6 @@ function sanitizeEngineInput(value) {
 }
 
 function sanitizeCustomsValueInput(value) {
-  return sanitizeEngineInput(value)
-}
-
-function sanitizeBatteryInput(value) {
   return sanitizeEngineInput(value)
 }
 
@@ -910,6 +907,68 @@ function buildRepairHistoryItems(car) {
     .filter((item) => item.label && item.label !== '-' && item.value && item.value !== '-')
 }
 
+function formatInspectionDisplayText(value) {
+  const normalized = normalizeInspectionValue(value)
+  const translated = translateInspectionText(normalized)
+  return translated || normalized || '-'
+}
+
+function findRepairHistoryRow(inspection, label) {
+  const rows = Array.isArray(inspection?.repairHistory) ? inspection.repairHistory : []
+  return rows.find((item) => {
+    const normalizedLabel = translateInspectionText(item?.label || '') || String(item?.label || '').trim()
+    return normalizedLabel === label
+  }) || null
+}
+
+function formatFrontRearInspectionValue(value, emptyLabel = '') {
+  const translated = formatInspectionDisplayText(value)
+  const parts = translated
+    .split(/\s*•\s*/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  if (!parts.length) return '-'
+  if (parts.every((item) => /^нет$/i.test(item))) return emptyLabel || translated
+  if (parts.length === 2) return `Перед: ${parts[0]} • Зад: ${parts[1]}`
+  return translated
+}
+
+function hasNoExteriorPanelReplacementNote(inspection) {
+  const opinions = Array.isArray(inspection?.opinion) ? inspection.opinion : []
+  return opinions.some((item) => {
+    const rawText = String(item?.text || '').trim()
+    const translatedText = translateInspectorComment(rawText)
+    return (
+      /교환이 없는 차량입니다|교환이 없습니다/u.test(rawText)
+      || /нет замененных внешних панелей|замены внешних кузовных панелей не выявлены/i.test(translatedText)
+    )
+  })
+}
+
+function buildBodyInspectionSummary(car) {
+  const inspection = car?.inspection
+  if (!inspection) return []
+
+  const bodyPanelRow = findRepairHistoryRow(inspection, 'Внешние панели')
+  const frameRow = findRepairHistoryRow(inspection, 'Силовой каркас')
+  const accidentSummary = getInspectionSummaryText(inspection, 'Аварийная история')
+  const cosmeticSummary = getInspectionSummaryText(inspection, 'Косметический ремонт')
+
+  const bodyPanelValue = hasNoExteriorPanelReplacementNote(inspection)
+    ? 'Замены не выявлены'
+    : formatFrontRearInspectionValue(bodyPanelRow?.value || '', 'Замены не отмечены')
+
+  const frameValue = formatFrontRearInspectionValue(frameRow?.value || '', 'Повреждений и замен не отмечено')
+
+  return [
+    { label: 'Внешние панели', value: bodyPanelValue },
+    { label: 'Силовой каркас', value: frameValue },
+    { label: 'Аварийная история', value: formatInspectionDisplayText(accidentSummary) },
+    { label: 'Косметический ремонт', value: formatInspectionDisplayText(cosmeticSummary) },
+  ].filter((item) => item.value && item.value !== '-')
+}
+
 function getInspectionStatusTone(value) {
   const text = normalizeInspectionValue(translateInspectionText(value || '') || String(value || ''))
     .toLowerCase()
@@ -1522,7 +1581,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     direction: 'asia',
     isPremium: false,
     customsValue: '',
-    batteryKwh: '',
   })
   const [calcDefaults, setCalcDefaults] = useState({ year: DEFAULT_CALC_YEAR, engine: DEFAULT_CALC_ENGINE })
 
@@ -1564,7 +1622,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
             direction: inferredDirection,
             isPremium: isPremiumVehicle(mapped),
             customsValue: '',
-            batteryKwh: '',
           })
         }
 
@@ -1596,7 +1653,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 direction: inferredDetailDirection,
                 isPremium: isPremiumVehicle(detail) || isPremiumVehicle(mapped),
                 customsValue: '',
-                batteryKwh: '',
               })
             }
           } catch {
@@ -1628,6 +1684,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const historyOwnerChanges = useMemo(() => buildVehicleHistoryOwnerChanges(car), [car])
   const historyInfoChanges = useMemo(() => buildVehicleHistoryInfoChanges(car), [car])
   const repairHistoryItems = useMemo(() => buildRepairHistoryItems(car), [car])
+  const bodyInspectionSummary = useMemo(() => buildBodyInspectionSummary(car), [car])
   const encarFlagBadges = useMemo(() => buildEncarFlagBadges(car), [car])
   const displayLocation = useMemo(() => getShortLocationLabel(car?.location || '', 'Корея'), [car?.location])
   const inspectionPhotos = Array.isArray(car?.inspection?.photos) ? car.inspection.photos : []
@@ -1672,6 +1729,15 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const customsAvailable = Boolean(customsMode)
   const isKzUnion = customsMode === 'kz'
   const isUkraine = customsMode === 'ua'
+  const autoKzUnionCustomsValue = useMemo(() => {
+    if (!isKzUnion) return ''
+    const priceUsd = Number(car?.priceUSD) || 0
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return ''
+    return String(Math.round(priceUsd * KZ_UNION_CUSTOMS_USD_TO_EUR_RATIO))
+  }, [car?.priceUSD, isKzUnion])
+  const effectiveKzUnionCustomsValue = (isKzUnion && !String(calc.customsValue || '').trim())
+    ? autoKzUnionCustomsValue
+    : calc.customsValue
   const customsUnavailableMessage = selectedCountry?.label
     ? `Растаможка для ${selectedCountry.label} уточняется.`
     : 'Растаможка для выбранной страны уточняется.'
@@ -1683,7 +1749,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
       return resolveCustomsCalculationKz({
         year: calcYearValue,
         engine: calcEngineValue,
-        customsValue: calc.customsValue,
+        customsValue: effectiveKzUnionCustomsValue,
       })
     }
     if (isUkraine) {
@@ -1692,7 +1758,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
         engine: calcEngineValue,
         fuel: calc.fuel,
         customsValue: calc.customsValue,
-        batteryCapacity: calc.batteryKwh,
       })
     }
     return resolveCustomsCalculation({
@@ -1703,13 +1768,13 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
       isPremium: calc.isPremium,
     })
   }, [
-    calc.batteryKwh,
     calc.customsValue,
     calc.direction,
     calc.fuel,
     calc.isPremium,
     calcEngineValue,
     calcYearValue,
+    effectiveKzUnionCustomsValue,
     customsAvailable,
     customsUnavailableMessage,
     isKzUnion,
@@ -1879,7 +1944,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={calc.customsValue}
+                          value={effectiveKzUnionCustomsValue}
                           onChange={(e) => updateCalc({ customsValue: sanitizeCustomsValueInput(e.target.value) })}
                           placeholder="Напр. 15000"
                         />
@@ -1903,18 +1968,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                           options={CUSTOMS_FUEL_OPTIONS}
                           onChange={(value) => updateCalc({ fuel: value })}
                         />
-                        {calc.fuel === 'electric' ? (
-                          <label>
-                            <span>Ёмкость батареи (кВт·ч)</span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={calc.batteryKwh}
-                              onChange={(e) => updateCalc({ batteryKwh: sanitizeBatteryInput(e.target.value) })}
-                              placeholder="Напр. 64"
-                            />
-                          </label>
-                        ) : null}
                       </>
                     ) : (
                       <>
@@ -2075,6 +2128,21 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
 
           {car.inspection ? (
             <div className="car-inspection-stack">
+              {!!bodyInspectionSummary.length && (
+                <div className="car-inspection-block">
+                  <h4 className="car-inspection-title">Кузов и ремонты</h4>
+                  <div className="car-inspection-status-list">
+                    {bodyInspectionSummary.map((item) => (
+                      <InspectionStatusRow
+                        key={item.label}
+                        label={item.label}
+                        value={item.value}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {!!inspectionPhotos.length && (
                 <div className="car-inspection-block">
                   <h4 className="car-inspection-title">{translateInspectionText('Inspection photos')}</h4>

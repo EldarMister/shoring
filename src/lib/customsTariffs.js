@@ -128,7 +128,6 @@ export const CUSTOMS_FUEL_OPTIONS = [
   { value: 'lpg', label: FUEL_LABELS.lpg },
   { value: 'diesel', label: FUEL_LABELS.diesel },
   { value: 'hybrid', label: FUEL_LABELS.hybrid },
-  { value: 'electric', label: FUEL_LABELS.electric },
 ]
 
 export function getCustomsFuelLabel(value) {
@@ -280,7 +279,7 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
     })
   }
 
-  if (!['gasoline', 'lpg', 'diesel', 'hybrid', 'electric'].includes(fuel)) {
+  if (!['gasoline', 'lpg', 'diesel', 'hybrid'].includes(fuel)) {
     return buildManualResult({
       fuel: getCustomsFuelLabel(fuel),
       message: 'Для выбранного типа двигателя нет поддерживаемой таблицы.',
@@ -500,7 +499,7 @@ export function resolveCustomsCalculationUa(input, currentDate = new Date()) {
     })
   }
 
-  if (!['gasoline', 'diesel', 'hybrid', 'electric'].includes(fuel)) {
+  if (!['gasoline', 'diesel', 'hybrid'].includes(fuel)) {
     return buildManualResult({
       message: 'Укажите корректный тип двигателя.',
     })
@@ -562,4 +561,3 @@ export function resolveCustomsCalculationUa(input, currentDate = new Date()) {
     },
   })
 }
-
