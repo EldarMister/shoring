@@ -11,6 +11,8 @@ import { BODY_TYPE_LABELS } from '../../../shared/vehicleTaxonomy.js'
 const CANONICAL_BODY_FILTER_ITEMS = [
   { name: BODY_TYPE_LABELS.suv, count: 0 },
   { name: BODY_TYPE_LABELS.sedan, count: 0 },
+  { name: BODY_TYPE_LABELS.businessSedan, count: 0 },
+  { name: BODY_TYPE_LABELS.executiveSedan, count: 0 },
   { name: BODY_TYPE_LABELS.coupe, count: 0 },
   { name: BODY_TYPE_LABELS.fourDoorCoupe, count: 0 },
   { name: BODY_TYPE_LABELS.cabriolet, count: 0 },

@@ -12,6 +12,8 @@ function joinContext(...values) {
 
 export const BODY_TYPE_LABELS = Object.freeze({
   sedan: 'Седан',
+  businessSedan: 'Бизнес-седан',
+  executiveSedan: 'Представительский седан',
   coupe: 'Купе',
   fourDoorCoupe: '4-дверное купе',
   cabriolet: 'Кабриолет',
@@ -144,6 +146,12 @@ export function resolveBodyTypeLabel(bodyValue, ...contextValues) {
   const inferred = inferBodyTypeFromContext(bodyValue, ...contextValues)
 
   if (inferred && (!normalized || normalized !== inferred)) {
+    if (
+      (normalized === BODY_TYPE_LABELS.businessSedan || normalized === BODY_TYPE_LABELS.executiveSedan)
+      && inferred === BODY_TYPE_LABELS.sedan
+    ) {
+      return normalized
+    }
     return inferred
   }
 

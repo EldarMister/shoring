@@ -6,6 +6,7 @@ import { getBlockedCatalogPriceReason } from '../lib/catalogPriceRules.js'
 import { normalizeCarTextFields } from '../lib/carRecordNormalization.js'
 import { fetchEncarVehicleEnrichment } from '../lib/encarVehicle.js'
 import { getPricingSettings, resolveVehicleFees } from '../lib/pricingSettings.js'
+import { BODY_TYPE_LABELS } from '../../shared/vehicleTaxonomy.js'
 import {
   appendTitleTrimSuffix,
   extractShortLocation,
@@ -98,6 +99,77 @@ const GERMAN_BRAND_ALIASES = [
   'maybach',
   'opel',
 ]
+
+const BUSINESS_SEDAN_MODEL_RE = [
+  /\bAudi\s+A6\b/i,
+  /\bMercedes[-\s]?Benz\s+E-Class\b/i,
+  /\bBMW\s+5\s*Series\b/i,
+  /\bHyundai\s+Grandeur\b/i,
+  /\bGenesis\s+G80\b/i,
+  /\bKia\s+K7\b/i,
+  /\bKia\s+K8\b/i,
+  /\bVolvo\s+S90\b/i,
+  /\bLexus\s+ES\b/i,
+]
+
+const EXECUTIVE_SEDAN_MODEL_RE = [
+  /\bBMW\s+7\s*Series\b/i,
+  /\bMercedes[-\s]?Benz\s+S-Class\b/i,
+  /\bAudi\s+A8\b/i,
+  /\bGenesis\s+G90\b/i,
+  /\bLexus\s+LS\b/i,
+]
+
+const BODY_TYPE_MODEL_OVERRIDES = [
+  { pattern: /\bKia\s+RAY\b/i, body: BODY_TYPE_LABELS.minivan },
+  { pattern: /\bPorsche\s+Taycan\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bAudi\s+e-?tron\s+GT\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bAudi\s+RS7\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bAudi\s+S7\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bPorsche\s+718\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bJaguar\s+F-?TYPE\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bMaserati\s+MC20\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bRolls-?Royce\s+Wraith\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bHyundai\s+Solati\b/i, body: BODY_TYPE_LABELS.minivan },
+  { pattern: /\bMercedes[-\s]?Benz\s+V-Class\b/i, body: BODY_TYPE_LABELS.minivan },
+  { pattern: /\bDodge\s+Ram\s+Pick\s+Up\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bGMC\s+Sierra\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bChevrolet\s+Colorado\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bSsangYong\s+Musso\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bSsangYong\s+Rexton\b/i, body: BODY_TYPE_LABELS.suv },
+  { pattern: /\bSuzuki\s+Jimny\b/i, body: BODY_TYPE_LABELS.suv },
+  { pattern: /\bIneos\s+Grenadier\b.*\bStation\s+Wagon\b/i, body: BODY_TYPE_LABELS.suv },
+]
+
+function matchesAny(patterns, text) {
+  return patterns.some((pattern) => pattern.test(text))
+}
+
+function applyBodyTypeOverrides(bodyType, context) {
+  const text = cleanText(context)
+  if (!text) return bodyType
+
+  const isExecutive = matchesAny(EXECUTIVE_SEDAN_MODEL_RE, text)
+  const isBusiness = matchesAny(BUSINESS_SEDAN_MODEL_RE, text)
+
+  for (const rule of BODY_TYPE_MODEL_OVERRIDES) {
+    if (rule.pattern.test(text)) return rule.body
+  }
+
+  if (bodyType === BODY_TYPE_LABELS.executiveSedan && !isExecutive) {
+    return BODY_TYPE_LABELS.sedan
+  }
+  if (bodyType === BODY_TYPE_LABELS.businessSedan && !isBusiness) {
+    return BODY_TYPE_LABELS.sedan
+  }
+
+  if (bodyType === BODY_TYPE_LABELS.sedan) {
+    if (isExecutive) return BODY_TYPE_LABELS.executiveSedan
+    if (isBusiness) return BODY_TYPE_LABELS.businessSedan
+  }
+
+  return bodyType
+}
 
 function cleanText(value) {
   return repairTextEncoding(String(value || '')).replace(/\s+/g, ' ').trim()
@@ -208,7 +280,7 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     raw.Name,
   )
   const body_color = normalizeColorName(raw.Color || '')
-  const body_type = resolveBodyType(
+  let body_type = resolveBodyType(
     raw.BodyType || raw.Body || raw.Shape || '',
     raw.Model,
     raw.Badge,
@@ -226,6 +298,10 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     raw.SubModel,
     raw.Grade,
     raw.BadgeDetail,
+  )
+  body_type = applyBodyTypeOverrides(
+    body_type,
+    [model, badge, rawName, raw.SubModel, raw.Grade, raw.BadgeDetail, raw.GradeDetail].filter(Boolean).join(' ')
   )
   const interior_raw =
     raw.InteriorColor ||

@@ -12,6 +12,78 @@ import {
   normalizeTrimLevel,
 } from './vehicleData.js'
 import { normalizeCarIdentityFields } from './carIdentityNormalization.js'
+import { BODY_TYPE_LABELS } from '../../shared/vehicleTaxonomy.js'
+
+const BUSINESS_SEDAN_MODEL_RE = [
+  /\bAudi\s+A6\b/i,
+  /\bMercedes[-\s]?Benz\s+E-Class\b/i,
+  /\bBMW\s+5\s*Series\b/i,
+  /\bHyundai\s+Grandeur\b/i,
+  /\bGenesis\s+G80\b/i,
+  /\bKia\s+K7\b/i,
+  /\bKia\s+K8\b/i,
+  /\bVolvo\s+S90\b/i,
+  /\bLexus\s+ES\b/i,
+]
+
+const EXECUTIVE_SEDAN_MODEL_RE = [
+  /\bBMW\s+7\s*Series\b/i,
+  /\bMercedes[-\s]?Benz\s+S-Class\b/i,
+  /\bAudi\s+A8\b/i,
+  /\bGenesis\s+G90\b/i,
+  /\bLexus\s+LS\b/i,
+]
+
+const BODY_TYPE_MODEL_OVERRIDES = [
+  { pattern: /\bKia\s+RAY\b/i, body: BODY_TYPE_LABELS.minivan },
+  { pattern: /\bPorsche\s+Taycan\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bAudi\s+e-?tron\s+GT\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bAudi\s+RS7\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bAudi\s+S7\b/i, body: BODY_TYPE_LABELS.liftback },
+  { pattern: /\bPorsche\s+718\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bJaguar\s+F-?TYPE\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bMaserati\s+MC20\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bRolls-?Royce\s+Wraith\b/i, body: BODY_TYPE_LABELS.coupe },
+  { pattern: /\bHyundai\s+Solati\b/i, body: BODY_TYPE_LABELS.minivan },
+  { pattern: /\bMercedes[-\s]?Benz\s+V-Class\b/i, body: BODY_TYPE_LABELS.minivan },
+  { pattern: /\bDodge\s+Ram\s+Pick\s+Up\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bGMC\s+Sierra\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bChevrolet\s+Colorado\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bSsangYong\s+Musso\b/i, body: BODY_TYPE_LABELS.pickup },
+  { pattern: /\bSsangYong\s+Rexton\b/i, body: BODY_TYPE_LABELS.suv },
+  { pattern: /\bSuzuki\s+Jimny\b/i, body: BODY_TYPE_LABELS.suv },
+  { pattern: /\bIneos\s+Grenadier\b.*\bStation\s+Wagon\b/i, body: BODY_TYPE_LABELS.suv },
+]
+
+function matchesAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text))
+}
+
+function applyBodyTypeOverrides(bodyType, context) {
+  const text = String(context || '').trim()
+  if (!text) return bodyType
+
+  const isExecutive = matchesAny(text, EXECUTIVE_SEDAN_MODEL_RE)
+  const isBusiness = matchesAny(text, BUSINESS_SEDAN_MODEL_RE)
+
+  for (const rule of BODY_TYPE_MODEL_OVERRIDES) {
+    if (rule.pattern.test(text)) return rule.body
+  }
+
+  if (bodyType === BODY_TYPE_LABELS.executiveSedan && !isExecutive) {
+    return BODY_TYPE_LABELS.sedan
+  }
+  if (bodyType === BODY_TYPE_LABELS.businessSedan && !isBusiness) {
+    return BODY_TYPE_LABELS.sedan
+  }
+
+  if (bodyType === BODY_TYPE_LABELS.sedan) {
+    if (isExecutive) return BODY_TYPE_LABELS.executiveSedan
+    if (isBusiness) return BODY_TYPE_LABELS.businessSedan
+  }
+
+  return bodyType
+}
 
 function normalizeNullableText(value, normalizer) {
   if (value === undefined) return undefined
@@ -58,7 +130,7 @@ export function normalizeCarTextFields(input = {}) {
   const finalModel = identityNormalized.model ?? normalizedModel
   const finalTrim = identityNormalized.trim_level ?? normalizedTrim
   const finalDrive = identityNormalized.drive_type === undefined ? normalizedDriveValue : identityNormalized.drive_type
-  const normalizedBodyType = resolveBodyType(
+  let normalizedBodyType = resolveBodyType(
     input.body_type ?? '',
     finalName ?? input.name ?? '',
     finalModel ?? input.model ?? '',
@@ -74,6 +146,10 @@ export function normalizeCarTextFields(input = {}) {
     finalTrim ?? rawTrimValue ?? '',
     input.name ?? '',
     input.model ?? '',
+  )
+  normalizedBodyType = applyBodyTypeOverrides(
+    normalizedBodyType,
+    [finalName ?? input.name ?? '', finalModel ?? input.model ?? '', finalTrim ?? rawTrimValue ?? ''].join(' ')
   )
 
   return {
