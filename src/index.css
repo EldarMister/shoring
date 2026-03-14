@@ -3580,6 +3580,26 @@ body {
   gap: 12px;
 }
 
+.car-details-customs-breakdown {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.car-details-customs-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #7b4a1f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.car-details-customs-breakdown-row strong {
+  font-size: 13px;
+  color: #1f2937;
+}
+
 .car-details-customs-result {
   display: flex;
   justify-content: flex-end;
@@ -6545,6 +6565,14 @@ body {
 
 [data-theme="dark"] .car-details-customs-result strong {
   color: #f59e0b;
+}
+
+[data-theme="dark"] .car-details-customs-breakdown-row {
+  color: #e7cfa3;
+}
+
+[data-theme="dark"] .car-details-customs-breakdown-row strong {
+  color: #f6f1e6;
 }
 
 [data-theme="dark"] .car-details-customs-note {

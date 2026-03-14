@@ -128,6 +128,7 @@ export const CUSTOMS_FUEL_OPTIONS = [
   { value: 'lpg', label: FUEL_LABELS.lpg },
   { value: 'diesel', label: FUEL_LABELS.diesel },
   { value: 'hybrid', label: FUEL_LABELS.hybrid },
+  { value: 'electric', label: FUEL_LABELS.electric },
 ]
 
 export function getCustomsFuelLabel(value) {
@@ -255,12 +256,13 @@ function buildManualResult({ fuel, table, row, volume, direction, message }) {
   }
 }
 
-function buildSuccessResult({ amount, fuel, table, row, volume, direction, message = '', currency }) {
+function buildSuccessResult({ amount, fuel, table, row, volume, direction, message = '', currency, breakdown }) {
   return {
     status: 'success',
     amount,
     currency,
     message,
+    breakdown,
     meta: buildMeta({ fuel, table, row, volume, direction }),
   }
 }
@@ -477,6 +479,87 @@ export function resolveCustomsCalculationKz(input, currentDate = new Date()) {
     amount: Math.round(amount),
     currency: 'EUR',
     message: '',
+  })
+}
+
+export function resolveCustomsCalculationUa(input, currentDate = new Date()) {
+  const year = Number(input?.year)
+  const fuelRaw = String(input?.fuel || 'gasoline')
+  const fuel = fuelRaw === 'lpg' ? 'gasoline' : fuelRaw
+
+  if (!Number.isInteger(year) || year < 1900) {
+    return buildManualResult({
+      message: 'Укажите корректный год выпуска.',
+    })
+  }
+
+  const customsValue = parseNumericValue(input?.customsValue ?? input?.customs_value)
+  if (!customsValue) {
+    return buildManualResult({
+      message: 'Укажите таможенную стоимость в EUR.',
+    })
+  }
+
+  if (!['gasoline', 'diesel', 'hybrid', 'electric'].includes(fuel)) {
+    return buildManualResult({
+      message: 'Укажите корректный тип двигателя.',
+    })
+  }
+
+  const rawAge = currentDate.getFullYear() - year
+  const ageCoefficient = Math.min(Math.max(rawAge, 1), 15)
+  const isElectric = fuel === 'electric'
+  const isHybrid = fuel === 'hybrid'
+
+  const duty = isElectric ? 0 : customsValue * 0.1
+
+  let excise = 0
+  if (isElectric) {
+    const batteryCapacity = parseNumericValue(input?.batteryCapacity ?? input?.battery_kwh)
+    if (!batteryCapacity) {
+      return buildManualResult({
+        message: 'Укажите ёмкость батареи (кВт·ч).',
+      })
+    }
+    excise = batteryCapacity * 1
+  } else if (isHybrid) {
+    excise = 100
+  } else {
+    const parsedEngine = parseEngineValue(input?.engine)
+    if (!parsedEngine) {
+      return buildManualResult({
+        message: 'Укажите объём двигателя.',
+      })
+    }
+    const engineCc = Math.round(parsedEngine.cc)
+    if (!Number.isFinite(engineCc) || engineCc <= 0) {
+      return buildManualResult({
+        message: 'Укажите корректный объём двигателя.',
+      })
+    }
+
+    const isDiesel = fuel === 'diesel'
+    const baseRate = isDiesel
+      ? (engineCc <= 3500 ? 75 : 150)
+      : (engineCc <= 3000 ? 50 : 100)
+
+    excise = baseRate * (engineCc / 1000) * ageCoefficient
+  }
+
+  const vatBase = customsValue + duty + excise
+  const vat = vatBase * 0.2
+  const total = duty + excise + vat
+
+  return buildSuccessResult({
+    amount: Math.round(total),
+    currency: 'EUR',
+    message: '',
+    breakdown: {
+      duty: Math.round(duty),
+      excise: Math.round(excise),
+      vat: Math.round(vat),
+      total: Math.round(total),
+    },
   })
 }
 

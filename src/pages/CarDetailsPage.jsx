@@ -24,6 +24,7 @@ import {
   getCustomsFuelLabel,
   resolveCustomsCalculation,
   resolveCustomsCalculationKz,
+  resolveCustomsCalculationUa,
 } from '../lib/customsTariffs.js'
 import { CAR_SECTION_CONFIG } from '../lib/catalogSections.js'
 import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
@@ -289,6 +290,10 @@ function sanitizeEngineInput(value) {
 }
 
 function sanitizeCustomsValueInput(value) {
+  return sanitizeEngineInput(value)
+}
+
+function sanitizeBatteryInput(value) {
   return sanitizeEngineInput(value)
 }
 
@@ -1517,6 +1522,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     direction: 'asia',
     isPremium: false,
     customsValue: '',
+    batteryKwh: '',
   })
   const [calcDefaults, setCalcDefaults] = useState({ year: DEFAULT_CALC_YEAR, engine: DEFAULT_CALC_ENGINE })
 
@@ -1558,6 +1564,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
             direction: inferredDirection,
             isPremium: isPremiumVehicle(mapped),
             customsValue: '',
+            batteryKwh: '',
           })
         }
 
@@ -1589,6 +1596,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 direction: inferredDetailDirection,
                 isPremium: isPremiumVehicle(detail) || isPremiumVehicle(mapped),
                 customsValue: '',
+                batteryKwh: '',
               })
             }
           } catch {
@@ -1654,9 +1662,16 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const calcEngineValue = useMemo(() => parseCalcEngineInput(calc.engine, calcDefaults.engine), [calc.engine, calcDefaults.engine])
   const customsCountryCode = String(selectedCountry?.code || selectedCountryCode || '').toLowerCase()
   const kzUnionCodes = ['kz', 'ru', 'by']
-  const customsMode = customsCountryCode === 'kg' ? 'kg' : kzUnionCodes.includes(customsCountryCode) ? 'kz' : null
+  const customsMode = customsCountryCode === 'kg'
+    ? 'kg'
+    : kzUnionCodes.includes(customsCountryCode)
+      ? 'kz'
+      : customsCountryCode === 'ua'
+        ? 'ua'
+        : null
   const customsAvailable = Boolean(customsMode)
-  const isKazakhstan = customsMode === 'kz'
+  const isKzUnion = customsMode === 'kz'
+  const isUkraine = customsMode === 'ua'
   const customsUnavailableMessage = selectedCountry?.label
     ? `Растаможка для ${selectedCountry.label} уточняется.`
     : 'Растаможка для выбранной страны уточняется.'
@@ -1664,11 +1679,20 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     if (!customsAvailable) {
       return { status: 'pending', message: customsUnavailableMessage }
     }
-    if (isKazakhstan) {
+    if (isKzUnion) {
       return resolveCustomsCalculationKz({
         year: calcYearValue,
         engine: calcEngineValue,
         customsValue: calc.customsValue,
+      })
+    }
+    if (isUkraine) {
+      return resolveCustomsCalculationUa({
+        year: calcYearValue,
+        engine: calcEngineValue,
+        fuel: calc.fuel,
+        customsValue: calc.customsValue,
+        batteryCapacity: calc.batteryKwh,
       })
     }
     return resolveCustomsCalculation({
@@ -1679,6 +1703,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
       isPremium: calc.isPremium,
     })
   }, [
+    calc.batteryKwh,
     calc.customsValue,
     calc.direction,
     calc.fuel,
@@ -1687,14 +1712,17 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     calcYearValue,
     customsAvailable,
     customsUnavailableMessage,
-    isKazakhstan,
+    isKzUnion,
+    isUkraine,
   ])
   const customsCurrencySymbol = customsResult.currency === 'EUR' ? '€' : '$'
   const customsTitleSuffix = customsMode === 'kg'
     ? ' (Кыргызстан)'
     : customsMode === 'kz'
       ? ` (${selectedCountry?.label || 'Казахстан'})`
-      : ''
+      : customsMode === 'ua'
+        ? ` (${selectedCountry?.label || 'Украина'})`
+        : ''
 
   if (loading) {
     return (
@@ -1845,7 +1873,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                         onChange={(e) => updateCalc({ engine: sanitizeEngineInput(e.target.value) })}
                       />
                     </label>
-                    {isKazakhstan ? (
+                    {isKzUnion ? (
                       <label>
                         <span>Таможенная стоимость (EUR)</span>
                         <input
@@ -1856,6 +1884,38 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                           placeholder="Напр. 15000"
                         />
                       </label>
+                    ) : isUkraine ? (
+                      <>
+                        <label>
+                          <span>Таможенная стоимость (EUR)</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={calc.customsValue}
+                            onChange={(e) => updateCalc({ customsValue: sanitizeCustomsValueInput(e.target.value) })}
+                            placeholder="Напр. 15000"
+                          />
+                        </label>
+                        <CustomsDropdown
+                          label="Тип двигателя"
+                          ariaLabel="Тип двигателя"
+                          value={calc.fuel}
+                          options={CUSTOMS_FUEL_OPTIONS}
+                          onChange={(value) => updateCalc({ fuel: value })}
+                        />
+                        {calc.fuel === 'electric' ? (
+                          <label>
+                            <span>Ёмкость батареи (кВт·ч)</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={calc.batteryKwh}
+                              onChange={(e) => updateCalc({ batteryKwh: sanitizeBatteryInput(e.target.value) })}
+                              placeholder="Напр. 64"
+                            />
+                          </label>
+                        ) : null}
+                      </>
                     ) : (
                       <>
                         <CustomsDropdown
@@ -1876,7 +1936,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                     )}
                   </div>
                   <div className="car-details-customs-summary">
-                    {!isKazakhstan ? (
+                    {!isKzUnion && !isUkraine ? (
                       <label className="car-details-customs-toggle">
                         <input
                           type="checkbox"
@@ -1892,6 +1952,22 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                       </div>
                     ) : null}
                   </div>
+                  {customsResult.status === 'success' && customsResult.breakdown ? (
+                    <div className="car-details-customs-breakdown">
+                      <div className="car-details-customs-breakdown-row">
+                        <span>Пошлина</span>
+                        <strong>{`${customsCurrencySymbol}${customsResult.breakdown.duty.toLocaleString('en-US')}`}</strong>
+                      </div>
+                      <div className="car-details-customs-breakdown-row">
+                        <span>Акциз</span>
+                        <strong>{`${customsCurrencySymbol}${customsResult.breakdown.excise.toLocaleString('en-US')}`}</strong>
+                      </div>
+                      <div className="car-details-customs-breakdown-row">
+                        <span>НДС</span>
+                        <strong>{`${customsCurrencySymbol}${customsResult.breakdown.vat.toLocaleString('en-US')}`}</strong>
+                      </div>
+                    </div>
+                  ) : null}
                   {customsResult.status !== 'success' && customsResult.message ? (
                     <p className="car-details-customs-note is-warning">{customsResult.message}</p>
                   ) : null}
