@@ -66,6 +66,19 @@ const KZ_OVER_FIVE_TARIFFS = [
   { max: Number.POSITIVE_INFINITY, rate: 5.7 },
 ]
 
+const KZ_UTIL_FEE_AEK_2026 = 4325
+const KZ_UTIL_ENGINE_COEFFICIENTS = [
+  { max: 1000, coefficient: 3 },
+  { max: 2000, coefficient: 7 },
+  { max: 3000, coefficient: 10 },
+  { max: Number.POSITIVE_INFINITY, coefficient: 23 },
+]
+
+const BY_UTIL_FEE_PERSONAL = {
+  underOrEqualThreeYears: 544.5,
+  overThreeYears: 816.7,
+}
+
 const FUEL_LABELS = {
   gasoline: 'Бензин',
   lpg: 'Газ',
@@ -270,7 +283,6 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
   const year = Number(input?.year)
   const fuel = String(input?.fuel || 'gasoline')
   const direction = String(input?.direction || '')
-  const isPremium = Boolean(input?.isPremium)
 
   if (!Number.isInteger(year) || year < 1900) {
     return buildManualResult({
@@ -296,13 +308,6 @@ export function resolveCustomsCalculation(input, currentDate = new Date()) {
   const age = resolveAgeFlags(year, currentDate)
   const fuelLabel = getCustomsFuelLabel(fuel)
   const isGasolineFamily = fuel === 'gasoline' || fuel === 'lpg'
-
-  if (isPremium && age.notOlderThan3Years) {
-    return buildManualResult({
-      fuel: fuelLabel,
-      message: 'Для автомобилей премиум-класса до 3 лет требуется уточнение по ИТС.',
-    })
-  }
 
   if (fuel === 'hybrid') {
     const rowLabel = getUnderThreeRowLabel(year)
@@ -560,4 +565,148 @@ export function resolveCustomsCalculationUa(input, currentDate = new Date()) {
       total: Math.round(total),
     },
   })
+}
+
+export function resolveCustomsCalculationAz(input, currentDate = new Date()) {
+  const year = Number(input?.year)
+  const fuelRaw = String(input?.fuel || 'gasoline')
+  const fuel = fuelRaw === 'lpg' ? 'gasoline' : fuelRaw
+
+  if (!Number.isInteger(year) || year < 1900) {
+    return buildManualResult({
+      message: 'Укажите корректный год выпуска.',
+    })
+  }
+
+  const customsValue = parseNumericValue(input?.customsValue ?? input?.customs_value)
+  if (!customsValue) {
+    return buildManualResult({
+      message: 'Укажите таможенную стоимость в AZN.',
+    })
+  }
+
+  if (!['gasoline', 'diesel', 'hybrid', 'electric'].includes(fuel)) {
+    return buildManualResult({
+      message: 'Укажите корректный тип двигателя.',
+    })
+  }
+
+  const ageYears = Math.max(currentDate.getFullYear() - year, 0)
+  const parsedEngine = fuel === 'electric' ? null : parseEngineValue(input?.engine)
+
+  if (fuel !== 'electric' && !parsedEngine) {
+    return buildManualResult({
+      message: 'Укажите объём двигателя.',
+    })
+  }
+
+  const engineCc = parsedEngine ? Math.round(parsedEngine.cc) : 0
+  const isElectric = fuel === 'electric'
+  const isHybrid = fuel === 'hybrid'
+  const electricDutyExempt = isElectric && ageYears <= 3
+  const vatExempt = electricDutyExempt || (isHybrid && ageYears <= 3 && engineCc > 0 && engineCc <= 2500)
+
+  const duty = electricDutyExempt ? 0 : customsValue * 0.15
+  const excise = isElectric
+    ? 0
+    : (engineCc <= 2000 ? engineCc * 0.3 : 600 + (engineCc - 2000) * 5)
+  const vatBase = customsValue + duty + excise
+  const vat = vatExempt ? 0 : vatBase * 0.18
+  const total = duty + excise + vat
+
+  return buildSuccessResult({
+    amount: Math.round(total),
+    currency: 'AZN',
+    message: vatExempt
+      ? 'Льгота по НДС применена для подходящей категории автомобиля.'
+      : '',
+    breakdown: {
+      duty: Math.round(duty),
+      excise: Math.round(excise),
+      vat: Math.round(vat),
+      total: Math.round(total),
+    },
+  })
+}
+
+export function resolveUtilFeeCalculation(input, currentDate = new Date()) {
+  const countryCode = String(input?.countryCode || '').trim().toLowerCase()
+
+  if (!countryCode || countryCode === 'kg' || countryCode === 'ua' || countryCode === 'az' || countryCode === 'tj') {
+    return { status: 'hidden' }
+  }
+
+  if (countryCode === 'kz') {
+    const fuel = String(input?.fuel || '').trim().toLowerCase()
+    if (fuel === 'electric') {
+      return {
+        status: 'success',
+        amount: 0,
+        currency: 'KZT',
+        message: 'Электромобили освобождены от утилизационного платежа.',
+      }
+    }
+
+    const parsedEngine = parseEngineValue(input?.engine)
+    if (!parsedEngine) {
+      return {
+        status: 'manual',
+        message: 'Для расчёта утильсбора укажите объём двигателя.',
+      }
+    }
+
+    const engineCc = Math.round(parsedEngine.cc)
+    const bracket = KZ_UTIL_ENGINE_COEFFICIENTS.find((item) => engineCc <= item.max)
+      || KZ_UTIL_ENGINE_COEFFICIENTS[KZ_UTIL_ENGINE_COEFFICIENTS.length - 1]
+    const amount = KZ_UTIL_FEE_AEK_2026 * 25 * bracket.coefficient
+
+    return {
+      status: 'success',
+      amount: Math.round(amount),
+      currency: 'KZT',
+      message: '',
+      meta: [
+        { label: 'АЕК 2026', value: String(KZ_UTIL_FEE_AEK_2026) },
+        { label: 'Коэффициент', value: String(bracket.coefficient) },
+      ],
+    }
+  }
+
+  if (countryCode === 'by') {
+    const year = Number(input?.year)
+    if (!Number.isInteger(year) || year < 1900) {
+      return {
+        status: 'manual',
+        message: 'Для расчёта утильсбора укажите год выпуска.',
+      }
+    }
+
+    const ageYears = Math.max(currentDate.getFullYear() - year, 0)
+    const amount = ageYears <= 3
+      ? BY_UTIL_FEE_PERSONAL.underOrEqualThreeYears
+      : BY_UTIL_FEE_PERSONAL.overThreeYears
+
+    return {
+      status: 'success',
+      amount,
+      currency: 'BYN',
+      message: 'Фиксированная ставка для ввоза легкового авто физлицом.',
+    }
+  }
+
+  if (countryCode === 'ru') {
+    return {
+      status: 'manual',
+      message: 'В России утильсбор зависит от статуса ввоза и условий льготы физлица, поэтому без отдельного режима точная сумма не рассчитывается.',
+    }
+  }
+
+  if (countryCode === 'uz') {
+    return {
+      status: 'manual',
+      message: 'В Узбекистане утильсбор есть, но универсальная ставка зависит от категории и регистрационного режима; автоматический расчёт пока не добавлен.',
+    }
+  }
+
+  return { status: 'hidden' }
 }

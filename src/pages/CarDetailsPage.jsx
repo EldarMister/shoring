@@ -19,12 +19,13 @@ import {
   stripTrailingTrimLabel,
 } from '../lib/vehicleDisplay'
 import {
-  CUSTOMS_DIRECTION_OPTIONS,
   CUSTOMS_FUEL_OPTIONS,
   getCustomsFuelLabel,
   resolveCustomsCalculation,
+  resolveCustomsCalculationAz,
   resolveCustomsCalculationKz,
   resolveCustomsCalculationUa,
+  resolveUtilFeeCalculation,
 } from '../lib/customsTariffs.js'
 import { CAR_SECTION_CONFIG } from '../lib/catalogSections.js'
 import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
@@ -251,6 +252,28 @@ function normalizeCustomsFuel(value) {
   return CUSTOMS_FUEL_OPTIONS.some((option) => option.value === value) ? value : 'gasoline'
 }
 
+const CURRENCY_SYMBOLS = {
+  EUR: '€',
+  USD: '$',
+  KZT: '₸',
+  AZN: '₼',
+  BYN: 'Br',
+  RUB: '₽',
+  UZS: 'UZS',
+  TJS: 'TJS',
+}
+
+function formatCurrencyAmount(amount, currency) {
+  const parsed = Number(amount)
+  if (!Number.isFinite(parsed)) return ''
+  const symbol = CURRENCY_SYMBOLS[currency] || currency || ''
+  const formatted = parsed.toLocaleString('ru-RU', {
+    minimumFractionDigits: Number.isInteger(parsed) ? 0 : 1,
+    maximumFractionDigits: Number.isInteger(parsed) ? 0 : 1,
+  })
+  return symbol ? `${symbol}${formatted}` : formatted
+}
+
 const DEFAULT_CALC_YEAR = new Date().getFullYear()
 const DEFAULT_CALC_ENGINE = 2.0
 const KZ_UNION_CUSTOMS_USD_TO_EUR_RATIO = 0.92
@@ -310,10 +333,6 @@ function parseCalcEngineInput(value, fallback = DEFAULT_CALC_ENGINE) {
 
   const engine = Number(normalized)
   return Number.isFinite(engine) && engine > 0 ? engine : fallback
-}
-
-function isPremiumVehicle(source) {
-  return /premium|прем/i.test(String(source?.vehicleClass || source?.vehicle_class || ''))
 }
 
 function inferImportDirection(...sources) {
@@ -1579,7 +1598,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     engine: formatCalcEngineInput(DEFAULT_CALC_ENGINE),
     fuel: 'gasoline',
     direction: 'asia',
-    isPremium: false,
     customsValue: '',
   })
   const [calcDefaults, setCalcDefaults] = useState({ year: DEFAULT_CALC_YEAR, engine: DEFAULT_CALC_ENGINE })
@@ -1620,7 +1638,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
             engine: formatCalcEngineInput(nextCalcDefaults.engine),
             fuel,
             direction: inferredDirection,
-            isPremium: isPremiumVehicle(mapped),
             customsValue: '',
           })
         }
@@ -1651,7 +1668,6 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 engine: formatCalcEngineInput(nextCalcDefaults.engine),
                 fuel: normalizeCustomsFuel(detectFuel({ fuel_type: detail?.fuel_type || mapped.fuelType, tags: mapped.tags })),
                 direction: inferredDetailDirection,
-                isPremium: isPremiumVehicle(detail) || isPremiumVehicle(mapped),
                 customsValue: '',
               })
             }
@@ -1725,10 +1741,13 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
       ? 'kz'
       : customsCountryCode === 'ua'
         ? 'ua'
+        : customsCountryCode === 'az'
+          ? 'az'
         : null
   const customsAvailable = Boolean(customsMode)
   const isKzUnion = customsMode === 'kz'
   const isUkraine = customsMode === 'ua'
+  const isAzerbaijan = customsMode === 'az'
   const autoKzUnionCustomsValue = useMemo(() => {
     if (!isKzUnion) return ''
     const priceUsd = Number(car?.priceUSD) || 0
@@ -1760,34 +1779,50 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
         customsValue: calc.customsValue,
       })
     }
+    if (isAzerbaijan) {
+      return resolveCustomsCalculationAz({
+        year: calcYearValue,
+        engine: calcEngineValue,
+        fuel: calc.fuel,
+        customsValue: calc.customsValue,
+      })
+    }
     return resolveCustomsCalculation({
       year: calcYearValue,
       engine: calcEngineValue,
       fuel: calc.fuel,
       direction: calc.direction,
-      isPremium: calc.isPremium,
     })
   }, [
     calc.customsValue,
     calc.direction,
     calc.fuel,
-    calc.isPremium,
     calcEngineValue,
     calcYearValue,
     effectiveKzUnionCustomsValue,
     customsAvailable,
     customsUnavailableMessage,
+    isAzerbaijan,
     isKzUnion,
     isUkraine,
   ])
-  const customsCurrencySymbol = customsResult.currency === 'EUR' ? '€' : '$'
   const customsTitleSuffix = customsMode === 'kg'
     ? ' (Кыргызстан)'
     : customsMode === 'kz'
       ? ` (${selectedCountry?.label || 'Казахстан'})`
       : customsMode === 'ua'
         ? ` (${selectedCountry?.label || 'Украина'})`
+        : customsMode === 'az'
+          ? ` (${selectedCountry?.label || 'Азербайджан'})`
         : ''
+  const utilFeeResult = useMemo(() => resolveUtilFeeCalculation({
+    countryCode: customsCountryCode,
+    year: calcYearValue,
+    engine: calcEngineValue,
+    fuel: calc.fuel,
+  }), [customsCountryCode, calcYearValue, calcEngineValue, calc.fuel])
+  const showUtilFeeCard = utilFeeResult.status && utilFeeResult.status !== 'hidden'
+  const utilFeeTitleSuffix = selectedCountry?.label ? ` (${selectedCountry.label})` : ''
 
   if (loading) {
     return (
@@ -1969,6 +2004,26 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                           onChange={(value) => updateCalc({ fuel: value })}
                         />
                       </>
+                    ) : isAzerbaijan ? (
+                      <>
+                        <label>
+                          <span>Таможенная стоимость (AZN)</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={calc.customsValue}
+                            onChange={(e) => updateCalc({ customsValue: sanitizeCustomsValueInput(e.target.value) })}
+                            placeholder="Напр. 25000"
+                          />
+                        </label>
+                        <CustomsDropdown
+                          label="Тип двигателя"
+                          ariaLabel="Тип двигателя"
+                          value={calc.fuel}
+                          options={CUSTOMS_FUEL_OPTIONS}
+                          onChange={(value) => updateCalc({ fuel: value })}
+                        />
+                      </>
                     ) : (
                       <>
                         <CustomsDropdown
@@ -1978,30 +2033,13 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                           options={CUSTOMS_FUEL_OPTIONS}
                           onChange={(value) => updateCalc({ fuel: value })}
                         />
-                        <CustomsDropdown
-                          label="Направление ввоза"
-                          ariaLabel="Направление ввоза"
-                          value={calc.direction}
-                          options={CUSTOMS_DIRECTION_OPTIONS}
-                          onChange={(value) => updateCalc({ direction: value })}
-                        />
                       </>
                     )}
                   </div>
                   <div className="car-details-customs-summary">
-                    {!isKzUnion && !isUkraine ? (
-                      <label className="car-details-customs-toggle">
-                        <input
-                          type="checkbox"
-                          checked={calc.isPremium}
-                          onChange={(e) => updateCalc({ isPremium: e.target.checked })}
-                        />
-                        <span>Премиум-класс</span>
-                      </label>
-                    ) : null}
                     {customsResult.status === 'success' ? (
                       <div className="car-details-customs-result">
-                        <strong>{`${customsCurrencySymbol}${customsResult.amount.toLocaleString('en-US')}`}</strong>
+                        <strong>{formatCurrencyAmount(customsResult.amount, customsResult.currency)}</strong>
                       </div>
                     ) : null}
                   </div>
@@ -2009,17 +2047,20 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                     <div className="car-details-customs-breakdown">
                       <div className="car-details-customs-breakdown-row">
                         <span>Пошлина</span>
-                        <strong>{`${customsCurrencySymbol}${customsResult.breakdown.duty.toLocaleString('en-US')}`}</strong>
+                        <strong>{formatCurrencyAmount(customsResult.breakdown.duty, customsResult.currency)}</strong>
                       </div>
                       <div className="car-details-customs-breakdown-row">
                         <span>Акциз</span>
-                        <strong>{`${customsCurrencySymbol}${customsResult.breakdown.excise.toLocaleString('en-US')}`}</strong>
+                        <strong>{formatCurrencyAmount(customsResult.breakdown.excise, customsResult.currency)}</strong>
                       </div>
                       <div className="car-details-customs-breakdown-row">
                         <span>НДС</span>
-                        <strong>{`${customsCurrencySymbol}${customsResult.breakdown.vat.toLocaleString('en-US')}`}</strong>
+                        <strong>{formatCurrencyAmount(customsResult.breakdown.vat, customsResult.currency)}</strong>
                       </div>
                     </div>
+                  ) : null}
+                  {customsResult.status === 'success' && customsResult.message ? (
+                    <p className="car-details-customs-note">{customsResult.message}</p>
                   ) : null}
                   {customsResult.status !== 'success' && customsResult.message ? (
                     <p className="car-details-customs-note is-warning">{customsResult.message}</p>
@@ -2029,6 +2070,36 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 <p className="car-details-customs-note is-warning">{customsResult.message}</p>
               )}
             </div>
+
+            {showUtilFeeCard ? (
+              <div className="car-details-card car-details-customs">
+                <h3 className="car-details-card-title">Утильсбор{utilFeeTitleSuffix}</h3>
+                {utilFeeResult.status === 'success' ? (
+                  <>
+                    <div className="car-details-customs-summary">
+                      <div className="car-details-customs-result">
+                        <strong>{formatCurrencyAmount(utilFeeResult.amount, utilFeeResult.currency)}</strong>
+                      </div>
+                    </div>
+                    {utilFeeResult.message ? (
+                      <p className="car-details-customs-note">{utilFeeResult.message}</p>
+                    ) : null}
+                    {Array.isArray(utilFeeResult.meta) && utilFeeResult.meta.length ? (
+                      <div className="car-details-customs-breakdown">
+                        {utilFeeResult.meta.map((item) => (
+                          <div key={`${item.label}-${item.value}`} className="car-details-customs-breakdown-row">
+                            <span>{item.label}</span>
+                            <strong>{item.value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                ) : utilFeeResult.message ? (
+                  <p className="car-details-customs-note is-warning">{utilFeeResult.message}</p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="car-details-card car-details-specs-card">
               <h3 className="car-details-card-title">Основные характеристики</h3>

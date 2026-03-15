@@ -190,7 +190,7 @@ export default function Hero() {
           </div>
           <div className="why-logistics-card hero-logistics-card">
             <div className="why-logistics-title">SHORING-LOGISTICS</div>
-            <div className="why-logistics-current">Цены и калькулятор: {activeCountryLabel}</div>
+            <div className="why-logistics-current">{activeCountryLabel}</div>
             <div className="why-logistics-flags" aria-label="SHORING logistics countries">
               {heroCountries.map(({ code, label }, index) => (
                 <button
