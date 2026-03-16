@@ -94,13 +94,13 @@ export async function getExchangeRateSnapshot({ force = false } = {}) {
       cachedSnapshot = fresh
       cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
       return fresh
-    } catch (primaryError) {
+    } catch {
       try {
         const fallback = buildSnapshot(await fetchFallbackRate())
         cachedSnapshot = fallback
         cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
         return fallback
-      } catch (fallbackError) {
+      } catch {
         if (cachedSnapshot) return cachedSnapshot
         const degraded = buildSnapshot({
           source: 'last-resort',

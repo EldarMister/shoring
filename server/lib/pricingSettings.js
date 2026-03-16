@@ -453,7 +453,7 @@ export async function getPricingSettings({ force = false } = {}) {
       cachedSettings = normalized
       cacheExpiresAt = Date.now() + SETTINGS_CACHE_TTL_MS
       return normalized
-    } catch (error) {
+    } catch {
       const fallback = normalizeSettings(DEFAULT_PRICING_SETTINGS)
       cachedSettings = fallback
       cacheExpiresAt = Date.now() + SETTINGS_CACHE_TTL_MS

@@ -395,29 +395,6 @@ export function appendDisplayTrimSuffix(value, trimLabel) {
   return `${text} Plus`.replace(/\s+/g, ' ').trim()
 }
 
-function inferPassengerBodyTypeFromText(...values) {
-  const text = values
-    .map((value) => cleanText(value))
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-
-  if (!text) return ''
-  if (PICKUP_BODY_HINT_RE.test(text)) return '\u0413\u0440\u0443\u0437\u043e\u0432\u043e\u0439 / \u043f\u0438\u043a\u0430\u043f'
-  if (MINIVAN_BODY_HINT_RE.test(text)) return '\u041c\u0438\u043d\u0438\u0432\u044d\u043d'
-  if (MINI_BODY_HINT_RE.test(text)) return '\u041c\u0438\u043d\u0438'
-  if (GRAN_COUPE_BODY_HINT_RE.test(text)) return '4-\u0434\u0432\u0435\u0440\u043d\u043e\u0435 \u043a\u0443\u043f\u0435'
-  if (LIFTBACK_BODY_HINT_RE.test(text)) return '\u041b\u0438\u0444\u0442\u0431\u0435\u043a'
-  if (SPORTSCAR_BODY_HINT_RE.test(text)) return '\u0421\u043f\u043e\u0440\u0442\u043a\u0430\u0440'
-  if (CABRIO_BODY_HINT_RE.test(text)) return '\u041a\u0430\u0431\u0440\u0438\u043e\u043b\u0435\u0442'
-  if (WAGON_BODY_HINT_RE.test(text)) return '\u0423\u043d\u0438\u0432\u0435\u0440\u0441\u0430\u043b'
-  if (COUPE_BODY_HINT_RE.test(text)) return '\u041a\u0443\u043f\u0435'
-  if (HATCH_BODY_HINT_RE.test(text) || /\bhatch\b/i.test(text)) return '\u0425\u044d\u0442\u0447\u0431\u0435\u043a'
-  if (SEDAN_BODY_HINT_RE.test(text) || /\bsedan\b/i.test(text)) return '\u0421\u0435\u0434\u0430\u043d'
-  if (SUV_BODY_HINT_RE.test(text)) return '\u041a\u0440\u043e\u0441\u0441\u043e\u0432\u0435\u0440 / \u0432\u043d\u0435\u0434\u043e\u0440\u043e\u0436\u043d\u0438\u043a'
-  return ''
-}
-
 export function isWeakBodyTypeLabel(value) {
   return isWeakCanonicalBodyTypeLabel(value)
 }

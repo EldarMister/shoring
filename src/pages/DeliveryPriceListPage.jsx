@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { useDeliveryContext } from '../context/DeliveryContext'
+import { useDeliveryContext } from '../hooks/useDeliveryContext.js'
 import { resolveDeliveryPriceList, resolveDeliveryTypeLabel } from '../lib/delivery'
 
 const FLAG_CDN_BASE = 'https://flagcdn.com'

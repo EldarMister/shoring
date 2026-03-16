@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DeliveryContext } from './delivery-context.js'
 import { normalizeDeliverySettings, resolveDefaultCountryCode } from '../lib/delivery.js'
 
@@ -116,8 +116,4 @@ export function DeliveryProvider({ children }) {
       {children}
     </DeliveryContext.Provider>
   )
-}
-
-export function useDeliveryContext() {
-  return useContext(DeliveryContext)
 }

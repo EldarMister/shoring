@@ -322,12 +322,6 @@ async function updateCar(id, patch) {
   return true
 }
 
-function formatChangedFields(patch) {
-  return Object.keys(patch)
-    .filter((field) => field !== 'updated_at')
-    .join(', ')
-}
-
 function getMeaningfulChangedFields(patch) {
   return Object.keys(patch)
     .filter((field) => field !== 'updated_at' && !SERVICE_ONLY_FIELDS.has(field))
@@ -394,7 +388,6 @@ async function main() {
           { allowBodyDuplicate: true },
         )
         const currentInterior = cleanText(row.interior_color)
-        const normalizedCurrentInterior = getNormalizedStoredInterior(row)
         const nextDrive = cleanText(normalizedDetail.drive_type)
         const currentDrive = cleanText(row.drive_type)
         const nextKeyInfo = cleanText(detail.key_info)

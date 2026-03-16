@@ -97,7 +97,7 @@ function compactMatchText(value) {
   return cleanText(value)
     .toLowerCase()
     .replace(/[~\-\u2013\u2014]/g, '')
-    .replace(/[()[\]{}:;,.\/\\|_]+/g, ' ')
+    .replace(/[()[\]{}:;,./\\|_]+/g, ' ')
     .replace(/\s+/g, '')
 }
 
@@ -370,7 +370,7 @@ function parseUninsuredPeriodsSection($, diagnostics) {
   const text = cleanText(sections.map(($section) => $section.text()).join(' ') || $.root().text())
   const periods = []
   const seen = new Set()
-  const regex = /(?:\uAE30\uAC04|period|\u043F\u0435\u0440\u0438\u043E\u0434)(?:\s*\d+)?\s*[:#-]?\s*(\d{4}[.\-]?\d{2}|\d{6})\s*(?:~|-|to)\s*(\d{4}[.\-]?\d{2}|\d{6})/gi
+  const regex = /(?:\uAE30\uAC04|period|\u043F\u0435\u0440\u0438\u043E\u0434)(?:\s*\d+)?\s*[:#-]?\s*(\d{4}[.-]?\d{2}|\d{6})\s*(?:~|-|to)\s*(\d{4}[.-]?\d{2}|\d{6})/gi
 
   let match
   while ((match = regex.exec(text))) {

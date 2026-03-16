@@ -35,3 +35,6 @@ server/uploads/cars/
 
 # Runtime cache (local only)
 server/scraper/.runtime-cache.json
+
+# Local scratch/debug artifacts
+.tmp/

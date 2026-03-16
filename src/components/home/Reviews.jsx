@@ -52,7 +52,6 @@ export default function Reviews() {
     const media = window.matchMedia('(max-width: 639px)')
     const handleChange = (event) => setIsMobile(event.matches)
 
-    setIsMobile(media.matches)
     if (typeof media.addEventListener === 'function') {
       media.addEventListener('change', handleChange)
       return () => media.removeEventListener('change', handleChange)

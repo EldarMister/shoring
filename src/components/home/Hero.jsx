@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { VAT_REFUND_RATE } from '../../lib/vehicleDisplay'
-import { useDeliveryContext } from '../../context/DeliveryContext'
+import { useDeliveryContext } from '../../hooks/useDeliveryContext.js'
 
 const PRIMARY_WHATSAPP_URL = 'https://wa.me/821056650943'
 const VAT_REFUND_PERCENT = Math.round(VAT_REFUND_RATE * 100)

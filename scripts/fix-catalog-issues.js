@@ -5,7 +5,7 @@ import { computePricing, getExchangeRateSnapshot } from '../server/lib/exchangeR
 import { runCarTextBackfill } from '../server/lib/carTextBackfill.js'
 import { getPricingSettings, resolveVehicleFees } from '../server/lib/pricingSettings.js'
 import { hasHangul } from '../server/scraper/translator.js'
-import { isStandardVin, normalizeVin } from '../server/lib/vin.js'
+import { normalizeVin } from '../server/lib/vin.js'
 
 const UNIQUE_VIN_INDEX_SQL = `
   CREATE UNIQUE INDEX IF NOT EXISTS idx_cars_vin_unique
@@ -210,7 +210,7 @@ async function repairTechnicalRows() {
         if (detail.drive_type) patch.drive_type = detail.drive_type
         if (detail.body_type) patch.body_type = detail.body_type
         if (detail.vehicle_class) patch.vehicle_class = detail.vehicle_class
-      } catch (error) {
+      } catch {
         summary.detail_failed += 1
       }
     }

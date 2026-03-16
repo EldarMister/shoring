@@ -186,7 +186,7 @@ function selectedStateTexts($cell, $) {
   return $cell.find('.txt_state.on, .txt_state.active').map((_, el) => translateText($(el).text())).get().filter(Boolean)
 }
 
-function cellFreeText($cell, $) {
+function cellFreeText($cell) {
   const clone = $cell.clone()
   clone.find('.txt_state').remove()
   return cleanText(clone.text())
@@ -217,7 +217,7 @@ function parseSummaryTable($) {
     if (!label) return
     const tds = $row.children('td')
     const states = selectedStateTexts(tds.eq(0), $)
-    const detail = translateText(cellFreeText(tds.eq(1), $) || tds.eq(1).find('.txt_detail').text())
+    const detail = translateText(cellFreeText(tds.eq(1)) || tds.eq(1).find('.txt_detail').text())
     const amount = cleanText(tds.eq(2).text())
     const note = cleanText(tds.eq(3).text())
     rows.push({
@@ -259,7 +259,7 @@ function parseRepairHistory($) {
     if (!label) return
     const values = $row.find('td').map((__, cell) => {
       const states = selectedStateTexts($(cell), $)
-      const detail = cleanText(cellFreeText($(cell), $))
+    const detail = cleanText(cellFreeText($(cell)))
       return states.length ? states.join(', ') : detail
     }).get().filter(Boolean)
     rows.push({ label, value: values.join(' • ') || '-' })
@@ -393,7 +393,7 @@ function parseDetailStatus($) {
 
     const label = headerTexts.map((text) => translateText(text)).join(' / ')
     const states = selectedStateTexts(valueCells.eq(0), $)
-    const detail = cleanText(cellFreeText(valueCells.eq(0), $))
+    const detail = cleanText(cellFreeText(valueCells.eq(0)))
     const amount = cleanText(valueCells.eq(1).text())
     const note = cleanText(valueCells.eq(2).text())
 

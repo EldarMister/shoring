@@ -779,6 +779,7 @@ function CarForm({ init = BLANK, onSave, onCancel, busy, pricingSettings }) {
         })
     }
 
+    /* eslint-disable react-hooks/static-components */
     const Row = ({ kids }) => <div className="adm-fields-row">{kids}</div>
     const F = ({ label, k, type = 'text', ph, full, disabled = false, valueOverride, ...inputProps }) => (
         <div className={`adm-field${full ? ' adm-field-full' : ''}`}>
@@ -906,6 +907,7 @@ function CarForm({ init = BLANK, onSave, onCancel, busy, pricingSettings }) {
             </div>
         </form>
     )
+    /* eslint-enable react-hooks/static-components */
 }
 
 /* ── Image Manager ── */
@@ -1012,25 +1014,28 @@ function PriceEditor({ car, onSave, onClose, pricingSettings }) {
 }
 
 /* ── Calculator ── */
-function Calculator({ pricingSettings }) {
-    const settings = normalizePricingSettingsClient(pricingSettings?.delivery_profiles ? pricingSettings : PRICING_FALLBACK)
+function buildCalculatorState(settings) {
     const defaultCountryCode = settings.default_country_code || resolveDefaultCountryCode(settings.delivery_countries)
     const firstProfile = settings.delivery_profiles[0] || null
     const firstDelivery = toNum(firstProfile?.prices?.[defaultCountryCode], firstProfile?.price ?? settings.default_delivery)
-    const [v, setV] = useState({ krw: 28000000, rate: 0.00073, delivery_profile_code: firstProfile?.code || '', comm: settings.commission, delivery: firstDelivery, loading: settings.loading, unloading: settings.unloading, storage: settings.storage, vat_pct: 6 })
-    useEffect(() => {
-        const nextFirstProfile = settings.delivery_profiles[0] || null
-        const nextDelivery = toNum(nextFirstProfile?.prices?.[defaultCountryCode], nextFirstProfile?.price ?? settings.default_delivery)
-        setV(prev => ({
-            ...prev,
-            delivery_profile_code: nextFirstProfile?.code || prev.delivery_profile_code,
-            comm: settings.commission,
-            delivery: nextDelivery,
-            loading: settings.loading,
-            unloading: settings.unloading,
-            storage: settings.storage,
-        }))
-    }, [pricingSettings])
+
+    return {
+        krw: 28000000,
+        rate: 0.00073,
+        delivery_profile_code: firstProfile?.code || '',
+        comm: settings.commission,
+        delivery: firstDelivery,
+        loading: settings.loading,
+        unloading: settings.unloading,
+        storage: settings.storage,
+        vat_pct: 6,
+    }
+}
+
+function Calculator({ pricingSettings }) {
+    const settings = normalizePricingSettingsClient(pricingSettings?.delivery_profiles ? pricingSettings : PRICING_FALLBACK)
+    const defaultCountryCode = settings.default_country_code || resolveDefaultCountryCode(settings.delivery_countries)
+    const [v, setV] = useState(() => buildCalculatorState(settings))
     const s = (k, val) => setV(p => ({ ...p, [k]: val }))
     const usd = Math.round(+v.krw * +v.rate)
     const vat = Math.round(usd * (+v.vat_pct / 100))
@@ -1601,6 +1606,8 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
         setLoading(false)
     }, [isPartsSection, section])
 
+    // Search is submitted explicitly from the toolbar; avoid auto-loading on each keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { load(page, search, sort) }, [page, sort, load, pricingRevision, section])
 
     const loadEnrichStatus = useCallback(async () => {
@@ -2600,7 +2607,11 @@ export default function AdminPage() {
     const [pricingRevision, setPricingRevision] = useState(0)
 
     useEffect(() => {
-        const handleSessionCleared = () => setAuth(Boolean(readAdminSessionToken()))
+        const handleSessionCleared = () => {
+            const hasSession = Boolean(readAdminSessionToken())
+            setAuth(hasSession)
+            if (!hasSession) setPricingLoaded(false)
+        }
         window.addEventListener('tlv-admin-session-cleared', handleSessionCleared)
         return () => window.removeEventListener('tlv-admin-session-cleared', handleSessionCleared)
     }, [])
@@ -2608,17 +2619,18 @@ export default function AdminPage() {
     useEffect(() => {
         if (!auth) return
         let active = true
-        setPricingLoaded(false)
         api.getPricingSettings()
             .then(data => {
                 if (!active) return
                 setPricingSettings(normalizePricingSettingsClient(data))
                 setPricingLoaded(true)
+                setPricingRevision(prev => prev + 1)
             })
             .catch(() => {
                 if (!active) return
                 setPricingSettings(PRICING_FALLBACK)
                 setPricingLoaded(true)
+                setPricingRevision(prev => prev + 1)
             })
 
         return () => {
@@ -2630,6 +2642,7 @@ export default function AdminPage() {
         if (!token) return
         sessionStorage.setItem('adm', 'ok')
         writeAdminSessionToken(token)
+        setPricingLoaded(false)
         setAuth(true)
     }} />
 
@@ -2661,7 +2674,7 @@ export default function AdminPage() {
                 </nav>
                 <div className="adm-sidebar-ft">
                     <a href="/catalog" target="_blank" className="adm-nav-btn" title="Каталог"><Ic d={IC.ext} s={19} />{sidebar && <span>Каталог</span>}</a>
-                    <button className="adm-nav-btn" onClick={() => { clearAdminSessionStorage(); setAuth(false) }} title="Выйти">
+                    <button className="adm-nav-btn" onClick={() => { clearAdminSessionStorage(); setPricingLoaded(false); setAuth(false) }} title="Выйти">
                         <Ic d={IC.out} s={19} />{sidebar && <span>Выйти</span>}
                     </button>
                 </div>
@@ -2682,7 +2695,7 @@ export default function AdminPage() {
                     {tab === 'calc' && (
                         <div>
                             <h2 className="adm-section-heading" style={{ marginBottom: 20 }}>🧮 Калькулятор</h2>
-                            <Calculator pricingSettings={pricingSettings} />
+                            <Calculator key={pricingRevision} pricingSettings={pricingSettings} />
                         </div>
                     )}
                     {tab === 'settings' && <Settings toast={toast} pricingSettings={pricingSettings} pricingLoaded={pricingLoaded} onSavePricingSettings={handlePricingSaved} />}

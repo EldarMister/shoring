@@ -303,7 +303,7 @@ function normalizeTrimWithContext(value, brand, name, model) {
   return normalized.replace(HYUNDAI_INSPIRE_RE, 'Inspiration')
 }
 
-function resolveIdentityDrive({ brand, name, model, trim_level, drive_type }) {
+function resolveIdentityDrive({ name, model, trim_level, drive_type }) {
   const currentDrive = cleanText(drive_type)
   const normalizedCurrentDrive = normalizeDrive(currentDrive)
 

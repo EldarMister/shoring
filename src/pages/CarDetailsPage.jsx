@@ -29,7 +29,7 @@ import {
 } from '../lib/customsTariffs.js'
 import { CAR_SECTION_CONFIG } from '../lib/catalogSections.js'
 import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
-import { useDeliveryContext } from '../context/DeliveryContext.jsx'
+import { useDeliveryContext } from '../hooks/useDeliveryContext.js'
 import { resolveDeliveryForCar } from '../lib/delivery.js'
 
 const VAT_REFUND_PERCENT = Math.round(VAT_REFUND_RATE * 100)
@@ -674,7 +674,7 @@ function buildInspectionMetaLines(item, primaryValue) {
   return [...new Set(lines)]
 }
 
-function buildEncarFlagBadges(car) {
+function _buildEncarFlagBadges(car) {
   const flags = car?.detailFlags || {}
   const badges = []
 
@@ -1304,7 +1304,7 @@ function filterDetailedInspectionGroups(groups = []) {
     })
 }
 
-function buildExteriorInspectionRows(section) {
+function _buildExteriorInspectionRows(section) {
   return (section?.ranks || []).flatMap((rank, rankIndex) => {
     const status = translateInspectionText(rank?.rank || '-') || '-'
     const items = Array.isArray(rank?.items) && rank.items.length ? rank.items : []
@@ -2029,7 +2029,10 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const limitedInspectionItems = useMemo(() => buildLimitedInspectionItems(car), [car])
   const displayLocation = useMemo(() => getShortLocationLabel(car?.location || '', 'Корея'), [car?.location])
   const inspectionPhotos = Array.isArray(car?.inspection?.photos) ? car.inspection.photos : []
-  const inspectionSummary = Array.isArray(car?.inspection?.summary) ? car.inspection.summary : []
+  const inspectionSummary = useMemo(
+    () => (Array.isArray(car?.inspection?.summary) ? car.inspection.summary : []),
+    [car?.inspection?.summary],
+  )
   const filteredInspectionSummary = useMemo(
     () => inspectionSummary.filter((item) => !shouldHideInspectionSummaryItem(item?.label)),
     [inspectionSummary],
