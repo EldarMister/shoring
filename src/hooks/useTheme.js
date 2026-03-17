@@ -9,6 +9,7 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.style.colorScheme = theme
     localStorage.setItem('tlv-theme', theme)
   }, [theme])
 
@@ -35,6 +36,7 @@ export function useTheme() {
 
     const transition = document.startViewTransition(() => {
       document.documentElement.setAttribute('data-theme', newTheme)
+      document.documentElement.style.colorScheme = newTheme
       localStorage.setItem('tlv-theme', newTheme)
       setTheme(newTheme)
     })

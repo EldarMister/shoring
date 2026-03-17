@@ -615,7 +615,7 @@ function buildLiveColorOptions(cars, field) {
 }
 
 /* ── Main component ── */
-export default function FilterSidebar({ filters, onFiltersChange, onClose, catalogCars = [], listingType = 'main' }) {
+export default function FilterSidebar({ filters, onFiltersChange, onClose, catalogCars = [], listingType = 'main', shouldLoadOptions = false }) {
   const [open, setOpen] = useState({
     price: true, year: true, mileage: true, origin: true, brands: true,
     drive: true, characteristics: true, body: true,
@@ -623,7 +623,10 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
   })
   const [brandSearch, setBrandSearch] = useState('')
   const [options, setOptions] = useState(FALLBACK)
-  const [loadingOpts, setLoadingOpts] = useState(true)
+  const [loadingOpts, setLoadingOpts] = useState(() => {
+    const isMobileViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+    return !isMobileViewport || shouldLoadOptions
+  })
 
   const local = useMemo(() => buildLocalFilters(filters), [filters])
 
@@ -699,8 +702,13 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
     (_, i) => effectiveYearRange.max - i
   )
 
-  // Fetch filter options from backend
+  // Fetch filter options from backend.
   useEffect(() => {
+    const isMobileViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+    if (isMobileViewport && !shouldLoadOptions) {
+      return
+    }
+
     const params = new URLSearchParams()
     if (listingType) params.set('listingType', listingType)
     fetch(`/api/admin/filter-options${params.toString() ? `?${params}` : ''}`)
@@ -721,7 +729,7 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
       })
       .catch(() => {/* Используем fallback */ })
       .finally(() => setLoadingOpts(false))
-  }, [listingType])
+  }, [listingType, shouldLoadOptions])
 
   const toggle = (key) => setOpen(s => ({ ...s, [key]: !s[key] }))
 

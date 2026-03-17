@@ -30,6 +30,7 @@ html:has(::view-transition) *::after {
 
 /* ========= THEME VARIABLES ========= */
 :root {
+  color-scheme: light;
   --bg: #ffffff;
   --bg-alt: #f8fafc;
   --bg-card: #ffffff;
@@ -50,6 +51,7 @@ html:has(::view-transition) *::after {
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0d1b2a;
   --bg-alt: #0f2030;
   --bg-card: #162032;

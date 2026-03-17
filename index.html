@@ -13,6 +13,19 @@
       name="keywords"
       content="авто из Кореи, доставка авто из Кореи, Encar, авто в Кыргызстан, авто в Россию, AVT Auto V Korea"
     />
+    <script>
+      (() => {
+        try {
+          const savedTheme = localStorage.getItem('tlv-theme')
+          const resolvedTheme = savedTheme === 'dark' ? 'dark' : 'light'
+          document.documentElement.setAttribute('data-theme', resolvedTheme)
+          document.documentElement.style.colorScheme = resolvedTheme
+        } catch {
+          document.documentElement.setAttribute('data-theme', 'light')
+          document.documentElement.style.colorScheme = 'light'
+        }
+      })()
+    </script>
     <meta name="theme-color" content="#f5f8fc" />
     <meta name="robots" content="index,follow" />
     <link rel="canonical" href="https://avt-autovtrade.com/" />

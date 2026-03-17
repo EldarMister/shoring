@@ -268,6 +268,8 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
               alt={car.name}
               className="car-img"
               loading="lazy"
+              decoding="async"
+              fetchPriority="low"
               onError={onImgError}
             />
           ) : (

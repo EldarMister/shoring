@@ -26,6 +26,7 @@ import {
 
 const HANGUL_RE = /[\uAC00-\uD7A3]/u
 const MIN_CATALOG_YEAR = '2019'
+const DEFAULT_CATALOG_FILTERS = Object.freeze({ minYear: MIN_CATALOG_YEAR })
 const CATALOG_FILTER_APPLY_DELAY_MS = 320
 const CATALOG_REQUEST_SETTLE_MS = 90
 const CATALOG_RETRY_DELAYS_MS = [1000, 2200, 4500]
@@ -35,6 +36,23 @@ const CATALOG_AUTOLOAD_MAX_PAGES = Math.max(1, Math.floor(CATALOG_AUTOLOAD_MAX_C
 const CATALOG_SCROLL_AUTOLOAD_THRESHOLD_PX = 320
 const CATALOG_DETAIL_ENRICH_CONCURRENCY = 4
 const TRANSIENT_CATALOG_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+const CATALOG_QUERY_FILTER_KEYS = Object.freeze([
+  'minPrice',
+  'maxPrice',
+  'minYear',
+  'maxYear',
+  'minMileage',
+  'maxMileage',
+  'origin',
+  'brand',
+  'fuel',
+  'drive',
+  'body',
+  'color',
+  'interiorColor',
+  'sort',
+])
+const SLOW_CONNECTION_TYPES = new Set(['slow-2g', '2g', '3g'])
 const encarDetailCache = new Map()
 const encarDetailInFlight = new Map()
 const KO = {
@@ -378,6 +396,68 @@ function appendFilterParams(params, filters) {
     params.set(key, String(value))
   }
   return params
+}
+
+function readSearchParamValues(params, key) {
+  const values = params
+    .getAll(key)
+    .flatMap((value) => String(value || '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  return [...new Set(values)]
+}
+
+function buildCatalogFiltersFromSearch(search) {
+  const params = search instanceof URLSearchParams ? search : new URLSearchParams(search)
+  const filters = { ...DEFAULT_CATALOG_FILTERS }
+
+  for (const key of ['minPrice', 'maxPrice', 'maxYear', 'minMileage', 'maxMileage']) {
+    const value = String(params.get(key) || '').trim()
+    if (value) filters[key] = value
+  }
+
+  const minYear = String(params.get('minYear') || '').trim()
+  filters.minYear = minYear || MIN_CATALOG_YEAR
+
+  for (const key of ['origin', 'brand', 'fuel', 'drive', 'body', 'color', 'interiorColor']) {
+    const values = readSearchParamValues(params, key)
+    if (values.length) filters[key] = values.join(',')
+  }
+
+  return filters
+}
+
+function buildCatalogSearchParams(currentSearch, filters, sort) {
+  const params = new URLSearchParams(currentSearch)
+
+  for (const key of CATALOG_QUERY_FILTER_KEYS) {
+    params.delete(key)
+  }
+
+  const nextFilters = { ...(filters || {}) }
+  if (String(nextFilters.minYear || '') === MIN_CATALOG_YEAR) {
+    delete nextFilters.minYear
+  }
+
+  appendFilterParams(params, nextFilters)
+
+  if (sort && sort !== 'newest') {
+    params.set('sort', sort)
+  }
+
+  return params
+}
+
+function getNetworkConnection() {
+  if (typeof navigator === 'undefined') return null
+  return navigator.connection || navigator.mozConnection || navigator.webkitConnection || null
+}
+
+function isSlowCatalogConnection() {
+  const connection = getNetworkConnection()
+  if (!connection) return false
+  return Boolean(connection.saveData) || SLOW_CONNECTION_TYPES.has(String(connection.effectiveType || '').toLowerCase())
 }
 
 function inferEngineLiters(...values) {
@@ -797,10 +877,19 @@ const SORT_OPTIONS = [
   { value: 'mileage_desc', label: 'Пробег: больше' },
 ]
 
+function normalizeCatalogSort(value) {
+  const normalized = String(value || '').trim()
+  return SORT_OPTIONS.some((option) => option.value === normalized) ? normalized : 'newest'
+}
+
 export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introContent = null }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const locationSearchParams = new URLSearchParams(location.search)
+  const initialFilters = buildCatalogFiltersFromSearch(locationSearchParams)
+  const initialSort = normalizeCatalogSort(locationSearchParams.get('sort'))
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sort, setSort] = useState('newest')
+  const [sort, setSort] = useState(initialSort)
   const [sortOpen, setSortOpen] = useState(false)
   const [cars, setCars] = useState([])
   const [loading, setLoading] = useState(true)
@@ -809,8 +898,8 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   const [error, setError] = useState(null)
   const [hasRetryableError, setHasRetryableError] = useState(false)
   const [meta, setMeta] = useState({ total: 0, page: 1, pages: 1 })
-  const [filters, setFilters] = useState({ minYear: MIN_CATALOG_YEAR })
-  const [appliedFilters, setAppliedFilters] = useState({ minYear: MIN_CATALOG_YEAR })
+  const [filters, setFilters] = useState(initialFilters)
+  const [appliedFilters, setAppliedFilters] = useState(initialFilters)
   const [page, setPage] = useState(1)
   const [loadedPageEnd, setLoadedPageEnd] = useState(1)
   const sortRef = useRef(null)
@@ -828,8 +917,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     metaPages: 1,
     autoLoadPageLimit: 1,
   })
-  const location = useLocation()
-  const searchQuery = new URLSearchParams(location.search).get('q')?.trim() || ''
+  const searchQuery = locationSearchParams.get('q')?.trim() || ''
   const hasSearchQuery = Boolean(searchQuery)
   const activeSortOption = SORT_OPTIONS.find((option) => option.value === sort) || SORT_OPTIONS[0]
   const filtersKey = appendFilterParams(new URLSearchParams(), filters).toString()
@@ -870,6 +958,37 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
       autoLoadPageLimit,
     }
   }, [autoLoadPageLimit, canAutoLoadMore, meta.pages, visiblePageEnd])
+
+  useEffect(() => {
+    const nextFilters = buildCatalogFiltersFromSearch(location.search)
+    const nextSort = normalizeCatalogSort(new URLSearchParams(location.search).get('sort'))
+    const nextFiltersKey = appendFilterParams(new URLSearchParams(), nextFilters).toString()
+
+    if (nextFiltersKey !== filtersKey) {
+      setFilters(nextFilters)
+      setAppliedFilters(nextFilters)
+      setPage(1)
+      setLoadedPageEnd(1)
+    }
+
+    if (nextSort !== sort) {
+      setSort(nextSort)
+      setPage(1)
+      setLoadedPageEnd(1)
+    }
+  }, [filtersKey, location.search, sort])
+
+  useEffect(() => {
+    const nextSearch = buildCatalogSearchParams(location.search, filters, sort).toString()
+    const currentSearch = location.search.startsWith('?') ? location.search.slice(1) : location.search
+
+    if (nextSearch === currentSearch) return
+
+    navigate({
+      pathname: location.pathname,
+      search: nextSearch ? `?${nextSearch}` : '',
+    }, { replace: true })
+  }, [filters, sort, location.pathname, location.search, navigate])
 
   useEffect(() => {
     if (filtersKey === appliedFiltersKey) return undefined
@@ -969,6 +1088,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
 
   const runCatalogEnrichment = useCallback(async ({ carsToEnrich, requestId, append = false } = {}) => {
     if (!Array.isArray(carsToEnrich) || !carsToEnrich.some(needsEncarEnrichment)) return
+    if (isSlowCatalogConnection()) return
 
     const isStale = () => requestId !== activeCatalogRequestRef.current
     const patchesToPersist = []
@@ -1355,6 +1475,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
             filters={filters}
             catalogCars={cars}
             listingType={section.listingType}
+            shouldLoadOptions={sidebarOpen}
             onFiltersChange={setFilters}
             onClose={() => setSidebarOpen(false)}
           />
