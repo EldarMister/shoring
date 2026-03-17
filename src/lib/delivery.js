@@ -31,7 +31,8 @@ const DEFAULT_SETTINGS = {
   delivery_profiles: DEFAULT_DELIVERY_PROFILES,
 }
 
-const KG_ONLY_PRICE_LIST_PROFILES = new Set(['sedan_osh', 'sedan_bishkek'])
+const KG_ONLY_PRICE_LIST_PROFILES = new Set(['sedan_osh'])
+export const RUSSIA_RO_RO_PRICE = 900
 
 function toNumber(value, fallback = null) {
   const numeric = Number(value)
@@ -209,6 +210,22 @@ export function resolveDeliveryPriceList({ settings, countryCode } = {}) {
   const resolvedCountryCode = String(countryCode || defaultCountryCode || '').trim()
   const country = countries.find((item) => item.code === resolvedCountryCode) || countries[0] || null
   const activeCountryCode = country?.code || defaultCountryCode
+
+  if (activeCountryCode === 'ru') {
+    return {
+      country,
+      items: [
+        {
+          code: 'ro_ro',
+          label: 'Ro-Ro',
+          description: '',
+          resolvedPrice: RUSSIA_RO_RO_PRICE,
+          priceSource: 'fixed',
+        },
+      ],
+      defaultCountryCode,
+    }
+  }
 
   const items = (normalized.delivery_profiles || [])
     .filter((profile) => activeCountryCode === 'kg' || !KG_ONLY_PRICE_LIST_PROFILES.has(profile.code))

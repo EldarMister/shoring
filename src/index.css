@@ -11004,6 +11004,10 @@ body {
   color: #000000;
 }
 
+[data-theme="dark"] .hero-logistics-card .why-logistics-title {
+  color: #ffffff;
+}
+
 /* Admin delivery matrix */
 .adm-input-sm {
   padding: 6px 8px;
@@ -11133,9 +11137,9 @@ body {
   min-height: 44px;
   padding: 0 18px;
   border-radius: 999px;
-  background: rgba(35, 77, 127, 0.08);
-  border: 1px solid rgba(35, 77, 127, 0.14);
-  color: #21476f;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  color: #2563eb;
   font-size: 14px;
   font-weight: 700;
 }
@@ -11307,7 +11311,7 @@ body {
   font-size: clamp(28px, 4vw, 42px);
   line-height: 1;
   font-weight: 900;
-  color: #16a34a;
+  color: #2563eb;
   text-align: right;
 }
 
@@ -11354,9 +11358,9 @@ body {
 }
 
 [data-theme="dark"] .delivery-price-badge {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #f8fafc;
+  background: rgba(37, 99, 235, 0.18);
+  border-color: rgba(59, 130, 246, 0.24);
+  color: #93c5fd;
 }
 
 [data-theme="dark"] .delivery-price-badge-accent {
@@ -11373,6 +11377,10 @@ body {
 
 [data-theme="dark"] .delivery-price-row-title {
   color: #f8fafc;
+}
+
+[data-theme="dark"] .delivery-price-row-value {
+  color: #60a5fa;
 }
 
 [data-theme="dark"] .delivery-price-row-description,

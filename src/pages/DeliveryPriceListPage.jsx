@@ -34,8 +34,9 @@ export default function DeliveryPriceListPage() {
 
   const country = priceList.country || selectedCountry || null
   const title = country?.label || 'Кыргызстан'
+  const isRussia = countryCode === 'ru'
   const shippingTypeLabel = resolveDeliveryTypeLabel(country)
-  const shippingExtraPrice = countryCode === 'ru' ? '900$' : ''
+  const heroTitle = isRussia ? 'Доставка Россия' : `Доставка в ${title}`
   const visibleCountries = useMemo(
     () => (countries || []).filter((countryItem) => DISPLAY_COUNTRY_CODES.includes(countryItem.code)),
     [countries],
@@ -48,28 +49,12 @@ export default function DeliveryPriceListPage() {
           <div>
             <div className="delivery-price-kicker">PRICE LIST</div>
             <h1 className="delivery-price-title">
-              <span className="delivery-price-title-prefix">Доставка в</span>
-              <span className="delivery-price-title-country">
-                <img
-                  className="delivery-price-title-flag"
-                  src={getFlagUrl(countryCode, 160)}
-                  srcSet={`${getFlagUrl(countryCode, 320)} 2x`}
-                  width="44"
-                  height="28"
-                  alt={title}
-                  loading="eager"
-                  decoding="async"
-                />
-                <span>{title}</span>
-              </span>
+              <span className="delivery-price-title-prefix">{heroTitle}</span>
             </h1>
           </div>
           <div className="delivery-price-meta">
             <div className="delivery-price-badge-row">
               <div className="delivery-price-badge">{shippingTypeLabel}</div>
-              {shippingExtraPrice ? (
-                <div className="delivery-price-badge delivery-price-badge-accent">{shippingExtraPrice}</div>
-              ) : null}
             </div>
             <div className="delivery-price-actions">
               <Link to="/" className="delivery-price-link">На главную</Link>
