@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import PartCard from '../components/catalog/PartCard.jsx'
+import Seo from '../components/seo/Seo.jsx'
 import { PARTS_SECTION_CONFIG, buildPartDetailsPath } from '../lib/catalogSections.js'
+import { buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Сначала новые' },
@@ -57,6 +59,10 @@ function mapPart(part) {
 export default function PartsCatalogPage({ introContent = null }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const seo = useMemo(
+    () => buildStaticRouteSeo({ pathname: location.pathname, search: location.search, origin: SITE_URL }),
+    [location.pathname, location.search]
+  )
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const [filters, setFilters] = useState(() => buildInitialFilters(searchParams))
   const [sort, setSort] = useState(() => searchParams.get('sort') || 'newest')
@@ -150,6 +156,7 @@ export default function PartsCatalogPage({ introContent = null }) {
 
   return (
     <div className="catalog-page catalog-page-damaged">
+      <Seo {...seo} />
       <div className="cat-breadcrumb">
         <div className="cat-breadcrumb-inner">
           <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>

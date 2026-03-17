@@ -1,10 +1,12 @@
-import { Suspense, lazy } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { Suspense, lazy, useMemo } from 'react'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/layout/Layout'
+import Seo from './components/seo/Seo.jsx'
 import HomePage from './pages/HomePage'
 import CatalogPage from './pages/CatalogPage'
 import DamagedStockTabs from './components/catalog/DamagedStockTabs.jsx'
 import { CAR_SECTION_CONFIG } from './lib/catalogSections.js'
+import { buildStaticRouteSeo, SITE_URL } from '../shared/seo.js'
 
 const CarDetailsPage = lazy(() => import('./pages/CarDetailsPage'))
 const ContactsPage = lazy(() => import('./pages/ContactsPage'))
@@ -21,17 +23,30 @@ function LazyRoute({ children }) {
   )
 }
 
+function AdminRoute() {
+  const location = useLocation()
+  const seo = useMemo(
+    () => buildStaticRouteSeo({ pathname: location.pathname, search: location.search, origin: SITE_URL }),
+    [location.pathname, location.search]
+  )
+
+  return (
+    <>
+      <Seo {...seo} />
+      <LazyRoute>
+        <AdminPage />
+      </LazyRoute>
+    </>
+  )
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route
           path="/admin"
-          element={(
-            <LazyRoute>
-              <AdminPage />
-            </LazyRoute>
-          )}
+          element={<AdminRoute />}
         />
         <Route path="/" element={<Layout><HomePage /></Layout>} />
         <Route

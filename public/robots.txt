@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 
+Host: avt-autovtrade.com
 Sitemap: https://avt-autovtrade.com/sitemap.xml

@@ -22,6 +22,12 @@ import {
   getProductionStartupWarnings,
   sendSafeApiError,
 } from './lib/requestSecurity.js'
+import {
+  buildRobotsTxt,
+  getSitemapXml,
+  injectSeoIntoHtml,
+  resolveRequestSeo,
+} from './lib/seo.js'
 
 dotenv.config()
 
@@ -33,6 +39,7 @@ const PARSE_SCOPE_OPTIONS = new Set(['all', 'domestic', 'imported', 'japanese', 
 const API_RATE_LIMIT_WINDOW_MS = 60 * 1000
 const API_RATE_LIMIT_MAX = 60
 const REQUEST_BODY_LIMIT = '256kb'
+let productionIndexTemplate = ''
 
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
@@ -73,8 +80,33 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() })
 })
 
+app.get('/robots.txt', (_req, res) => {
+  void _req
+  res.type('text/plain; charset=utf-8')
+  res.setHeader('Cache-Control', 'public, max-age=3600')
+  res.send(buildRobotsTxt(globalThis.process?.env?.PUBLIC_SITE_URL || globalThis.process?.env?.SITE_URL || globalThis.process?.env?.BASE_URL || 'https://avt-autovtrade.com'))
+})
+
+app.get('/sitemap.xml', async (_req, res, next) => {
+  void _req
+  try {
+    const xml = await getSitemapXml(
+      globalThis.process?.env?.PUBLIC_SITE_URL
+      || globalThis.process?.env?.SITE_URL
+      || globalThis.process?.env?.BASE_URL
+      || 'https://avt-autovtrade.com'
+    )
+    res.type('application/xml; charset=utf-8')
+    res.setHeader('Cache-Control', 'public, max-age=900')
+    res.send(xml)
+  } catch (error) {
+    next(error)
+  }
+})
+
 if (ENV.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '..', 'dist')
+  const indexFilePath = path.join(distPath, 'index.html')
   app.use(express.static(distPath, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.html')) {
@@ -91,9 +123,22 @@ if (ENV.NODE_ENV === 'production') {
     },
   }))
 
-  app.get(/.*/, (_req, res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
-    res.sendFile(path.join(distPath, 'index.html'))
+  app.get(/.*/, async (req, res, next) => {
+    try {
+      if (!productionIndexTemplate) {
+        const fs = await import('fs')
+        productionIndexTemplate = fs.readFileSync(indexFilePath, 'utf-8')
+      }
+
+      const { seo, statusCode } = await resolveRequestSeo(req)
+      const html = injectSeoIntoHtml(productionIndexTemplate, seo)
+
+      res.status(statusCode)
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+      res.send(html)
+    } catch (error) {
+      next(error)
+    }
   })
 }
 

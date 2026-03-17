@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import Seo from '../components/seo/Seo.jsx'
 import { PARTS_SECTION_CONFIG } from '../lib/catalogSections.js'
+import { buildNotFoundSeo, buildPartSeo, buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const HomeIcon = () => (
   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,11 +45,21 @@ function mapPart(part) {
 
 export default function PartDetailsPage({ introContent = null }) {
   const { id } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [part, setPart] = useState(null)
   const [activeImage, setActiveImage] = useState(0)
+  const seo = useMemo(() => {
+    if (part) {
+      return buildPartSeo({ part, pathname: location.pathname, origin: SITE_URL })
+    }
+    if (!loading && (error || !part)) {
+      return buildNotFoundSeo({ pathname: location.pathname, origin: SITE_URL, title: 'Запчасть не найдена' })
+    }
+    return buildStaticRouteSeo({ pathname: PARTS_SECTION_CONFIG.path, origin: SITE_URL })
+  }, [error, loading, location.pathname, part])
 
   useEffect(() => {
     let active = true
@@ -83,6 +95,7 @@ export default function PartDetailsPage({ introContent = null }) {
   if (loading) {
     return (
       <div className="catalog-page catalog-page-damaged">
+        <Seo {...seo} />
         <div className="cat-layout">
           <div className="cat-loading">
             <div className="cat-loading-spinner" />
@@ -96,6 +109,7 @@ export default function PartDetailsPage({ introContent = null }) {
   if (error || !part) {
     return (
       <div className="catalog-page catalog-page-damaged">
+        <Seo {...seo} />
         <div className="cat-layout">
           <div className="cat-error">
             ⚠️ {error || 'Запчасть не найдена'} — <Link to={PARTS_SECTION_CONFIG.path}>Вернуться в каталог</Link>
@@ -107,6 +121,7 @@ export default function PartDetailsPage({ introContent = null }) {
 
   return (
     <div className="catalog-page catalog-page-damaged">
+      <Seo {...seo} />
       <div className="cat-breadcrumb">
         <div className="cat-breadcrumb-inner">
           <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>

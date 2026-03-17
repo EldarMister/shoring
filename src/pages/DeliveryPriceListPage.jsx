@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useDeliveryContext } from '../hooks/useDeliveryContext.js'
+import Seo from '../components/seo/Seo.jsx'
 import { resolveDeliveryPriceList, resolveDeliveryTypeLabel } from '../lib/delivery'
+import { buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const FLAG_CDN_BASE = 'https://flagcdn.com'
 const DISPLAY_COUNTRY_CODES = ['kg', 'kz', 'ru', 'uz', 'tj', 'by', 'az', 'ua']
@@ -26,6 +28,7 @@ function formatUsd(value) {
 
 export default function DeliveryPriceListPage() {
   const { settings, loading, countries, countryCode, selectedCountry, setCountryCode } = useDeliveryContext()
+  const seo = buildStaticRouteSeo({ pathname: '/delivery-price-list', origin: SITE_URL })
 
   const priceList = useMemo(
     () => resolveDeliveryPriceList({ settings, countryCode }),
@@ -44,6 +47,7 @@ export default function DeliveryPriceListPage() {
 
   return (
     <section className="delivery-price-page">
+      <Seo {...seo} />
       <div className="delivery-price-shell">
         <div className="delivery-price-hero">
           <div>

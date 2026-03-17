@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { applyVehicleTitleFixes } from '../../shared/vehicleTextFixes.js'
 import { sanitizeVin } from '../../shared/vin.js'
 import FilterSidebar from '../components/catalog/FilterSidebar'
 import CarCard from '../components/catalog/CarCard'
 import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
+import Seo from '../components/seo/Seo.jsx'
 import { CAR_SECTION_CONFIG, buildCarDetailsPath } from '../lib/catalogSections.js'
+import { buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 import {
   appendDisplayTrimSuffix,
   classifyVehicleOrigin,
@@ -886,6 +888,10 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   const navigate = useNavigate()
   const location = useLocation()
   const locationSearchParams = new URLSearchParams(location.search)
+  const seo = useMemo(
+    () => buildStaticRouteSeo({ pathname: location.pathname, search: location.search, origin: SITE_URL }),
+    [location.pathname, location.search]
+  )
   const initialFilters = buildCatalogFiltersFromSearch(locationSearchParams)
   const initialSort = normalizeCatalogSort(locationSearchParams.get('sort'))
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -1476,6 +1482,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
 
   return (
     <div className={`catalog-page catalog-page-${section.heroTone || 'main'}`}>
+      <Seo {...seo} />
       <div className="cat-breadcrumb">
         <div className="cat-breadcrumb-inner">
           <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>

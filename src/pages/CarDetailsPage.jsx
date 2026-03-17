@@ -29,8 +29,10 @@ import {
 } from '../lib/customsTariffs.js'
 import { CAR_SECTION_CONFIG } from '../lib/catalogSections.js'
 import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
+import Seo from '../components/seo/Seo.jsx'
 import { useDeliveryContext } from '../hooks/useDeliveryContext.js'
 import { resolveDeliveryForCar } from '../lib/delivery.js'
+import { buildCarSeo, buildNotFoundSeo, buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const VAT_REFUND_PERCENT = Math.round(VAT_REFUND_RATE * 100)
 
@@ -1916,6 +1918,21 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     customsValue: '',
   })
   const [calcDefaults, setCalcDefaults] = useState({ year: DEFAULT_CALC_YEAR, engine: DEFAULT_CALC_ENGINE })
+  const seo = useMemo(() => {
+    if (car) {
+      return buildCarSeo({
+        car,
+        pathname: location.pathname,
+        origin: SITE_URL,
+        sectionName: section.breadcrumbLabel || section.navLabel || 'Каталог',
+        sectionPath: section.path || '/catalog',
+      })
+    }
+    if (!loading && (error || !car)) {
+      return buildNotFoundSeo({ pathname: location.pathname, origin: SITE_URL, title: 'Автомобиль не найден' })
+    }
+    return buildStaticRouteSeo({ pathname: section.path || '/catalog', origin: SITE_URL })
+  }, [car, error, loading, location.pathname, section.breadcrumbLabel, section.navLabel, section.path])
 
   const updateCalc = (patch) => {
     calcDirtyRef.current = true
@@ -2169,6 +2186,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   if (loading) {
     return (
       <div className={`catalog-page catalog-page-${section.heroTone || 'main'}`}>
+        <Seo {...seo} />
         <div className="cat-layout">
           <div className="cat-loading">
             <div className="cat-loading-spinner" />
@@ -2182,6 +2200,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   if (error || !car) {
     return (
       <div className={`catalog-page catalog-page-${section.heroTone || 'main'}`}>
+        <Seo {...seo} />
         <div className="cat-layout">
           <div className="cat-error">
             ⚠️ {error || 'Машина не найдена'} — <Link to={section.path}>Вернуться в раздел</Link>
@@ -2193,6 +2212,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
 
   return (
     <div className={`catalog-page catalog-page-${section.heroTone || 'main'}`}>
+      <Seo {...seo} />
       <div className="cat-breadcrumb">
         <div className="cat-breadcrumb-inner">
           <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>
