@@ -8384,6 +8384,7 @@ body {
 .filter-actions {
   display: flex;
   gap: 10px;
+  justify-content: flex-end;
   padding: 14px 16px;
   border-top: 1px solid rgba(226, 232, 240, 0.8);
   position: sticky;
@@ -8398,25 +8399,6 @@ body {
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.42) 0%, rgba(15, 23, 42, 0.68) 100%);
   border-color: rgba(148, 163, 184, 0.14);
   box-shadow: 0 -12px 28px rgba(2, 6, 23, 0.28);
-}
-
-.filter-auto-apply-note {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 16px;
-  border-radius: 14px;
-  background: rgba(26, 60, 94, 0.06);
-  color: #516577;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-}
-
-[data-theme="dark"] .filter-auto-apply-note {
-  background: rgba(148, 163, 184, 0.12);
-  color: #cbd5e1;
 }
 
 .filter-apply-btn {

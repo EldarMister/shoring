@@ -993,14 +993,11 @@ export default function FilterSidebar({ filters, onFiltersChange, onClose, catal
         )}
       </div>
 
-      {/* Reset / auto-apply */}
+      {/* Reset */}
       <div className="filter-actions">
         <button type="button" className="filter-reset-btn" onClick={resetFilters}>
           Сбросить
         </button>
-        <div className="filter-auto-apply-note" aria-live="polite">
-          Применяется автоматически
-        </div>
       </div>
     </div>
   )

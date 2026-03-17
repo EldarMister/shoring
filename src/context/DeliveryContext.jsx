@@ -13,24 +13,28 @@ function normalizeCountryCode(value, fallback = 'kg') {
   return normalized || fallback
 }
 
-function readStoredCountryCode() {
-  if (typeof window === 'undefined') return 'kg'
+function getDeliverySessionStorage() {
+  if (typeof window === 'undefined') return null
 
   try {
-    return normalizeCountryCode(window.localStorage.getItem(DELIVERY_COUNTRY_STORAGE_KEY), 'kg')
+    return window.sessionStorage
   } catch {
-    return 'kg'
+    return null
   }
 }
 
-function readStoredCountryTouched() {
-  if (typeof window === 'undefined') return false
+function readStoredCountryCode() {
+  const storage = getDeliverySessionStorage()
+  if (!storage) return 'kg'
 
-  try {
-    return window.localStorage.getItem(DELIVERY_COUNTRY_TOUCHED_STORAGE_KEY) === '1'
-  } catch {
-    return false
-  }
+  return normalizeCountryCode(storage.getItem(DELIVERY_COUNTRY_STORAGE_KEY), 'kg')
+}
+
+function readStoredCountryTouched() {
+  const storage = getDeliverySessionStorage()
+  if (!storage) return false
+
+  return storage.getItem(DELIVERY_COUNTRY_TOUCHED_STORAGE_KEY) === '1'
 }
 
 export function DeliveryProvider({ children }) {
@@ -43,17 +47,30 @@ export function DeliveryProvider({ children }) {
     if (typeof window === 'undefined') return
 
     try {
-      window.localStorage.setItem(DELIVERY_COUNTRY_STORAGE_KEY, normalizeCountryCode(countryCode, 'kg'))
+      window.localStorage.removeItem(DELIVERY_COUNTRY_STORAGE_KEY)
+      window.localStorage.removeItem(DELIVERY_COUNTRY_TOUCHED_STORAGE_KEY)
+    } catch {
+      // Ignore legacy storage cleanup failures.
+    }
+  }, [])
+
+  useEffect(() => {
+    const storage = getDeliverySessionStorage()
+    if (!storage) return
+
+    try {
+      storage.setItem(DELIVERY_COUNTRY_STORAGE_KEY, normalizeCountryCode(countryCode, 'kg'))
     } catch {
       // Ignore storage write failures; the in-memory selection still works.
     }
   }, [countryCode])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    const storage = getDeliverySessionStorage()
+    if (!storage) return
 
     try {
-      window.localStorage.setItem(DELIVERY_COUNTRY_TOUCHED_STORAGE_KEY, hasUserSelectedCountry ? '1' : '0')
+      storage.setItem(DELIVERY_COUNTRY_TOUCHED_STORAGE_KEY, hasUserSelectedCountry ? '1' : '0')
     } catch {
       // Ignore storage write failures; the in-memory state still works.
     }
