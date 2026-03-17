@@ -909,7 +909,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   const retryTimerRef = useRef(null)
   const fetchCarsRef = useRef(null)
   const activeCatalogQueryKeyRef = useRef('')
-  const pendingSearchSyncRef = useRef('')
+  const pendingSearchSyncRef = useRef(null)
   const autoLoadSentinelRef = useRef(null)
   const autoLoadLockRef = useRef(false)
   const autoLoadStateRef = useRef({
@@ -964,9 +964,9 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     const currentSearch = location.search.startsWith('?') ? location.search.slice(1) : location.search
     const pendingSearch = pendingSearchSyncRef.current
 
-    if (pendingSearch) {
+    if (pendingSearch !== null) {
       if (currentSearch === pendingSearch) {
-        pendingSearchSyncRef.current = ''
+        pendingSearchSyncRef.current = null
       } else {
         return
       }
