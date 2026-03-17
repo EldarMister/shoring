@@ -909,6 +909,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   const retryTimerRef = useRef(null)
   const fetchCarsRef = useRef(null)
   const activeCatalogQueryKeyRef = useRef('')
+  const pendingSearchSyncRef = useRef('')
   const autoLoadSentinelRef = useRef(null)
   const autoLoadLockRef = useRef(false)
   const autoLoadStateRef = useRef({
@@ -960,6 +961,17 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   }, [autoLoadPageLimit, canAutoLoadMore, meta.pages, visiblePageEnd])
 
   useEffect(() => {
+    const currentSearch = location.search.startsWith('?') ? location.search.slice(1) : location.search
+    const pendingSearch = pendingSearchSyncRef.current
+
+    if (pendingSearch) {
+      if (currentSearch === pendingSearch) {
+        pendingSearchSyncRef.current = ''
+      } else {
+        return
+      }
+    }
+
     const nextFilters = buildCatalogFiltersFromSearch(location.search)
     const nextSort = normalizeCatalogSort(new URLSearchParams(location.search).get('sort'))
     const nextFiltersKey = appendFilterParams(new URLSearchParams(), nextFilters).toString()
@@ -984,6 +996,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
 
     if (nextSearch === currentSearch) return
 
+    pendingSearchSyncRef.current = nextSearch
     navigate({
       pathname: location.pathname,
       search: nextSearch ? `?${nextSearch}` : '',
@@ -994,13 +1007,14 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     if (filtersKey === appliedFiltersKey) return undefined
 
     const timeoutId = window.setTimeout(() => {
+      pendingSearchSyncRef.current = buildCatalogSearchParams(location.search, filters, sort).toString()
       setPage(1)
       setLoadedPageEnd(1)
       setAppliedFilters(filters)
     }, CATALOG_FILTER_APPLY_DELAY_MS)
 
     return () => window.clearTimeout(timeoutId)
-  }, [appliedFiltersKey, filters, filtersKey])
+  }, [appliedFiltersKey, filters, filtersKey, location.search, sort])
 
   const clearScheduledRetry = useCallback(() => {
     if (!retryTimerRef.current) return
@@ -1580,6 +1594,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
                           aria-selected={isActive}
                           className={`cat-sort-option${isActive ? ' is-active' : ''}`}
                           onClick={() => {
+                            pendingSearchSyncRef.current = buildCatalogSearchParams(location.search, appliedFilters, option.value).toString()
                             setSort(option.value)
                             setPage(1)
                             setSortOpen(false)
