@@ -1392,10 +1392,12 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     }
 
     window.addEventListener('online', retryFailedLoad)
+    window.addEventListener('focus', retryFailedLoad)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       window.removeEventListener('online', retryFailedLoad)
+      window.removeEventListener('focus', retryFailedLoad)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [hasRetryableError, clearScheduledRetry])

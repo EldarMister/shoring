@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import PartCard from '../components/catalog/PartCard.jsx'
 import Seo from '../components/seo/Seo.jsx'
 import { PARTS_SECTION_CONFIG, buildPartDetailsPath } from '../lib/catalogSections.js'
+import useRecoverableErrorRetry from '../lib/useRecoverableErrorRetry.js'
 import { buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const SORT_OPTIONS = [
@@ -71,6 +72,7 @@ export default function PartsCatalogPage({ introContent = null }) {
   const [meta, setMeta] = useState({ total: 0, page: 1, pages: 1 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [retryNonce, setRetryNonce] = useState(0)
 
   useEffect(() => {
     const nextParams = new URLSearchParams(location.search)
@@ -78,6 +80,11 @@ export default function PartsCatalogPage({ introContent = null }) {
     setSort(nextParams.get('sort') || 'newest')
     setPage(Math.max(Number(nextParams.get('page')) || 1, 1))
   }, [location.search])
+
+  const retryLoad = useCallback(() => {
+    setRetryNonce((value) => value + 1)
+  }, [])
+  useRecoverableErrorRetry(error, retryLoad)
 
   useEffect(() => {
     let active = true
@@ -118,7 +125,7 @@ export default function PartsCatalogPage({ introContent = null }) {
       active = false
       controller.abort()
     }
-  }, [filters, sort, page])
+  }, [filters, sort, page, retryNonce])
 
   const applyFilters = (event) => {
     event.preventDefault()

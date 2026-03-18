@@ -371,8 +371,29 @@ async function apiFetch(url, opts = {}) {
     if ((r.status === 401 || r.status === 403) && adminToken) {
         clearAdminSessionStorage()
     }
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
-    return r.json()
+    const contentType = String(r.headers.get('content-type') || '').toLowerCase()
+    let payload = null
+
+    if (r.status !== 204) {
+        if (contentType.includes('application/json')) {
+            payload = await r.json().catch(() => null)
+        } else {
+            const text = await r.text().catch(() => '')
+            payload = text || null
+        }
+    }
+
+    if (!r.ok) {
+        const message = typeof payload === 'string'
+            ? payload.trim()
+            : (payload?.error || payload?.message || '')
+        const error = new Error(message || `HTTP ${r.status}`)
+        error.httpStatus = r.status
+        error.payload = payload
+        throw error
+    }
+
+    return payload
 }
 const api = {
     getCars: p => apiFetch('/api/cars?' + new URLSearchParams({ limit: 20, page: 1, sort: 'newest', ...p })),
@@ -1738,13 +1759,13 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
                 setEditCar(null)
             }
             setAdding(false); load(page, search, sort)
-        } catch { toast('Ошибка сохранения', 'error') }
+        } catch (error) { toast(error?.message || 'Ошибка сохранения', 'error') }
         setBusy(false)
     }
 
     const savePrices = async data => {
         try { await api.updateCar(priceCar.id, data); toast('Цены обновлены', 'success'); setPriceCar(null); load(page, search, sort) }
-        catch { toast('Ошибка', 'error') }
+        catch (error) { toast(error?.message || 'Ошибка', 'error') }
     }
 
     const del = async id => {
@@ -1758,21 +1779,31 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
             }
             toast('Удалено', 'success'); load(page, search, sort)
         }
-        catch { toast('Ошибка', 'error') }
+        catch (error) { toast(error?.message || 'Ошибка удаления', 'error') }
     }
 
     const delSelected = async () => {
         const entityLabel = isPartsSection ? 'запчастей' : 'авто'
         if (!confirm(`Удалить ${selected.size} ${entityLabel}?`)) return
+        let removed = 0
+        let failed = 0
+        let lastErrorMessage = ''
         for (const id of selected) {
             try {
                 if (isPartsSection) await api.deletePart(id)
                 else await api.deleteCar(id)
-            } catch {
-                /* ignore individual delete errors during bulk removal */
+                removed += 1
+            } catch (error) {
+                failed += 1
+                lastErrorMessage = error?.message || lastErrorMessage
             }
         }
-        setSelected(new Set()); load(page, search, sort); toast(`Удалено ${selected.size} ${entityLabel}`, 'success')
+        setSelected(new Set()); load(page, search, sort)
+        if (failed) {
+            toast(`Удалено ${removed} ${entityLabel}, ошибок ${failed}${lastErrorMessage ? `: ${lastErrorMessage}` : ''}`, removed ? 'success' : 'error')
+            return
+        }
+        toast(`Удалено ${removed} ${entityLabel}`, 'success')
     }
 
     const downloadCatalogExport = async () => {
@@ -2374,8 +2405,12 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
                 <div className="adm-error-box">
                     <Ic d={IC.warn} s={18} />
                     <div>
-                        <div style={{ fontWeight: 600 }}>Сервер не отвечает</div>
-                        <div style={{ fontSize: 12, marginTop: 4 }}>Убедитесь что бэкенд запущен: <code>npm run server</code></div>
+                        <div style={{ fontWeight: 600 }}>{error}</div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                            {error === 'Failed to fetch'
+                                ? <>Убедитесь что бэкенд запущен: <code>npm run server</code></>
+                                : 'Исправьте проблему и повторите запрос.'}
+                        </div>
                     </div>
                     <button className="adm-btn adm-btn-sm" onClick={() => load(page, search, sort)}>Повторить</button>
                 </div>

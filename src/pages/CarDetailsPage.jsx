@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { applyVehicleTitleFixes } from '../../shared/vehicleTextFixes.js'
 import { sanitizeVin } from '../../shared/vin.js'
@@ -32,6 +32,7 @@ import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.js
 import Seo from '../components/seo/Seo.jsx'
 import { useDeliveryContext } from '../hooks/useDeliveryContext.js'
 import { resolveDeliveryForCar } from '../lib/delivery.js'
+import useRecoverableErrorRetry from '../lib/useRecoverableErrorRetry.js'
 import { buildCarSeo, buildNotFoundSeo, buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const VAT_REFUND_PERCENT = Math.round(VAT_REFUND_RATE * 100)
@@ -1910,6 +1911,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const [car, setCar] = useState(() => previewCar)
   const [imgIdx, setImgIdx] = useState(0)
   const [inspectionOpen, setInspectionOpen] = useState(false)
+  const [retryNonce, setRetryNonce] = useState(0)
   const [calc, setCalc] = useState({
     year: String(DEFAULT_CALC_YEAR),
     engine: formatCalcEngineInput(DEFAULT_CALC_ENGINE),
@@ -1934,6 +1936,11 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     return buildStaticRouteSeo({ pathname: section.path || '/catalog', origin: SITE_URL })
   }, [car, error, loading, location.pathname, section.breadcrumbLabel, section.navLabel, section.path])
 
+  const retryLoad = useCallback(() => {
+    setRetryNonce((value) => value + 1)
+  }, [])
+  useRecoverableErrorRetry(error, retryLoad)
+
   const updateCalc = (patch) => {
     calcDirtyRef.current = true
     setCalc((prev) => ({ ...prev, ...patch }))
@@ -1943,6 +1950,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     let active = true
     let hasBaseResponse = false
     calcDirtyRef.current = false
+    setError('')
     setInspectionOpen(false)
     if (previewCar) {
       setCar(previewCar)
@@ -2024,7 +2032,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
 
     run()
     return () => { active = false }
-  }, [id, previewCar, section.listingType])
+  }, [id, previewCar, retryNonce, section.listingType])
 
   const imageCount = car?.images?.length || 1
   const boundedIdx = Math.min(imgIdx, imageCount - 1)

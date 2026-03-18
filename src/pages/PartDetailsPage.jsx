@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Seo from '../components/seo/Seo.jsx'
 import { PARTS_SECTION_CONFIG } from '../lib/catalogSections.js'
+import useRecoverableErrorRetry from '../lib/useRecoverableErrorRetry.js'
 import { buildNotFoundSeo, buildPartSeo, buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const HomeIcon = () => (
@@ -51,6 +52,7 @@ export default function PartDetailsPage({ introContent = null }) {
   const [error, setError] = useState('')
   const [part, setPart] = useState(null)
   const [activeImage, setActiveImage] = useState(0)
+  const [retryNonce, setRetryNonce] = useState(0)
   const seo = useMemo(() => {
     if (part) {
       return buildPartSeo({ part, pathname: location.pathname, origin: SITE_URL })
@@ -60,6 +62,11 @@ export default function PartDetailsPage({ introContent = null }) {
     }
     return buildStaticRouteSeo({ pathname: PARTS_SECTION_CONFIG.path, origin: SITE_URL })
   }, [error, loading, location.pathname, part])
+
+  const retryLoad = useCallback(() => {
+    setRetryNonce((value) => value + 1)
+  }, [])
+  useRecoverableErrorRetry(error, retryLoad)
 
   useEffect(() => {
     let active = true
@@ -88,7 +95,7 @@ export default function PartDetailsPage({ introContent = null }) {
       active = false
       controller.abort()
     }
-  }, [id])
+  }, [id, retryNonce])
 
   const activeImageUrl = useMemo(() => part?.images?.[activeImage]?.url || '', [part?.images, activeImage])
 
