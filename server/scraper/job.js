@@ -169,6 +169,8 @@ const RE_JEEP_GLADIATOR = /\bJeep\s+Gladiator\b/i
 const RE_KIA_TASMAN = /\bKia\s+Tasman\b/i
 const RE_CHEVROLET_DAMAS = /\bChevrolet\s+Damas\b/i
 const RE_LEXUS_LM = /\bLexus\s+LM\b/i
+const RENTAL_PLATE_RE = /\d{2,3}\s*[허하호]\s*\d{4}/u
+const COMMERCIAL_USE_TEXT_RE = /(?:\b(?:rent|rental|lease|leasing|taxi)\b|렌트카|렌터카|렌트|리스|영업용|택시)/iu
 
 function matchesAny(patterns, text) {
   return patterns.some((pattern) => pattern.test(text))
@@ -262,6 +264,54 @@ function applyBodyTypeOverrides(bodyType, context) {
 
 function cleanText(value) {
   return repairTextEncoding(String(value || '')).replace(/\s+/g, ' ').trim()
+}
+
+function getBlockedCommercialUseReason({ raw, car }) {
+  const vehicleNoSignals = [
+    car?.vehicle_no,
+    raw?.VehicleNo,
+    raw?.vehicleNo,
+    raw?.CarNo,
+    raw?.carNo,
+  ]
+    .map((value) => cleanText(value))
+    .filter(Boolean)
+
+  for (const vehicleNo of vehicleNoSignals) {
+    if (RENTAL_PLATE_RE.test(vehicleNo)) {
+      return `commercial plate detected: ${vehicleNo}`
+    }
+  }
+
+  const textSignals = [
+    car?.name,
+    car?.model,
+    car?.trim_level,
+    raw?.Name,
+    raw?.Model,
+    raw?.Badge,
+    raw?.BadgeDetail,
+    raw?.Grade,
+    raw?.GradeDetail,
+    raw?.SubModel,
+    raw?.Title,
+    raw?.title,
+    raw?.Memo,
+    raw?.memo,
+    raw?.OneLineText,
+    raw?.oneLineText,
+  ]
+    .map((value) => cleanText(value))
+    .filter(Boolean)
+
+  for (const signal of textSignals) {
+    const match = signal.match(COMMERCIAL_USE_TEXT_RE)
+    if (match) {
+      return `commercial use marker "${match[0]}" detected`
+    }
+  }
+
+  return ''
 }
 
 function normalizeEvidenceSource(value) {
@@ -1325,6 +1375,22 @@ export async function runScrapeJob(limit = 100, options = {}) {
             stage: 'post_detail_filter',
             reason: 'filtered_generic_vehicle',
             details: enrichedGenericVehicleReason,
+            car: preparedCar,
+            raw,
+          }))
+          await paceAfterDetailFlow()
+          continue
+        }
+
+        const commercialUseReason = getBlockedCommercialUseReason({
+          raw,
+          car: preparedCar,
+        })
+        if (commercialUseReason) {
+          recordSkip(buildFilterDiagnostic({
+            stage: 'post_detail_filter',
+            reason: 'filtered_commercial_use',
+            details: commercialUseReason,
             car: preparedCar,
             raw,
           }))
