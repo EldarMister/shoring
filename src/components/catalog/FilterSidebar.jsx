@@ -451,7 +451,7 @@ function CheckboxList({ items, selected, onToggle }) {
     <>
       {visible.map(({ name, count }) => (
         <button
-          key={name + count}
+          key={name}
           type="button"
           className={`filter-brand-item${selectedValues.includes(name) ? ' is-selected' : ''}`}
           onClick={() => onToggle(name)}
@@ -489,7 +489,7 @@ function ColorGrid({ colors, selected, onToggle, showMoreLabel }) {
           const style = resolveColorChipStyle({ name, color, border })
           return (
             <label
-              key={name + count}
+              key={name}
               className={`filter-color-item${selectedValues.includes(name) ? ' selected' : ''}`}
             >
               <input

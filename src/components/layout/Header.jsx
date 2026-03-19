@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { startTransition, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../../hooks/useTheme'
 import { useAuth } from '../../hooks/useAuth.js'
@@ -181,11 +181,13 @@ export default function Header() {
       else params.delete('q')
       params.delete('page')
 
-      navigate(`${searchTargetPath}${params.toString() ? `?${params}` : ''}`, { replace: true })
-      if (!hasPendingWhitespace) {
-        setSearchDirty(false)
-      }
-    }, 250)
+      startTransition(() => {
+        navigate(`${searchTargetPath}${params.toString() ? `?${params}` : ''}`, { replace: true })
+        if (!hasPendingWhitespace) {
+          setSearchDirty(false)
+        }
+      })
+    }, 160)
 
     return () => clearTimeout(timer)
   }, [location.pathname, location.search, locationQuery, navigate, searchDirty, searchTargetPath, searchTerm])
@@ -195,7 +197,9 @@ export default function Header() {
     const query = effectiveSearchTerm.trim()
     const params = new URLSearchParams()
     if (query) params.set('q', query)
-    navigate(`${searchTargetPath}${params.toString() ? `?${params}` : ''}`, { replace: true })
+    startTransition(() => {
+      navigate(`${searchTargetPath}${params.toString() ? `?${params}` : ''}`, { replace: true })
+    })
     setMobileOpen(false)
     setSearchDirty(false)
   }

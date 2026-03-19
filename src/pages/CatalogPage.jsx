@@ -31,6 +31,7 @@ const MIN_CATALOG_YEAR = '2019'
 const DEFAULT_CATALOG_FILTERS = Object.freeze({ minYear: MIN_CATALOG_YEAR })
 const CATALOG_FILTER_APPLY_DELAY_MS = 320
 const CATALOG_REQUEST_SETTLE_MS = 90
+const CATALOG_REFRESH_INDICATOR_DELAY_MS = 180
 const CATALOG_RETRY_DELAYS_MS = [1000, 2200, 4500]
 const CATALOG_PAGE_SIZE = 20
 const CATALOG_AUTOLOAD_MAX_CARS = 300
@@ -896,6 +897,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   const initialSort = normalizeCatalogSort(locationSearchParams.get('sort'))
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sort, setSort] = useState(initialSort)
+  const [sortDraft, setSortDraft] = useState(initialSort)
   const [sortOpen, setSortOpen] = useState(false)
   const [cars, setCars] = useState([])
   const [loading, setLoading] = useState(true)
@@ -913,6 +915,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   const activeCatalogRequestRef = useRef(0)
   const carsRef = useRef([])
   const retryTimerRef = useRef(null)
+  const refreshIndicatorTimerRef = useRef(null)
   const fetchCarsRef = useRef(null)
   const activeCatalogQueryKeyRef = useRef('')
   const pendingSearchSyncRef = useRef(null)
@@ -925,17 +928,21 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     autoLoadPageLimit: 1,
   })
   const searchQuery = locationSearchParams.get('q')?.trim() || ''
+  const previousSearchQueryRef = useRef(searchQuery)
   const hasSearchQuery = Boolean(searchQuery)
-  const activeSortOption = SORT_OPTIONS.find((option) => option.value === sort) || SORT_OPTIONS[0]
+  const effectiveCatalogPage = searchQuery !== previousSearchQueryRef.current ? 1 : page
+  const activeSortOption = SORT_OPTIONS.find((option) => option.value === sortDraft) || SORT_OPTIONS[0]
   const filtersKey = appendFilterParams(new URLSearchParams(), filters).toString()
   const appliedFiltersKey = appendFilterParams(new URLSearchParams(), appliedFilters).toString()
+  const hasPendingFilterChanges = filtersKey !== appliedFiltersKey
+  const hasPendingSortChanges = sortDraft !== sort
   const normalizedOriginFilters = normalizeOriginFilterValues(filters.origin)
   const hasImportedOriginFilter = normalizedOriginFilters.includes('imported')
   const hasKoreanOriginFilter = normalizedOriginFilters.includes('korean')
   const isImportedQuickFilterActive = hasImportedOriginFilter && !hasKoreanOriginFilter
   const isKoreanQuickFilterActive = hasKoreanOriginFilter && !hasImportedOriginFilter
   const isAllCarsQuickFilterActive = normalizedOriginFilters.length === 0 || (hasImportedOriginFilter && hasKoreanOriginFilter)
-  const catalogRequestKey = `${appliedFiltersKey}|sort=${sort}|page=${page}|q=${searchQuery}`
+  const catalogRequestKey = `${appliedFiltersKey}|sort=${sort}|page=${effectiveCatalogPage}|q=${searchQuery}`
   const visiblePageStart = Math.min(meta.page || 1, loadedPageEnd || 1)
   const visiblePageEnd = Math.max(meta.page || 1, loadedPageEnd || 1)
   const autoLoadPageLimit = Math.min(meta.pages || 1, (meta.page || 1) + CATALOG_AUTOLOAD_MAX_PAGES - 1)
@@ -973,20 +980,28 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     if (pendingSearch !== null) {
       if (currentSearch === pendingSearch) {
         pendingSearchSyncRef.current = null
-      } else {
         return
       }
+
+      return
     }
 
     const nextFilters = buildCatalogFiltersFromSearch(location.search)
     const nextSort = normalizeCatalogSort(new URLSearchParams(location.search).get('sort'))
     const nextFiltersKey = appendFilterParams(new URLSearchParams(), nextFilters).toString()
 
-    if (nextFiltersKey !== appliedFiltersKey) {
+    if (nextFiltersKey !== filtersKey) {
       setFilters(nextFilters)
+    }
+
+    if (nextFiltersKey !== appliedFiltersKey) {
       setAppliedFilters(nextFilters)
       setPage(1)
       setLoadedPageEnd(1)
+    }
+
+    if (nextSort !== sortDraft) {
+      setSortDraft(nextSort)
     }
 
     if (nextSort !== sort) {
@@ -1010,23 +1025,43 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   }, [appliedFilters, sort, location.pathname, location.search, navigate])
 
   useEffect(() => {
-    if (filtersKey === appliedFiltersKey) return undefined
+    if (!hasPendingFilterChanges && !hasPendingSortChanges) return undefined
+    if (sortOpen && hasPendingFilterChanges) return undefined
 
     const timeoutId = window.setTimeout(() => {
-      pendingSearchSyncRef.current = buildCatalogSearchParams(location.search, filters, sort).toString()
+      pendingSearchSyncRef.current = buildCatalogSearchParams(location.search, filters, sortDraft).toString()
       setPage(1)
       setLoadedPageEnd(1)
-      setAppliedFilters(filters)
-    }, CATALOG_FILTER_APPLY_DELAY_MS)
+      if (hasPendingFilterChanges) {
+        setAppliedFilters(filters)
+      }
+      if (hasPendingSortChanges) {
+        setSort(sortDraft)
+      }
+    }, hasPendingFilterChanges ? CATALOG_FILTER_APPLY_DELAY_MS : 0)
 
     return () => window.clearTimeout(timeoutId)
-  }, [appliedFiltersKey, filters, filtersKey, location.search, sort])
+  }, [filters, hasPendingFilterChanges, hasPendingSortChanges, location.search, sortDraft, sortOpen])
 
   const clearScheduledRetry = useCallback(() => {
     if (!retryTimerRef.current) return
     window.clearTimeout(retryTimerRef.current)
     retryTimerRef.current = null
   }, [])
+
+  const clearRefreshIndicator = useCallback(() => {
+    if (!refreshIndicatorTimerRef.current) return
+    window.clearTimeout(refreshIndicatorTimerRef.current)
+    refreshIndicatorTimerRef.current = null
+  }, [])
+
+  const scheduleRefreshIndicator = useCallback(() => {
+    clearRefreshIndicator()
+    refreshIndicatorTimerRef.current = window.setTimeout(() => {
+      refreshIndicatorTimerRef.current = null
+      setIsRefreshing(true)
+    }, CATALOG_REFRESH_INDICATOR_DELAY_MS)
+  }, [clearRefreshIndicator])
 
   const scheduleCatalogRetry = useCallback((requestKey, nextAttempt, retryOptions = {}) => {
     const retryDelay = CATALOG_RETRY_DELAYS_MS[nextAttempt - 1]
@@ -1260,9 +1295,10 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     listAbortControllerRef.current = controller
     const isStale = () => controller.signal.aborted || requestId !== activeCatalogRequestRef.current
     const hasVisibleCars = carsRef.current.length > 0
-    const targetPage = Math.max(1, Number(pageOverride || page) || 1)
+    const targetPage = Math.max(1, Number(pageOverride || effectiveCatalogPage) || 1)
     const requestKey = catalogRequestKey
 
+    clearRefreshIndicator()
     if (append) {
       autoLoadLockRef.current = true
       setIsAutoLoadingMore(true)
@@ -1271,8 +1307,9 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     } else if (hasVisibleCars) {
       autoLoadLockRef.current = false
       setIsAutoLoadingMore(false)
-      setIsRefreshing(true)
+      setIsRefreshing(false)
       setLoading(false)
+      scheduleRefreshIndicator()
     } else {
       autoLoadLockRef.current = false
       setIsAutoLoadingMore(false)
@@ -1348,6 +1385,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
       if (listAbortControllerRef.current === controller) {
         listAbortControllerRef.current = null
       }
+      clearRefreshIndicator()
       if (!append) {
         autoLoadLockRef.current = false
         setIsAutoLoadingMore(false)
@@ -1360,7 +1398,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
         setIsAutoLoadingMore(false)
       }
     }
-  }, [sort, page, appliedFilters, searchQuery, fetchCarsFallback, clearScheduledRetry, scheduleCatalogRetry, catalogRequestKey, runCatalogEnrichment, section.listingType])
+  }, [sort, effectiveCatalogPage, appliedFilters, searchQuery, fetchCarsFallback, clearScheduledRetry, clearRefreshIndicator, scheduleRefreshIndicator, scheduleCatalogRetry, catalogRequestKey, runCatalogEnrichment, section.listingType])
 
   useEffect(() => {
     fetchCarsRef.current = fetchCars
@@ -1372,11 +1410,12 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
 
   useEffect(() => () => {
     clearScheduledRetry()
+    clearRefreshIndicator()
     listAbortControllerRef.current?.abort()
-  }, [clearScheduledRetry])
+  }, [clearRefreshIndicator, clearScheduledRetry])
 
   useEffect(() => {
-    setPage(1)
+    previousSearchQueryRef.current = searchQuery
   }, [searchQuery])
 
   useEffect(() => {
@@ -1594,7 +1633,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
                 {sortOpen && (
                   <div className="cat-sort-menu" role="listbox" aria-label="Сортировка">
                     {SORT_OPTIONS.map((option) => {
-                      const isActive = option.value === sort
+                      const isActive = option.value === sortDraft
                       return (
                         <button
                           key={option.value}
@@ -1603,9 +1642,7 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
                           aria-selected={isActive}
                           className={`cat-sort-option${isActive ? ' is-active' : ''}`}
                           onClick={() => {
-                            pendingSearchSyncRef.current = buildCatalogSearchParams(location.search, appliedFilters, option.value).toString()
-                            setSort(option.value)
-                            setPage(1)
+                            setSortDraft(option.value)
                             setSortOpen(false)
                           }}
                         >
