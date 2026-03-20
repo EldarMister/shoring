@@ -45,7 +45,7 @@ const RAW_MEDIUM_CLASS_RE = /(?:junghyeongcha|middle(?:\s+class)?|mid[-\s]*size|
 const RAW_BUSINESS_CLASS_RE = /(?:daehyeongcha|business(?:\s+class)?|executive\s+sedan|large\s+sedan|대형차|бизнес(?:-| )класс|бизнес\s+класса)/i
 const RAW_EXECUTIVE_CLASS_RE = /(?:representative(?:\s+class)?|flagship|luxury\s+sedan|представительск(?:ий|ого)\s+класс)/i
 
-const SUV_HINT_RE = /\b(suv|crossover|cross[-\s]*over|rv|sport\s*utility|santa[\s-]*fe|santafe|tucson|sorento|sportage|seltos|palisade|mohave|trailblazer|trax|qm6|gv60|gv70|gv80|korando|tivoli|niro|kona|torres|xc60|xc90|x3\b|x5\b|x7\b|glc\b|gle\b|gls\b|q3\b|q5\b|q7\b|q8\b|tiguan|touareg|cr[-\s]*v|rav4|highlander|casper)\b/i
+const SUV_HINT_RE = /\b(suv|crossover|cross[-\s]*over|rv|sport\s*utility|santa[\s-]*fe|santafe|tucson|sorento|sportage|seltos|palisade|mohave|trailblazer|trax|qm6|gv60|gv70|gv80|korando|tivoli|niro|kona|stonic|venue|xm3|torres|xc60|xc90|x3\b|x5\b|x7\b|glc\b|gle\b|gls\b|q3\b|q5\b|q7\b|q8\b|tiguan|touareg|cr[-\s]*v|rav4|highlander|casper)\b/i
 const MINIVAN_HINT_RE = /\b(minivan|van|mpv|carnival|staria|starex|orlando|master|alphard|sienna|odyssey)\b/i
 const PICKUP_HINT_RE = /\b(pickup|pick-up|korando\s+sports|rexton\s+sports|musso\s+sports|hilux|ranger|f[-\s]*150|ram\s*1500)\b/i
 const TRUCK_HINT_RE = /\b(truck|cargo|porter|bongo|dump|tractor|lorry)\b/i
@@ -56,7 +56,7 @@ const CABRIOLET_HINT_RE = /\b(cabrio|cabriolet|convertible|drophead|soft[-\s]*to
 const WAGON_HINT_RE = /\b(wagon|estate|touring|allroad|shooting\s*brake)\b/i
 const HATCHBACK_HINT_RE = /\b(hatch|hatchback|i30|golf|polo|ceed|cee['’ -]?d|picanto|morning|spark|matiz|veloster|brio|focus\s*hatch)\b/i
 const COUPE_HINT_RE = /\b(coupe|genesis\s+coupe|86\b|brz\b|m4\b|m8\b|c63\s*coupe|mustang|camaro|challenger|huracan|aventador|gallardo|murcielago|revuelto|r8\b|amg\s*gt\b|f8\b|488\b|458\b|720s\b|570s\b|650s\b|600lt\b|supra\b)\b/i
-const SEDAN_HINT_RE = /\b(sedan|7\s*series|5\s*series|3\s*series|2\s*series\s+gran\s+coupe|s[-\s]*class|e[-\s]*class|c[-\s]*class|a8\b|a6\b|a4\b|a3\b|g90\b|g80\b|g70\b|s90\b|s80\b|s60\b|sonata|grandeur|azera|k9\b|k8\b|k7\b|k5\b|k3\b|avante|elantra|sm3|sm5|sm6|sm7|malibu|impala|cts|ct6|camry|accord|es300|es350|ls500)\b/i
+const SEDAN_HINT_RE = /\b(sedan|7\s*series|5\s*series|3\s*series|2\s*series\s+gran\s+coupe|s[-\s]*class|e[-\s]*class|c[-\s]*class|a8\b|a6\b|a4\b|a3\b|g90\b|g80\b|g70\b|s90\b|s80\b|s60\b|sonata|grandeur|azera|k9\b|k8\b|k7\b|k5\b|k3\b|avante|elantra|sm3|sm5|sm6|sm7|malibu|impala|cts|ct6|camry|accord|es300h|es300|es350|ls500)\b/i
 
 const EXECUTIVE_CLASS_HINT_RE = /\b(7\s*series|740|745|750|760|i7\b|s[-\s]*class|s350|s400|s450|s500|s560|s580|maybach|a8\b|ls460|ls500|g90\b|eq900|k9\b|quoris|ct6\b|xj\b)\b/i
 const BUSINESS_CLASS_HINT_RE = /\b(5\s*series|520|523|525|528|530|535|540|550|e[-\s]*class|e200|e220|e250|e300|e350|a6\b|g80\b|s90\b|k8\b|k7\b|grandeur|azera|es300|es350|cts\b)\b/i

@@ -74,99 +74,147 @@ export const DEFAULT_DELIVERY_COUNTRIES = [
 export const DEFAULT_DELIVERY_PROFILES = [
   {
     code: 'mini_car',
-    label: 'Малолитражка',
-    description: 'Morning, Spark, Ray',
+    label: 'MORNING / SPARK',
+    description: '',
     price: 1000,
     prices: { kg: 1000 },
     sort_order: 10,
   },
   {
     code: 'sedan_bishkek',
-    label: 'Седан',
+    label: 'Седан (Бишкек)',
     description: '',
     price: 1450,
     prices: { kg: 1450 },
     sort_order: 20,
   },
   {
-    code: 'sedan_lux',
-    label: 'Бизнес седан',
+    code: 'sedan_osh',
+    label: 'Седан (Ош)',
     description: '',
-    price: 1600,
-    prices: { kg: 1600 },
+    price: 1500,
+    prices: { kg: 1500 },
     sort_order: 30,
   },
   {
-    code: 'suv_small',
-    label: 'Кроссовер',
-    description: 'Tivoli, Seltos',
+    code: 'sedan_lux',
+    label: 'Седан люкс',
+    description: 'LEXUS / HONDA / MERCEDES',
     price: 1600,
     prices: { kg: 1600 },
     sort_order: 40,
   },
   {
-    code: 'suv_middle',
-    label: 'SUV',
-    description: 'Santafe, Sorento',
-    price: 1700,
-    prices: { kg: 1700 },
+    code: 'suv_city',
+    label: 'Малый кроссовер',
+    description: 'STONIC / KONA / NIRO / VENUE / XM3',
+    price: 1550,
+    prices: { kg: 1550 },
     sort_order: 50,
   },
   {
-    code: 'suv_big',
-    label: 'Внедорожник',
-    description: 'Highlander, Carnival',
-    price: 1800,
-    prices: { kg: 1800 },
+    code: 'suv_small',
+    label: 'Компактный кроссовер',
+    description: 'SPORTAGE / TRAX / TIVOLI / CORANDO',
+    price: 1600,
+    prices: { kg: 1600 },
     sort_order: 60,
   },
   {
-    code: 'minivan',
-    label: 'Минивэн',
+    code: 'suv_standard',
+    label: 'Кроссовер',
     description: '',
-    price: 1900,
-    prices: { kg: 1900 },
+    price: 1650,
+    prices: { kg: 1650 },
     sort_order: 70,
   },
   {
-    code: 'pickup',
-    label: 'Пикап',
-    description: '',
-    price: 2000,
-    prices: { kg: 2000 },
+    code: 'suv_middle',
+    label: 'Средний кроссовер',
+    description: 'SANTA FE / QM6',
+    price: 1700,
+    prices: { kg: 1700 },
     sort_order: 80,
   },
   {
-    code: 'electric',
-    label: 'Электромобиль',
-    description: '',
-    price: 1700,
-    prices: { kg: 1700 },
+    code: 'suv_big',
+    label: 'Большой кроссовер',
+    description: 'REXTON (Sport / G4 / G5) / CARNIVAL / PALISADE',
+    price: 1800,
+    prices: { kg: 1800 },
     sort_order: 90,
   },
   {
-    code: 'commercial',
-    label: 'Коммерческий транспорт',
+    code: 'ray',
+    label: 'RAY',
     description: '',
-    price: 2200,
-    prices: { kg: 2200 },
+    price: 1400,
+    prices: { kg: 1400 },
     sort_order: 100,
   },
   {
-    code: 'sedan_osh',
-    label: 'SEDAN OSH',
+    code: 'damas',
+    label: 'DAMAS',
     description: '',
-    price: 1500,
-    prices: { kg: 1500 },
+    price: 1400,
+    prices: { kg: 1400 },
     sort_order: 110,
   },
   {
+    code: 'labo',
+    label: 'LABO',
+    description: '',
+    price: 1200,
+    prices: { kg: 1200 },
+    sort_order: 120,
+  },
+  {
+    code: 'porter',
+    label: 'PORTER',
+    description: '',
+    price: 1600,
+    prices: { kg: 1600 },
+    sort_order: 130,
+  },
+  {
+    code: 'porter_double_cab',
+    label: 'PORTER (двойная кабина)',
+    description: '',
+    price: 2000,
+    prices: { kg: 2000 },
+    sort_order: 140,
+  },
+  {
+    code: 'starex',
+    label: 'STAREX',
+    description: '',
+    price: 2000,
+    prices: { kg: 2000 },
+    sort_order: 150,
+  },
+  {
+    code: 'staria',
+    label: 'STARIA',
+    description: '',
+    price: 2000,
+    prices: { kg: 2000 },
+    sort_order: 160,
+  },
+  {
+    code: 'carnival_hi_limousine',
+    label: 'CARNIVAL HI-LIMOUSINE',
+    description: '',
+    price: 2000,
+    prices: { kg: 2000 },
+    sort_order: 170,
+  },
+  {
     code: 'half_container',
-    label: 'HALF CONTAINER',
+    label: 'ПОЛКОНТЕЙНЕРА',
     description: '',
     price: 3000,
     prices: { kg: 3000 },
-    sort_order: 120,
+    sort_order: 180,
   },
 ]
 
@@ -181,11 +229,21 @@ export const DEFAULT_PRICING_SETTINGS = {
   delivery_profiles: DEFAULT_DELIVERY_PROFILES,
 }
 
-const PREMIUM_SEDAN_HINT_RE = /\b(k8|k9|g80|g90|eq900|grandeur|genesis|s-class|e-class|7\s*series|5\s*series|a6|a7|a8|es300h|es350|ls500|k7)\b/i
-const MINI_CAR_HINT_RE = /\b(ray|morning|spark|matiz|picanto|casper)\b/i
-const BIG_SUV_HINT_RE = /\b(highlander|carnival|staria|starex|palisade|telluride|mohave|mohabi|traverse|tahoe|escalade|rexton\s*w|santa\s*cruz)\b/i
-const SMALL_SUV_HINT_RE = /\b(tivoli|seltos|kona|niro|venue|stonic|trax|trailblazer|encore|xm3|korando\s?c)\b/i
-const MIDDLE_SUV_HINT_RE = /\b(santa\s*fe|santafe|sorento|sportage|tucson|qm6|torres|korando|captiva|equinox|rav4|cr-v|x-trail|rogue)\b/i
+const PREMIUM_SEDAN_HINT_RE = /\b(k8|k9|g80|g90|eq900|grandeur|genesis|s-class|e-class|7\s*series|5\s*series|a6|a7|a8|es300h|es350|ls500|k7|accord|legend|cls(?:-class)?|cls\d*)\b/i
+const MINI_CAR_HINT_RE = /\b(morning|spark|matiz|picanto|casper)\b/i
+const RAY_HINT_RE = /\bray\b/i
+const DAMAS_HINT_RE = /\bdamas\b/i
+const LABO_HINT_RE = /\blabo\b/i
+const PORTER_DOUBLE_CAB_HINT_RE = /\bporter\b.*\b(double|dual|crew)\b|\b(double|dual|crew)\b.*\bporter\b|\bporter\b.*\bдвойн/i
+const PORTER_HINT_RE = /\bporter\b/i
+const STAREX_HINT_RE = /\bstarex\b/i
+const STARIA_HINT_RE = /\bstaria\b/i
+const CARNIVAL_HI_LIMOUSINE_HINT_RE = /\bcarnival\b.*\b(?:hi[-\s]*limousine|h[-\s]*limousine)\b|\b(?:hi[-\s]*limousine|h[-\s]*limousine)\b.*\bcarnival\b/i
+const BIG_SUV_HINT_RE = /\b(highlander|carnival|palisade|telluride|mohave|mohabi|traverse|tahoe|escalade|rexton(?:\s*(?:sport|sports|g4|g5|w))?|santa\s*cruz)\b/i
+const CITY_SUV_HINT_RE = /\b(stonic|kona|niro|venue|xm3)\b/i
+const SMALL_SUV_HINT_RE = /\b(sportage|trax|tivoli|seltos|corando|korando(?:\s?c)?)\b/i
+const STANDARD_SUV_HINT_RE = /\b(sorento|tucson|torres|captiva|equinox|rav4|cr-v|x-trail|rogue)\b/i
+const MIDDLE_SUV_HINT_RE = /\b(santa\s*fe|santafe|qm6)\b/i
 const CAR_LIKE_BODY_TYPES = new Set([
   '\u0421\u0435\u0434\u0430\u043d',
   '\u0421\u0435\u0434\u0430\u043d \u043c\u0430\u043b\u043e\u0433\u043e \u043a\u043b\u0430\u0441\u0441\u0430',
@@ -394,6 +452,23 @@ export function inferDeliveryProfileCode(vehicle = {}, settings = DEFAULT_PRICIN
     if (findProfile(settings, 'sedan_bishkek')) return 'sedan_bishkek'
   }
 
+  if (!pricingLocked) {
+    if (RAY_HINT_RE.test(haystack) && findProfile(settings, 'ray')) return 'ray'
+    if (DAMAS_HINT_RE.test(haystack) && findProfile(settings, 'damas')) return 'damas'
+    if (LABO_HINT_RE.test(haystack) && findProfile(settings, 'labo')) return 'labo'
+    if (PORTER_DOUBLE_CAB_HINT_RE.test(haystack) && findProfile(settings, 'porter_double_cab')) return 'porter_double_cab'
+    if (PORTER_HINT_RE.test(haystack) && findProfile(settings, 'porter')) return 'porter'
+    if (CARNIVAL_HI_LIMOUSINE_HINT_RE.test(haystack) && findProfile(settings, 'carnival_hi_limousine')) return 'carnival_hi_limousine'
+    if (STAREX_HINT_RE.test(haystack) && findProfile(settings, 'starex')) return 'starex'
+    if (STARIA_HINT_RE.test(haystack) && findProfile(settings, 'staria')) return 'staria'
+    if (BIG_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_big')) return 'suv_big'
+    if (CITY_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_city')) return 'suv_city'
+    if (SMALL_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_small')) return 'suv_small'
+    if (MIDDLE_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_middle')) return 'suv_middle'
+    if (STANDARD_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
+    if (PREMIUM_SEDAN_HINT_RE.test(haystack) && findProfile(settings, 'sedan_lux')) return 'sedan_lux'
+  }
+
   if (!pricingLocked && (vehicleClass === 'A-класс' || MINI_CAR_HINT_RE.test(haystack)) && findProfile(settings, 'mini_car')) {
     return 'mini_car'
   }
@@ -406,13 +481,17 @@ export function inferDeliveryProfileCode(vehicle = {}, settings = DEFAULT_PRICIN
   if (bodyType === 'Мини') return findProfile(settings, 'mini_car') ? 'mini_car' : ''
   if (bodyType === BODY_TYPE_LABELS.microvan) return findProfile(settings, 'mini_car') ? 'mini_car' : ''
   if (HEAVY_BODY_TYPES.has(bodyType) || CANONICAL_HEAVY_BODY_TYPES.has(bodyType)) {
+    if (PORTER_DOUBLE_CAB_HINT_RE.test(haystack) && findProfile(settings, 'porter_double_cab')) return 'porter_double_cab'
+    if (PORTER_HINT_RE.test(haystack) && findProfile(settings, 'porter')) return 'porter'
     return findProfile(settings, 'suv_big') ? 'suv_big' : ''
   }
 
-  if (bodyType === 'Кроссовер / внедорожник') {
+  if (bodyType === BODY_TYPE_LABELS.suv) {
     if (BIG_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_big')) return 'suv_big'
+    if (CITY_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_city')) return 'suv_city'
     if (SMALL_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_small')) return 'suv_small'
     if (MIDDLE_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_middle')) return 'suv_middle'
+    if (STANDARD_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
     if (findProfile(settings, 'suv_middle')) return 'suv_middle'
   }
 

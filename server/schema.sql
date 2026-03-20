@@ -211,18 +211,24 @@ VALUES (
     {"code":"ge","label":"Грузия","flag":"🇬🇪","shipping_type":"ro_ro","sort_order":90}
   ]$$::jsonb,
   $$[
-    {"code":"mini_car","label":"Малолитражка","description":"Morning, Spark","price":1000,"prices":{"kg":1000},"sort_order":10},
-    {"code":"sedan_bishkek","label":"Седан","description":"","price":1450,"prices":{"kg":1450},"sort_order":20},
-    {"code":"sedan_lux","label":"Бизнес седан","description":"","price":1600,"prices":{"kg":1600},"sort_order":30},
-    {"code":"suv_small","label":"Кроссовер","description":"Tivoli, Seltos","price":1600,"prices":{"kg":1600},"sort_order":40},
-    {"code":"suv_middle","label":"SUV","description":"Santafe, Sorento","price":1700,"prices":{"kg":1700},"sort_order":50},
-    {"code":"suv_big","label":"Внедорожник","description":"Highlander, Carnival","price":1800,"prices":{"kg":1800},"sort_order":60},
-    {"code":"minivan","label":"Минивэн","description":"","price":1900,"prices":{"kg":1900},"sort_order":70},
-    {"code":"pickup","label":"Пикап","description":"","price":2000,"prices":{"kg":2000},"sort_order":80},
-    {"code":"electric","label":"Электромобиль","description":"","price":1700,"prices":{"kg":1700},"sort_order":90},
-    {"code":"commercial","label":"Коммерческий транспорт","description":"","price":2200,"prices":{"kg":2200},"sort_order":100},
-    {"code":"sedan_osh","label":"SEDAN OSH","description":"","price":1500,"prices":{"kg":1500},"sort_order":110},
-    {"code":"half_container","label":"HALF CONTAINER","description":"","price":3000,"prices":{"kg":3000},"sort_order":120}
+    {"code":"mini_car","label":"MORNING / SPARK","description":"","price":1000,"prices":{"kg":1000},"sort_order":10},
+    {"code":"sedan_bishkek","label":"Седан (Бишкек)","description":"","price":1450,"prices":{"kg":1450},"sort_order":20},
+    {"code":"sedan_osh","label":"Седан (Ош)","description":"","price":1500,"prices":{"kg":1500},"sort_order":30},
+    {"code":"sedan_lux","label":"Седан люкс","description":"LEXUS / HONDA / MERCEDES","price":1600,"prices":{"kg":1600},"sort_order":40},
+    {"code":"suv_city","label":"Малый кроссовер","description":"STONIC / KONA / NIRO / VENUE / XM3","price":1550,"prices":{"kg":1550},"sort_order":50},
+    {"code":"suv_small","label":"Компактный кроссовер","description":"SPORTAGE / TRAX / TIVOLI / CORANDO","price":1600,"prices":{"kg":1600},"sort_order":60},
+    {"code":"suv_standard","label":"Кроссовер","description":"","price":1650,"prices":{"kg":1650},"sort_order":70},
+    {"code":"suv_middle","label":"Средний кроссовер","description":"SANTA FE / QM6","price":1700,"prices":{"kg":1700},"sort_order":80},
+    {"code":"suv_big","label":"Большой кроссовер","description":"REXTON (Sport / G4 / G5) / CARNIVAL / PALISADE","price":1800,"prices":{"kg":1800},"sort_order":90},
+    {"code":"ray","label":"RAY","description":"","price":1400,"prices":{"kg":1400},"sort_order":100},
+    {"code":"damas","label":"DAMAS","description":"","price":1400,"prices":{"kg":1400},"sort_order":110},
+    {"code":"labo","label":"LABO","description":"","price":1200,"prices":{"kg":1200},"sort_order":120},
+    {"code":"porter","label":"PORTER","description":"","price":1600,"prices":{"kg":1600},"sort_order":130},
+    {"code":"porter_double_cab","label":"PORTER (двойная кабина)","description":"","price":2000,"prices":{"kg":2000},"sort_order":140},
+    {"code":"starex","label":"STAREX","description":"","price":2000,"prices":{"kg":2000},"sort_order":150},
+    {"code":"staria","label":"STARIA","description":"","price":2000,"prices":{"kg":2000},"sort_order":160},
+    {"code":"carnival_hi_limousine","label":"CARNIVAL HI-LIMOUSINE","description":"","price":2000,"prices":{"kg":2000},"sort_order":170},
+    {"code":"half_container","label":"ПОЛКОНТЕЙНЕРА","description":"","price":3000,"prices":{"kg":3000},"sort_order":180}
   ]$$::jsonb
 )
 ON CONFLICT (id) DO NOTHING;
