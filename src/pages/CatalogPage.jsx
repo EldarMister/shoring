@@ -38,6 +38,10 @@ const CATALOG_AUTOLOAD_MAX_CARS = 300
 const CATALOG_AUTOLOAD_MAX_PAGES = Math.max(1, Math.floor(CATALOG_AUTOLOAD_MAX_CARS / CATALOG_PAGE_SIZE))
 const CATALOG_SCROLL_AUTOLOAD_THRESHOLD_PX = 320
 const CATALOG_DETAIL_ENRICH_CONCURRENCY = 4
+const CATALOG_PATCH_PERSIST_CONCURRENCY = 2
+const CATALOG_IMPORTED_IMAGE_LIMIT = 8
+const CATALOG_SESSION_CACHE_TTL_MS = 10 * 60 * 1000
+const CATALOG_SESSION_CACHE_PREFIX = 'catalog-query-cache:v1:'
 const TRANSIENT_CATALOG_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 const CATALOG_QUERY_FILTER_KEYS = Object.freeze([
   'minPrice',
@@ -379,6 +383,90 @@ function getCatalogTransientMessage(hasSearchQuery, willRetry) {
     : 'Ошибка загрузки. Попробуйте повторить.'
 }
 
+function buildCatalogSessionCacheKey(listingType) {
+  const scope = String(listingType || 'all').trim() || 'all'
+  return `${CATALOG_SESSION_CACHE_PREFIX}${scope}`
+}
+
+function readCatalogSessionSnapshot(listingType, requestKey) {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const storageKey = buildCatalogSessionCacheKey(listingType)
+    const raw = window.sessionStorage.getItem(storageKey)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw)
+    if (!parsed || parsed.requestKey !== requestKey) return null
+
+    const savedAt = Number(parsed.savedAt) || 0
+    if (!savedAt || (Date.now() - savedAt) > CATALOG_SESSION_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(storageKey)
+      return null
+    }
+
+    if (!Array.isArray(parsed.cars) || !parsed.meta || typeof parsed.meta !== 'object') {
+      return null
+    }
+
+    return {
+      cars: parsed.cars,
+      meta: {
+        total: Number(parsed.meta.total) || 0,
+        page: Math.max(1, Number(parsed.meta.page) || 1),
+        pages: Math.max(1, Number(parsed.meta.pages) || 1),
+      },
+      loadedPageEnd: Math.max(1, Number(parsed.loadedPageEnd || parsed.meta.page || 1)),
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeCatalogSessionSnapshot(listingType, requestKey, snapshot) {
+  if (typeof window === 'undefined') return
+  if (!snapshot || !Array.isArray(snapshot.cars) || !snapshot.meta) return
+
+  try {
+    window.sessionStorage.setItem(
+      buildCatalogSessionCacheKey(listingType),
+      JSON.stringify({
+        requestKey,
+        savedAt: Date.now(),
+        cars: snapshot.cars,
+        meta: snapshot.meta,
+        loadedPageEnd: snapshot.loadedPageEnd,
+      })
+    )
+  } catch {
+    // Ignore storage quota errors and keep the live catalog responsive.
+  }
+}
+
+async function persistCatalogPatches(patches) {
+  if (!Array.isArray(patches) || !patches.length) return
+
+  const concurrency = Math.min(CATALOG_PATCH_PERSIST_CONCURRENCY, patches.length)
+  await Promise.allSettled(
+    Array.from({ length: concurrency }, (_, workerIndex) => (async () => {
+      for (let index = workerIndex; index < patches.length; index += concurrency) {
+        const entry = patches[index]
+        if (!entry?.id || !entry.patch || !Object.keys(entry.patch).length) continue
+
+        try {
+          await fetch(`/api/cars/${entry.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entry.patch),
+          })
+        } catch {
+          // Ignore best-effort persistence errors; the UI already has enriched data.
+        }
+      }
+    })())
+  )
+}
+
 function normalizeDisplacementValue(value) {
   const num = Number(value) || 0
   if (num >= 800) return Number((num / 1000).toFixed(1))
@@ -656,9 +744,16 @@ function hasWeakImages(car) {
   return images.every((img) => String(img?.url || '').startsWith('/uploads/'))
 }
 
+function hasPotentiallyIncompleteEncarGallery(car) {
+  const images = Array.isArray(car.images) ? car.images : []
+  if (!images.length) return true
+  return images.length <= CATALOG_IMPORTED_IMAGE_LIMIT
+}
+
 function needsEncarEnrichment(car) {
   if (!car?.encarId || car.encarId === '-') return false
   const detailMetaReady = car.detailFlags?.metaReady === true
+  const detailGalleryReady = car.detailFlags?.galleryReady === true && Array.isArray(car.images) && car.images.length > 0
   return (
     !detailMetaReady ||
     !car.transmission || car.transmission === '-' ||
@@ -668,6 +763,7 @@ function needsEncarEnrichment(car) {
     !car.keyInfo ||
     (!car.engineVolume && !String(car.fuelType || '').toLowerCase().includes('электро')) ||
     hasWeakImages(car) ||
+    (!detailGalleryReady && hasPotentiallyIncompleteEncarGallery(car)) ||
     shouldUpgradeVehicleTitle(car.name) ||
     shouldUpgradeVehicleTitle(car.model) ||
     hasUntranslatedTags(car.tags) ||
@@ -705,9 +801,10 @@ async function fetchEncarDetail(encarId) {
 
       if (!detail) return null
 
+      const detailImages = normalizeImages(detail?.photos?.length ? detail.photos : detail?.images)
       const detailTrim = normalizeTrimLabel(detail?.trim_level || '') || extractTrimLabelFromTitle(detail?.name || '', detail?.model || '')
       const normalized = {
-        images: normalizeImages(detail?.photos?.length ? detail.photos : detail?.images),
+        images: detailImages,
         name: appendDisplayTrimSuffix(stripTrailingTrimLabel(normalizeVehicleTitle(detail?.name || ''), detailTrim), detailTrim),
         model: appendDisplayTrimSuffix(stripTrailingTrimLabel(normalizeVehicleTitle(detail?.model || ''), detailTrim), detailTrim),
         fuelType: normalizeTagLabel(detail?.fuel_type || ''),
@@ -722,7 +819,7 @@ async function fetchEncarDetail(encarId) {
         interiorColor: normalizeInteriorColorLabel(detail?.interior_color || '', detail?.body_color || '', { allowBodyDuplicate: true }),
         location: getShortLocationLabel(detail?.location_short || detail?.location || ''),
         vin: sanitizeVin(detail?.vin) || '',
-        flags: { ...(detail?.flags || {}), metaReady: true },
+        flags: { ...(detail?.flags || {}), metaReady: true, galleryReady: detailImages.length > 0 },
         inspectionFormats: detail?.condition?.inspectionFormats || [],
       }
       normalized.engineVolume = resolveEngineVolume(normalized)
@@ -914,10 +1011,13 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   const listAbortControllerRef = useRef(null)
   const activeCatalogRequestRef = useRef(0)
   const carsRef = useRef([])
+  const metaRef = useRef({ total: 0, page: 1, pages: 1 })
+  const loadedPageEndRef = useRef(1)
   const retryTimerRef = useRef(null)
   const refreshIndicatorTimerRef = useRef(null)
   const fetchCarsRef = useRef(null)
   const activeCatalogQueryKeyRef = useRef('')
+  const catalogCacheRequestKeyRef = useRef('')
   const pendingSearchSyncRef = useRef(null)
   const autoLoadSentinelRef = useRef(null)
   const autoLoadLockRef = useRef(false)
@@ -961,7 +1061,16 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
   }, [cars])
 
   useEffect(() => {
+    metaRef.current = meta
+  }, [meta])
+
+  useEffect(() => {
+    loadedPageEndRef.current = loadedPageEnd
+  }, [loadedPageEnd])
+
+  useEffect(() => {
     activeCatalogQueryKeyRef.current = catalogRequestKey
+    catalogCacheRequestKeyRef.current = catalogRequestKey
   }, [catalogRequestKey])
 
   useEffect(() => {
@@ -1077,6 +1186,14 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
     return true
   }, [clearScheduledRetry])
 
+  const persistCatalogSnapshot = useCallback((snapshot) => {
+    writeCatalogSessionSnapshot(section.listingType, catalogCacheRequestKeyRef.current, {
+      cars: Array.isArray(snapshot?.cars) ? snapshot.cars : [],
+      meta: snapshot?.meta || metaRef.current,
+      loadedPageEnd: snapshot?.loadedPageEnd || loadedPageEndRef.current,
+    })
+  }, [section.listingType])
+
   const applyQuickOriginFilter = useCallback((mode) => {
     setFilters((prev) => {
       const next = { ...prev }
@@ -1134,15 +1251,17 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
       fallbackCars.filter((car) => carMatchesSearch(car, searchQuery)),
       appliedFilters.origin
     )
+    const fallbackMeta = { total: filteredCars.length, page: 1, pages: 1 }
     setCars(filteredCars)
-    setMeta({ total: filteredCars.length, page: 1, pages: 1 })
+    setMeta(fallbackMeta)
     setLoadedPageEnd(1)
     setHasRetryableError(false)
     setError(filteredCars.length ? null : '\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e')
+    persistCatalogSnapshot({ cars: filteredCars, meta: fallbackMeta, loadedPageEnd: 1 })
     return true
-  }, [sort, appliedFilters, searchQuery, section.listingType])
+  }, [sort, appliedFilters, searchQuery, section.listingType, persistCatalogSnapshot])
 
-  const runCatalogEnrichment = useCallback(async ({ carsToEnrich, requestId, append = false } = {}) => {
+  const runCatalogEnrichment = useCallback(async ({ carsToEnrich, requestId, append = false, baseCars = [] } = {}) => {
     if (!Array.isArray(carsToEnrich) || !carsToEnrich.some(needsEncarEnrichment)) return
     if (isSlowCatalogConnection()) return
 
@@ -1199,7 +1318,16 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
               model: next.model,
             })
           }
-          if (hasWeakImages(car) && detail.images.length) next.images = detail.images
+          if (detail.images.length) {
+            const currentImages = Array.isArray(next.images) ? next.images : []
+            if (
+              hasWeakImages(car)
+              || hasPotentiallyIncompleteEncarGallery(car)
+              || detail.images.length > currentImages.length
+            ) {
+              next.images = detail.images
+            }
+          }
           if (shouldReplaceColor(car.bodyColor) && detail.bodyColor) next.bodyColor = detail.bodyColor
           if (shouldReplaceColor(car.interiorColor) && detail.interiorColor) next.interiorColor = detail.interiorColor
           if (detail.location) next.location = detail.location
@@ -1243,18 +1371,13 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
       })
     }
 
+    const nextSnapshotCars = append ? mergeCatalogCars(baseCars, enrichedCars) : enrichedCars
+    persistCatalogSnapshot({ cars: nextSnapshotCars })
+
     if (patchesToPersist.length && !isStale()) {
-      Promise.allSettled(
-        patchesToPersist.map(({ id, patch }) =>
-          fetch(`/api/cars/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(patch),
-          })
-        )
-      ).catch(() => {})
+      void persistCatalogPatches(patchesToPersist)
     }
-  }, [])
+  }, [persistCatalogSnapshot])
 
   const triggerAutoLoadNextPage = useCallback(() => {
     if (autoLoadLockRef.current) return false
@@ -1347,19 +1470,27 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
       }
       if (isStale()) return
 
+      const nextCars = append ? mergeCatalogCars(carsRef.current, mappedCars) : mappedCars
+      const nextMeta = { total: data.total, page: data.page, pages: data.pages }
       if (append) {
-        setCars((prev) => mergeCatalogCars(prev, mappedCars))
-        setMeta((prev) => ({ ...prev, total: data.total, pages: data.pages }))
+        setCars(nextCars)
+        setMeta((prev) => ({ ...prev, total: nextMeta.total, pages: nextMeta.pages }))
       } else {
-        setCars(mappedCars)
-        setMeta({ total: data.total, page: data.page, pages: data.pages })
+        setCars(nextCars)
+        setMeta(nextMeta)
       }
       setLoadedPageEnd(targetPage)
       setHasRetryableError(false)
-      void runCatalogEnrichment({ carsToEnrich: mappedCars, requestId, append })
+      persistCatalogSnapshot({
+        cars: nextCars,
+        meta: append ? { ...metaRef.current, total: nextMeta.total, pages: nextMeta.pages } : nextMeta,
+        loadedPageEnd: targetPage,
+      })
+      void runCatalogEnrichment({ carsToEnrich: mappedCars, requestId, append, baseCars: nextCars })
     } catch (e) {
       if (e?.name === 'AbortError' || isStale()) return
 
+      const hasVisibleCarsNow = carsRef.current.length > 0
       if (searchQuery && !append) {
         try {
           await fetchCarsFallback({ signal: controller.signal, requestId })
@@ -1370,16 +1501,20 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
           const willRetry = isTransientCatalogError(fallbackError)
             && scheduleCatalogRetry(requestKey, nextAttempt, { pageOverride: targetPage, append })
           setHasRetryableError(willRetry)
-          setError(getCatalogTransientMessage(true, willRetry))
+          setError(hasVisibleCarsNow && willRetry ? null : getCatalogTransientMessage(true, willRetry))
         }
       } else if (!isStale()) {
         const nextAttempt = retryAttempt + 1
         const willRetry = isTransientCatalogError(e)
           && scheduleCatalogRetry(requestKey, nextAttempt, { pageOverride: targetPage, append })
         setHasRetryableError(willRetry)
-        setError(willRetry
-          ? getCatalogTransientMessage(Boolean(searchQuery), true)
-          : (e.message || getCatalogTransientMessage(Boolean(searchQuery), false)))
+        if (hasVisibleCarsNow && isTransientCatalogError(e)) {
+          setError(null)
+        } else {
+          setError(willRetry
+            ? getCatalogTransientMessage(Boolean(searchQuery), true)
+            : (e.message || getCatalogTransientMessage(Boolean(searchQuery), false)))
+        }
       }
     } finally {
       if (listAbortControllerRef.current === controller) {
@@ -1398,11 +1533,27 @@ export default function CatalogPage({ section = CAR_SECTION_CONFIG.main, introCo
         setIsAutoLoadingMore(false)
       }
     }
-  }, [sort, effectiveCatalogPage, appliedFilters, searchQuery, fetchCarsFallback, clearScheduledRetry, clearRefreshIndicator, scheduleRefreshIndicator, scheduleCatalogRetry, catalogRequestKey, runCatalogEnrichment, section.listingType])
+  }, [sort, effectiveCatalogPage, appliedFilters, searchQuery, fetchCarsFallback, clearScheduledRetry, clearRefreshIndicator, scheduleRefreshIndicator, scheduleCatalogRetry, catalogRequestKey, persistCatalogSnapshot, runCatalogEnrichment, section.listingType])
 
   useEffect(() => {
     fetchCarsRef.current = fetchCars
   }, [fetchCars])
+
+  useEffect(() => {
+    const cachedSnapshot = readCatalogSessionSnapshot(section.listingType, catalogRequestKey)
+    if (!cachedSnapshot) return
+
+    carsRef.current = cachedSnapshot.cars
+    metaRef.current = cachedSnapshot.meta
+    loadedPageEndRef.current = cachedSnapshot.loadedPageEnd
+    setCars(cachedSnapshot.cars)
+    setMeta(cachedSnapshot.meta)
+    setLoadedPageEnd(cachedSnapshot.loadedPageEnd)
+    setLoading(false)
+    setIsRefreshing(false)
+    setHasRetryableError(false)
+    setError(null)
+  }, [catalogRequestKey, section.listingType])
 
   useEffect(() => {
     fetchCars()

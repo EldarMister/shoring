@@ -805,7 +805,13 @@ function mergeCarEnrichment(car, enrichment, exchangeSnapshot, pricingSettings) 
       ? enrichment.image_urls
       : car.image_urls,
     encar_url: enrichment.encar_url || car.encar_url,
-    detail_flags: buildStoredDetailFlags(enrichment.flags || car.detail_flags),
+    detail_flags: buildStoredDetailFlags({
+      ...(car.detail_flags || {}),
+      ...(enrichment.flags || {}),
+      galleryReady: Array.isArray(enrichment.image_urls) && enrichment.image_urls.length > 0
+        ? true
+        : (car.detail_flags?.galleryReady === true),
+    }),
     inspection_formats: normalizeInspectionFormats(enrichment.condition?.inspectionFormats || car.inspection_formats),
   })
 
@@ -1556,16 +1562,23 @@ export async function runScrapeJob(limit = 100, options = {}) {
         try {
           const extracted = extractPhotoUrls(raw, PHOTO_LIMIT)
           const detailPhotos = Array.isArray(preparedCar.image_urls) ? preparedCar.image_urls.slice(0, PHOTO_LIMIT) : []
-          const validUrls = extracted.length
-            ? extracted
-            : detailPhotos.length
-              ? detailPhotos
-              : await probePhotoUrls(raw.Id, PHOTO_LIMIT)
+          const mergedPhotoCandidates = [...detailPhotos, ...extracted]
+            .map((item) => String(item || '').trim())
+            .filter(Boolean)
+            .filter((item, index, list) => list.indexOf(item) === index)
+            .slice(0, PHOTO_LIMIT)
+          const validUrls = mergedPhotoCandidates.length
+            ? mergedPhotoCandidates
+            : await probePhotoUrls(raw.Id, PHOTO_LIMIT)
 
           photoUrls = validUrls
+          preparedCar.detail_flags = {
+            ...(preparedCar.detail_flags || {}),
+            galleryReady: detailPhotos.length > 0,
+          }
 
           if (photoUrls.length) {
-            state.info(`PHOTO_FETCH | carId=${currentEncarId} | count=${photoUrls.length} | source=${extracted.length ? 'list' : detailPhotos.length ? 'detail' : 'probe'}`)
+            state.info(`PHOTO_FETCH | carId=${currentEncarId} | count=${photoUrls.length} | source=${detailPhotos.length ? 'detail' : extracted.length ? 'list' : 'probe'}`)
             const photoDownload = await downloadPhotosDetailed(photoUrls, raw.Id, PHOTO_LIMIT)
             state.setProgress({ photos: state.progress.photos + photoUrls.length })
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import PartCard from '../components/catalog/PartCard.jsx'
 import Seo from '../components/seo/Seo.jsx'
@@ -21,6 +21,18 @@ const HomeIcon = () => (
 const ChevronRightIcon = () => (
   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m9 18 6-6-6-6" />
+  </svg>
+)
+
+const ChevronDownIcon = () => (
+  <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <polyline points="6 9 12 15 18 9" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+const CheckIcon = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <polyline points="4 12 9 17 20 6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
@@ -73,13 +85,39 @@ export default function PartsCatalogPage({ introContent = null }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [retryNonce, setRetryNonce] = useState(0)
+  const [sortOpen, setSortOpen] = useState(false)
+  const sortRef = useRef(null)
+  const activeSortOption = SORT_OPTIONS.find((option) => option.value === sort) || SORT_OPTIONS[0]
 
   useEffect(() => {
     const nextParams = new URLSearchParams(location.search)
     setFilters(buildInitialFilters(nextParams))
     setSort(nextParams.get('sort') || 'newest')
     setPage(Math.max(Number(nextParams.get('page')) || 1, 1))
+    setSortOpen(false)
   }, [location.search])
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!sortRef.current?.contains(event.target)) {
+        setSortOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setSortOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
 
   const retryLoad = useCallback(() => {
     setRetryNonce((value) => value + 1)
@@ -231,11 +269,43 @@ export default function PartsCatalogPage({ introContent = null }) {
             onChange={(event) => setFilters((prev) => ({ ...prev, maxPrice: event.target.value }))}
             placeholder="Цена до"
           />
-          <select className="adm-select" value={sort} onChange={(event) => setSort(event.target.value)}>
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <div className={`cat-sort-wrap${sortOpen ? ' is-open' : ''}`} ref={sortRef}>
+            <button
+              type="button"
+              className="cat-sort-trigger"
+              aria-haspopup="listbox"
+              aria-expanded={sortOpen}
+              onClick={() => setSortOpen((open) => !open)}
+            >
+              <span className="cat-sort-trigger-label">{activeSortOption.label}</span>
+              <span className="cat-sort-trigger-icon" aria-hidden="true"><ChevronDownIcon /></span>
+            </button>
+            {sortOpen && (
+              <div className="cat-sort-menu" role="listbox" aria-label="Сортировка запчастей">
+                {SORT_OPTIONS.map((option) => {
+                  const isActive = option.value === sort
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={isActive}
+                      className={`cat-sort-option${isActive ? ' is-active' : ''}`}
+                      onClick={() => {
+                        setSort(option.value)
+                        setSortOpen(false)
+                      }}
+                    >
+                      <span className="cat-sort-option-check" aria-hidden="true">
+                        {isActive ? <CheckIcon /> : null}
+                      </span>
+                      <span className="cat-sort-option-label">{option.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <button type="submit" className="adm-btn adm-btn-primary">Применить</button>
           <button type="button" className="adm-btn adm-btn-cancel" onClick={resetFilters}>Сбросить</button>
         </form>
