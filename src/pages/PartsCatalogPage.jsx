@@ -8,6 +8,7 @@ import { buildStaticRouteSeo, SITE_URL } from '../../shared/seo.js'
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Сначала новые' },
+  { value: 'oldest', label: 'Сначала старые' },
   { value: 'price_asc', label: 'Цена: дешевле' },
   { value: 'price_desc', label: 'Цена: дороже' },
 ]
