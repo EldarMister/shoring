@@ -500,7 +500,7 @@ function normalizeBackfillOptions(value = {}) {
   }
 }
 
-function hasActiveBackgroundTask() {
+export function hasActiveBackgroundTask() {
   return Boolean(enrichState.running || normalizeCarsState.running || encarBackfillState.running)
 }
 
@@ -1062,7 +1062,7 @@ async function enrichCar(car, context = {}) {
   }
 }
 
-async function runEmptyFieldEnrichment(options = {}) {
+export async function runEmptyFieldEnrichment(options = {}) {
   const { scope, latestLimit } = normalizeEnrichOptions(options)
   enrichState.running = true
   enrichState.stop_requested = false

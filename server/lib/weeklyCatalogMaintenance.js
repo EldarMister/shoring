@@ -1,14 +1,9 @@
-import { spawn } from 'node:child_process'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import pool from '../db.js'
 import { state as scraperState } from '../scraper/state.js'
+import { hasActiveBackgroundTask, runEmptyFieldEnrichment } from '../routes/admin.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..')
 const JOB_KEY = 'weekly_catalog_maintenance'
 const JOB_LOCK_KEY = 48239017
-const FULL_BACKFILL_TARGETS = 'interior,drive,key,vin,trim,options,warranty,price'
 const MAINTENANCE_INTERVAL_DAYS = clampInt(globalThis.process?.env?.WEEKLY_MAINTENANCE_INTERVAL_DAYS, 7, 1, 30)
 const MAINTENANCE_CHECK_HOURS = clampInt(globalThis.process?.env?.WEEKLY_MAINTENANCE_CHECK_HOURS, 1, 1, 24)
 const MAINTENANCE_STARTUP_DELAY_SECONDS = clampInt(globalThis.process?.env?.WEEKLY_MAINTENANCE_STARTUP_DELAY_SECONDS, 60, 5, 3600)
@@ -75,59 +70,6 @@ function tailText(value, maxLength = 6000) {
   return text.length > maxLength ? text.slice(-maxLength) : text
 }
 
-async function runNodeScript(scriptRelativePath, { env = {}, label }) {
-  const scriptPath = path.resolve(PROJECT_ROOT, scriptRelativePath)
-
-  return await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [scriptPath], {
-      cwd: PROJECT_ROOT,
-      env: {
-        ...process.env,
-        ...env,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    let stdoutBuffer = ''
-    let stderrBuffer = ''
-
-    const appendChunk = (current, chunk) => tailText(`${current}\n${chunk}`)
-    const relayChunk = (stream, prefix) => (chunk) => {
-      const text = String(chunk || '')
-      if (!text.trim()) return
-      if (stream === 'stdout') {
-        stdoutBuffer = appendChunk(stdoutBuffer, text)
-      } else {
-        stderrBuffer = appendChunk(stderrBuffer, text)
-      }
-
-      for (const line of text.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
-        console.log(`WEEKLY_MAINTENANCE | ${prefix} | ${line}`)
-      }
-    }
-
-    child.stdout?.on('data', relayChunk('stdout', `${label}:stdout`))
-    child.stderr?.on('data', relayChunk('stderr', `${label}:stderr`))
-    child.on('error', reject)
-    child.on('close', (code, signal) => {
-      if (code === 0) {
-        resolve({
-          code,
-          signal,
-          stdout: stdoutBuffer,
-          stderr: stderrBuffer,
-        })
-        return
-      }
-
-      reject(new Error(
-        `${label} exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`
-        + `${stderrBuffer ? ` | ${tailText(stderrBuffer, 1200)}` : stdoutBuffer ? ` | ${tailText(stdoutBuffer, 1200)}` : ''}`
-      ))
-    })
-  })
-}
-
 async function acquireJobLock() {
   const client = await pool.connect()
   try {
@@ -192,41 +134,34 @@ export async function runWeeklyCatalogMaintenance({ reason = 'scheduled' } = {})
   }
 
   if (scraperState.isRunning) {
-    logWarn(`full maintenance skipped (${reason}): scraper is already running`)
+    logWarn(`weekly enrichment skipped (${reason}): scraper is already running`)
     return { status: 'skipped', reason: 'scraper_running' }
+  }
+
+  if (hasActiveBackgroundTask()) {
+    logWarn(`weekly enrichment skipped (${reason}): admin background task is already running`)
+    return { status: 'skipped', reason: 'admin_task_running' }
   }
 
   const lockClient = await acquireJobLock()
   if (!lockClient) {
-    logWarn(`full maintenance skipped (${reason}): advisory lock is already held`)
+    logWarn(`weekly enrichment skipped (${reason}): advisory lock is already held`)
     return { status: 'skipped', reason: 'locked' }
   }
 
   maintenanceState.running = true
   try {
-    logInfo(`starting full maintenance (${reason})`)
+    logInfo(`starting weekly enrichment (${reason})`)
     await markJobStarted()
 
-    await runNodeScript('scripts/backfill-encar-enrichment.js', {
-      label: 'encar-backfill',
-      env: {
-        BACKFILL_TARGETS: FULL_BACKFILL_TARGETS,
-        BACKFILL_ENRICH_LIMIT: '0',
-        BACKFILL_INTERIOR_MODE: 'missing_or_invalid',
-      },
-    })
-
-    await runNodeScript('scripts/normalize-existing-cars.js', {
-      label: 'normalize-cars',
-    })
-
+    await runEmptyFieldEnrichment({ scope: 'all' })
     await markJobFinished('success')
-    logInfo('full maintenance completed successfully')
+    logInfo('weekly enrichment completed successfully')
     return { status: 'success' }
   } catch (error) {
     const message = error?.message || String(error)
     await markJobFinished('failed', message)
-    logError(`full maintenance failed: ${message}`)
+    logError(`weekly enrichment failed: ${message}`)
     return { status: 'failed', error: message }
   } finally {
     maintenanceState.running = false
@@ -274,7 +209,7 @@ export function startWeeklyCatalogMaintenance() {
   }
 
   logInfo(
-    `watchdog started: full enrichment + normalization every ${MAINTENANCE_INTERVAL_DAYS}d `
+    `watchdog started: regular catalog enrichment every ${MAINTENANCE_INTERVAL_DAYS}d `
     + `(due check every ${MAINTENANCE_CHECK_HOURS}h, startup delay ${MAINTENANCE_STARTUP_DELAY_SECONDS}s)`
   )
   scheduleNextCheck(MAINTENANCE_STARTUP_DELAY_MS)
