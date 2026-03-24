@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export const SITE_RATE_OFFSET = 15.0
+export const SITE_RATE_OFFSET = 20.0
 export const VAT_REFUND_RATE = 0.06
 export const DEFAULT_FEES = {
   commission: 200,
@@ -10,7 +10,7 @@ export const DEFAULT_FEES = {
   storage: 310,
 }
 
-const RATE_CACHE_TTL_MS = 60 * 60 * 1000
+const RATE_CACHE_TTL_MS = 15 * 60 * 1000
 const MAX_RATE_SOURCE_STALENESS_MS = 12 * 60 * 60 * 1000
 const LAST_RESORT_CURRENT_RATE = Number(process.env.FALLBACK_KRW_PER_USD || 1485)
 
