@@ -15,11 +15,7 @@ const DEFAULT_DELIVERY_PROFILES = [
   { code: 'sedan_bishkek', label: 'Седан (Бишкек)', description: '', price: 1450, prices: { kg: 1450 }, sort_order: 20 },
   { code: 'sedan_osh', label: 'Седан (Ош)', description: '', price: 1500, prices: { kg: 1500 }, sort_order: 30 },
   { code: 'sedan_lux', label: 'Седан люкс', description: 'LEXUS / HONDA / MERCEDES', price: 1600, prices: { kg: 1600 }, sort_order: 40 },
-  { code: 'suv_city', label: 'Кроссовер', description: 'STONIC / KONA / NIRO / VENUE / XM3', price: 1550, prices: { kg: 1550 }, sort_order: 50 },
-  { code: 'suv_small', label: 'Кроссовер', description: 'SPORTAGE / TRAX / TIVOLI / CORANDO', price: 1600, prices: { kg: 1600 }, sort_order: 60 },
-  { code: 'suv_standard', label: 'Кроссовер', description: '', price: 1650, prices: { kg: 1650 }, sort_order: 70 },
-  { code: 'suv_middle', label: 'Кроссовер', description: 'SANTA FE / QM6', price: 1700, prices: { kg: 1700 }, sort_order: 80 },
-  { code: 'suv_big', label: 'Кроссовер', description: 'REXTON (Sport / G4 / G5) / CARNIVAL / PALISADE', price: 1800, prices: { kg: 1800 }, sort_order: 90 },
+  { code: 'suv_standard', label: 'Кроссовер', description: '', price: 1650, prices: { kg: 1650 }, sort_order: 50 },
   { code: 'ray', label: 'RAY', description: '', price: 1400, prices: { kg: 1400 }, sort_order: 100 },
   { code: 'damas', label: 'DAMAS', description: '', price: 1400, prices: { kg: 1400 }, sort_order: 110 },
   { code: 'labo', label: 'LABO', description: '', price: 1200, prices: { kg: 1200 }, sort_order: 120 },
@@ -39,6 +35,7 @@ const DEFAULT_SETTINGS = {
 
 const KG_ONLY_PRICE_LIST_PROFILES = new Set(['sedan_osh'])
 export const RUSSIA_RO_RO_PRICE = 900
+const LEGACY_CROSSOVER_PROFILE_CODES = new Set(['suv_city', 'suv_small', 'suv_middle', 'suv_big'])
 
 function toNumber(value, fallback = null) {
   const numeric = Number(value)
@@ -53,6 +50,23 @@ function slugifyCode(value, index = 0, prefix = 'code') {
     .replace(/^_+|_+$/g, '')
 
   return code || `${prefix}_${index + 1}`
+}
+
+function canonicalizeDeliveryProfileCode(value, index = 0) {
+  const code = slugifyCode(value, index, 'profile')
+  return LEGACY_CROSSOVER_PROFILE_CODES.has(code) ? 'suv_standard' : code
+}
+
+function collapseLegacyCrossoverProfiles(source = []) {
+  const profiles = Array.isArray(source) ? source : []
+  const legacyOrStandard = profiles.filter((profile) => canonicalizeDeliveryProfileCode(profile?.code || profile?.label) === 'suv_standard')
+  if (!legacyOrStandard.length) return profiles
+
+  const explicitStandard = legacyOrStandard.find((profile) => slugifyCode(profile?.code || profile?.label, 0, 'profile') === 'suv_standard')
+  const standardFallback = DEFAULT_DELIVERY_PROFILES.find((profile) => profile.code === 'suv_standard')
+  const mergedStandard = explicitStandard || standardFallback
+  const preserved = profiles.filter((profile) => canonicalizeDeliveryProfileCode(profile?.code || profile?.label) !== 'suv_standard')
+  return [...preserved, mergedStandard]
 }
 
 export function normalizeDeliveryCountries(input = []) {
@@ -99,7 +113,7 @@ export function resolveDefaultCountryCode(countries = []) {
 }
 
 export function normalizeDeliveryProfiles(input = [], { countries, defaultCountryCode } = {}) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_SETTINGS.delivery_profiles
+  const source = collapseLegacyCrossoverProfiles(Array.isArray(input) && input.length ? input : DEFAULT_SETTINGS.delivery_profiles)
   const safeCountries = Array.isArray(countries) && countries.length ? countries : DEFAULT_SETTINGS.delivery_countries
   const defaultCode = defaultCountryCode || resolveDefaultCountryCode(safeCountries)
   const uniqueCodes = new Set()
@@ -120,7 +134,7 @@ export function normalizeDeliveryProfiles(input = [], { countries, defaultCountr
       const resolvedPrice = Number.isFinite(prices?.[defaultCode]) ? prices[defaultCode] : price
 
       return {
-        code: slugifyCode(profile?.code || profile?.label, index, 'profile'),
+        code: canonicalizeDeliveryProfileCode(profile?.code || profile?.label, index),
         label: String(profile?.label || `TYPE ${index + 1}`).trim(),
         description: String(profile?.description || '').trim(),
         price: resolvedPrice,
@@ -163,7 +177,7 @@ export function resolveDeliveryForCar({ car, settings, countryCode } = {}) {
   const resolvedCountryCode = String(countryCode || normalized.default_country_code || '').trim()
   const country = countries.find((item) => item.code === resolvedCountryCode) || countries[0] || null
   const isDefaultCountry = resolvedCountryCode === normalized.default_country_code
-  const profileCode = String(car?.delivery_profile_code || car?.deliveryProfileCode || '').trim()
+  const profileCode = canonicalizeDeliveryProfileCode(String(car?.delivery_profile_code || car?.deliveryProfileCode || '').trim())
   const profile = normalized.delivery_profiles.find((item) => item.code === profileCode) || null
 
   let price = null

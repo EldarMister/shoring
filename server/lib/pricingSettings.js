@@ -105,44 +105,12 @@ export const DEFAULT_DELIVERY_PROFILES = [
     sort_order: 40,
   },
   {
-    code: 'suv_city',
-    label: 'Кроссовер',
-    description: 'STONIC / KONA / NIRO / VENUE / XM3',
-    price: 1550,
-    prices: { kg: 1550 },
-    sort_order: 50,
-  },
-  {
-    code: 'suv_small',
-    label: 'Кроссовер',
-    description: 'SPORTAGE / TRAX / TIVOLI / CORANDO',
-    price: 1600,
-    prices: { kg: 1600 },
-    sort_order: 60,
-  },
-  {
     code: 'suv_standard',
     label: 'Кроссовер',
     description: '',
     price: 1650,
     prices: { kg: 1650 },
-    sort_order: 70,
-  },
-  {
-    code: 'suv_middle',
-    label: 'Кроссовер',
-    description: 'SANTA FE / QM6',
-    price: 1700,
-    prices: { kg: 1700 },
-    sort_order: 80,
-  },
-  {
-    code: 'suv_big',
-    label: 'Кроссовер',
-    description: 'REXTON (Sport / G4 / G5) / CARNIVAL / PALISADE',
-    price: 1800,
-    prices: { kg: 1800 },
-    sort_order: 90,
+    sort_order: 50,
   },
   {
     code: 'ray',
@@ -272,6 +240,7 @@ const CANONICAL_CAR_LIKE_BODY_TYPES = new Set([
   'Родстер',
 ])
 const CANONICAL_HEAVY_BODY_TYPES = new Set(['Пикап', 'Грузовик', 'Минивэн'])
+const LEGACY_CROSSOVER_PROFILE_CODES = new Set(['suv_city', 'suv_small', 'suv_middle', 'suv_big'])
 
 let cachedSettings = null
 let cacheExpiresAt = 0
@@ -297,6 +266,27 @@ function slugifyCode(value, index = 0) {
   return text || `profile_${index + 1}`
 }
 
+function canonicalizeDeliveryProfileCode(value) {
+  const code = slugifyCode(value)
+  return LEGACY_CROSSOVER_PROFILE_CODES.has(code) ? 'suv_standard' : code
+}
+
+function collapseLegacyCrossoverProfiles(source = []) {
+  const profiles = Array.isArray(source) ? source : []
+  const legacyOrStandard = profiles.filter((profile) => {
+    const code = canonicalizeDeliveryProfileCode(profile?.code || profile?.label)
+    return code === 'suv_standard'
+  })
+
+  if (!legacyOrStandard.length) return profiles
+
+  const standardFallback = DEFAULT_DELIVERY_PROFILES.find((profile) => profile.code === 'suv_standard')
+  const explicitStandard = legacyOrStandard.find((profile) => slugifyCode(profile?.code || profile?.label) === 'suv_standard')
+  const mergedStandard = explicitStandard || standardFallback
+  const preserved = profiles.filter((profile) => canonicalizeDeliveryProfileCode(profile?.code || profile?.label) !== 'suv_standard')
+  return [...preserved, mergedStandard]
+}
+
 function normalizeProfile(profile, index = 0, { countries, defaultCountryCode } = {}) {
   const fallback = DEFAULT_DELIVERY_PROFILES[index] || DEFAULT_DELIVERY_PROFILES[0]
   const rawPrices = profile?.prices && typeof profile.prices === 'object' ? profile.prices : {}
@@ -314,7 +304,7 @@ function normalizeProfile(profile, index = 0, { countries, defaultCountryCode } 
   }
 
   return {
-    code: slugifyCode(profile?.code || profile?.label || fallback.code, index),
+    code: canonicalizeDeliveryProfileCode(profile?.code || profile?.label || fallback.code),
     label: toText(profile?.label, fallback.label),
     description: toText(profile?.description, fallback.description),
     price: basePrice,
@@ -324,7 +314,7 @@ function normalizeProfile(profile, index = 0, { countries, defaultCountryCode } 
 }
 
 function normalizeProfiles(input, { countries, defaultCountryCode } = {}) {
-  const source = Array.isArray(input) && input.length ? input : DEFAULT_DELIVERY_PROFILES
+  const source = collapseLegacyCrossoverProfiles(Array.isArray(input) && input.length ? input : DEFAULT_DELIVERY_PROFILES)
   const uniqueCodes = new Set()
 
   return source
@@ -403,7 +393,7 @@ function normalizeSettings(payload = {}) {
 }
 
 function findProfile(settings, code) {
-  const profileCode = toText(code)
+  const profileCode = canonicalizeDeliveryProfileCode(toText(code))
   if (!profileCode) return null
   return settings.delivery_profiles.find((profile) => profile.code === profileCode) || null
 }
@@ -461,11 +451,8 @@ export function inferDeliveryProfileCode(vehicle = {}, settings = DEFAULT_PRICIN
     if (CARNIVAL_HI_LIMOUSINE_HINT_RE.test(haystack) && findProfile(settings, 'carnival_hi_limousine')) return 'carnival_hi_limousine'
     if (STAREX_HINT_RE.test(haystack) && findProfile(settings, 'starex')) return 'starex'
     if (STARIA_HINT_RE.test(haystack) && findProfile(settings, 'staria')) return 'staria'
-    if (BIG_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_big')) return 'suv_big'
-    if (CITY_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_city')) return 'suv_city'
-    if (SMALL_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_small')) return 'suv_small'
-    if (MIDDLE_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_middle')) return 'suv_middle'
-    if (STANDARD_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
+    if ((BIG_SUV_HINT_RE.test(haystack) || CITY_SUV_HINT_RE.test(haystack) || SMALL_SUV_HINT_RE.test(haystack) || MIDDLE_SUV_HINT_RE.test(haystack) || STANDARD_SUV_HINT_RE.test(haystack)) && findProfile(settings, 'suv_standard')) return 'suv_standard'
+    if (bodyType === BODY_TYPE_LABELS.suv && findProfile(settings, 'suv_standard')) return 'suv_standard'
     if (PREMIUM_SEDAN_HINT_RE.test(haystack) && findProfile(settings, 'sedan_lux')) return 'sedan_lux'
   }
 
@@ -473,7 +460,7 @@ export function inferDeliveryProfileCode(vehicle = {}, settings = DEFAULT_PRICIN
     return 'mini_car'
   }
 
-  const explicitCode = toText(vehicle.delivery_profile_code)
+  const explicitCode = canonicalizeDeliveryProfileCode(toText(vehicle.delivery_profile_code))
   if (explicitCode && findProfile(settings, explicitCode)) {
     return explicitCode
   }
@@ -483,16 +470,16 @@ export function inferDeliveryProfileCode(vehicle = {}, settings = DEFAULT_PRICIN
   if (HEAVY_BODY_TYPES.has(bodyType) || CANONICAL_HEAVY_BODY_TYPES.has(bodyType)) {
     if (PORTER_DOUBLE_CAB_HINT_RE.test(haystack) && findProfile(settings, 'porter_double_cab')) return 'porter_double_cab'
     if (PORTER_HINT_RE.test(haystack) && findProfile(settings, 'porter')) return 'porter'
-    return findProfile(settings, 'suv_big') ? 'suv_big' : ''
+    return findProfile(settings, 'suv_standard') ? 'suv_standard' : ''
   }
 
   if (bodyType === BODY_TYPE_LABELS.suv) {
-    if (BIG_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_big')) return 'suv_big'
-    if (CITY_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_city')) return 'suv_city'
-    if (SMALL_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_small')) return 'suv_small'
-    if (MIDDLE_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_middle')) return 'suv_middle'
     if (STANDARD_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
-    if (findProfile(settings, 'suv_middle')) return 'suv_middle'
+    if (BIG_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
+    if (CITY_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
+    if (SMALL_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
+    if (MIDDLE_SUV_HINT_RE.test(haystack) && findProfile(settings, 'suv_standard')) return 'suv_standard'
+    if (findProfile(settings, 'suv_standard')) return 'suv_standard'
   }
 
   if (CAR_LIKE_BODY_TYPES.has(bodyType) || CANONICAL_CAR_LIKE_BODY_TYPES.has(bodyType)) {
