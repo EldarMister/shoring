@@ -10,7 +10,7 @@ export const DEFAULT_FEES = {
   storage: 310,
 }
 
-const RATE_CACHE_TTL_MS = 15 * 60 * 1000
+const RATE_CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_RATE_SOURCE_STALENESS_MS = 12 * 60 * 60 * 1000
 const LAST_RESORT_CURRENT_RATE = Number(process.env.FALLBACK_KRW_PER_USD || 1485)
 
@@ -38,6 +38,37 @@ function normalizeRateUpdatedAt(dateValue, timestampValue) {
   return {
     updatedAt: dateValue || null,
     updatedAtMs: 0,
+  }
+}
+
+async function fetchWiseLiveRate() {
+  const { data } = await axios.get('https://wise.com/rates/live?source=USD&target=KRW&length=1', {
+    timeout: 15000,
+    proxy: false,
+    headers: {
+      'user-agent': 'Mozilla/5.0',
+      accept: 'application/json, text/plain, */*',
+    },
+  })
+
+  const currentRate = Number(data?.value)
+  if (!Number.isFinite(currentRate) || currentRate <= 0) {
+    throw new Error('Wise live FX source returned invalid USD/KRW rate')
+  }
+
+  const { updatedAt, updatedAtMs } = normalizeRateUpdatedAt(null, Number(data?.time) > 0 ? Number(data.time) / 1000 : 0)
+  if (updatedAtMs > 0 && (Date.now() - updatedAtMs) > MAX_RATE_SOURCE_STALENESS_MS) {
+    throw new Error('Wise live FX source returned stale USD/KRW rate')
+  }
+
+  return {
+    source: 'Wise (live)',
+    provider: 'https://wise.com',
+    documentation: 'https://wise.com/us/currency-converter/usd-to-krw-rate',
+    terms: null,
+    updatedAt,
+    nextUpdateAt: null,
+    currentRate,
   }
 }
 
@@ -145,37 +176,44 @@ export async function getExchangeRateSnapshot({ force = false } = {}) {
 
   pendingSnapshotPromise = (async () => {
     try {
+      const wiseLive = buildSnapshot(await fetchWiseLiveRate())
+      cachedSnapshot = wiseLive
+      cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
+      return wiseLive
+    } catch {
+      try {
       const fresh = buildSnapshot(await fetchIntradayRate())
       cachedSnapshot = fresh
       cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
       return fresh
-    } catch {
-      try {
-        const dailyPrimary = buildSnapshot(await fetchPrimaryRate())
-        cachedSnapshot = dailyPrimary
-        cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
-        return dailyPrimary
       } catch {
-        if (cachedSnapshot) return cachedSnapshot
         try {
-          const fallback = buildSnapshot(await fetchFallbackRate())
-          cachedSnapshot = fallback
+          const dailyPrimary = buildSnapshot(await fetchPrimaryRate())
+          cachedSnapshot = dailyPrimary
           cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
-          return fallback
+          return dailyPrimary
         } catch {
           if (cachedSnapshot) return cachedSnapshot
-          const degraded = buildSnapshot({
-            source: 'last-resort',
-            provider: null,
-            documentation: null,
-            terms: null,
-            updatedAt: null,
-            nextUpdateAt: null,
-            currentRate: LAST_RESORT_CURRENT_RATE,
-          })
-          cachedSnapshot = degraded
-          cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
-          return degraded
+          try {
+            const fallback = buildSnapshot(await fetchFallbackRate())
+            cachedSnapshot = fallback
+            cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
+            return fallback
+          } catch {
+            if (cachedSnapshot) return cachedSnapshot
+            const degraded = buildSnapshot({
+              source: 'last-resort',
+              provider: null,
+              documentation: null,
+              terms: null,
+              updatedAt: null,
+              nextUpdateAt: null,
+              currentRate: LAST_RESORT_CURRENT_RATE,
+            })
+            cachedSnapshot = degraded
+            cacheExpiresAt = Date.now() + RATE_CACHE_TTL_MS
+            return degraded
+          }
         }
       }
     } finally {
