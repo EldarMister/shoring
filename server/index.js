@@ -29,7 +29,7 @@ import {
   injectSeoIntoHtml,
   resolveRequestSeoWithRedirects,
 } from './lib/seo.js'
-import { normalizePathname } from '../shared/seo.js'
+import { normalizePathname, resolveSiteOrigin } from '../shared/seo.js'
 
 dotenv.config()
 
@@ -41,10 +41,36 @@ const PARSE_SCOPE_OPTIONS = new Set(['all', 'domestic', 'imported', 'japanese', 
 const API_RATE_LIMIT_WINDOW_MS = 60 * 1000
 const API_RATE_LIMIT_MAX = 60
 const REQUEST_BODY_LIMIT = '256kb'
+const CANONICAL_ORIGIN = resolveSiteOrigin(
+  ENV.PUBLIC_SITE_URL
+  || ENV.SITE_URL
+  || ENV.BASE_URL
+  || 'https://avt-autovtrade.com'
+)
+const CANONICAL_HOST = new URL(CANONICAL_ORIGIN).host.toLowerCase()
 let productionIndexTemplate = ''
+
+function getRequestHost(req) {
+  const forwardedHost = req.headers['x-forwarded-host']
+  const rawHost = Array.isArray(forwardedHost)
+    ? forwardedHost[0]
+    : (forwardedHost || req.headers.host || '')
+  return String(rawHost || '')
+    .split(',')[0]
+    .trim()
+    .replace(/:\d+$/, '')
+    .toLowerCase()
+}
 
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
+app.use((req, res, next) => {
+  const requestHost = getRequestHost(req)
+  if (requestHost && requestHost === `www.${CANONICAL_HOST}`) {
+    return res.redirect(308, new URL(req.originalUrl || '/', CANONICAL_ORIGIN).toString())
+  }
+  return next()
+})
 app.use(cors(createCorsOptions({
   allowedOrigins: ENV.CORS_ALLOWED_ORIGINS,
 })))
