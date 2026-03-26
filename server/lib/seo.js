@@ -119,6 +119,13 @@ function buildPartRouteMeta(pathname) {
   return { id: matched[1], sectionPath: '/damaged-stock/parts' }
 }
 
+function buildCarDetailPath(listingType, id) {
+  const normalizedId = encodeURIComponent(String(id || '').trim())
+  if (listingType === 'urgent') return `/urgent-sale/${normalizedId}`
+  if (listingType === 'damaged') return `/damaged-stock/${normalizedId}`
+  return `/catalog/${normalizedId}`
+}
+
 async function fetchSeoCar(id, listingType) {
   const result = await pool.query(
     `SELECT c.id,
@@ -168,6 +175,27 @@ async function fetchSeoCar(id, listingType) {
 
   if (priceBlockReason || vehicleBlockReason) return null
   return row
+}
+
+async function fetchCanonicalCarRoute(id) {
+  const result = await pool.query(
+    `SELECT c.id, c.listing_type
+       FROM cars c
+      WHERE c.id = $1
+        AND NOT ${buildBlockedCatalogPriceSql('c')}
+        AND NOT ${buildBlockedGenericVehicleSql('c')}
+      LIMIT 1`,
+    [id]
+  )
+
+  if (!result.rows.length) return null
+  const row = result.rows[0]
+
+  return {
+    id: row.id,
+    listingType: row.listing_type,
+    pathname: buildCarDetailPath(row.listing_type, row.id),
+  }
 }
 
 async function fetchSeoPart(id) {
@@ -379,4 +407,68 @@ export async function getSitemapXml(origin = SITE_URL) {
     expiresAt: now + SITEMAP_CACHE_TTL_MS,
   }
   return xml
+}
+
+export async function resolveRequestSeoWithRedirects(req) {
+  const origin = getPrimaryOrigin()
+  const pathname = normalizePathname(req.path || '/')
+  const search = toSearchString(req)
+
+  const partRoute = buildPartRouteMeta(pathname)
+  if (partRoute) {
+    const part = await fetchSeoPart(partRoute.id)
+    if (!part) {
+      return {
+        seo: buildNotFoundSeo({ pathname, origin, title: 'Р—Р°РїС‡Р°СЃС‚СЊ РЅРµ РЅР°Р№РґРµРЅР°' }),
+        statusCode: 404,
+      }
+    }
+
+    return {
+      seo: buildPartSeo({ part, pathname, origin }),
+      statusCode: 200,
+    }
+  }
+
+  const carRoute = buildCarRouteMeta(pathname)
+  if (carRoute) {
+    const car = await fetchSeoCar(carRoute.id, carRoute.listingType)
+    if (!car) {
+      const canonicalCarRoute = await fetchCanonicalCarRoute(carRoute.id)
+      if (canonicalCarRoute && canonicalCarRoute.listingType !== carRoute.listingType) {
+        return {
+          redirectLocation: canonicalCarRoute.pathname,
+          statusCode: 308,
+        }
+      }
+
+      return {
+        seo: buildNotFoundSeo({ pathname, origin, title: 'РђРІС‚РѕРјРѕР±РёР»СЊ РЅРµ РЅР°Р№РґРµРЅ' }),
+        statusCode: 404,
+      }
+    }
+
+    return {
+      seo: buildCarSeo({
+        car,
+        pathname,
+        origin,
+        sectionName: carRoute.sectionName,
+        sectionPath: carRoute.sectionPath,
+      }),
+      statusCode: 200,
+    }
+  }
+
+  if (matchStaticSeoRoute(pathname)) {
+    return {
+      seo: buildStaticRouteSeo({ pathname, search, origin }),
+      statusCode: 200,
+    }
+  }
+
+  return {
+    seo: buildNotFoundSeo({ pathname, origin, title: 'РЎС‚СЂР°РЅРёС†Р° РЅРµ РЅР°Р№РґРµРЅР°' }),
+    statusCode: 404,
+  }
 }

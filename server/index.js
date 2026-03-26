@@ -27,8 +27,9 @@ import {
   buildRobotsTxt,
   getSitemapXml,
   injectSeoIntoHtml,
-  resolveRequestSeo,
+  resolveRequestSeoWithRedirects,
 } from './lib/seo.js'
+import { normalizePathname } from '../shared/seo.js'
 
 dotenv.config()
 
@@ -131,7 +132,21 @@ if (ENV.NODE_ENV === 'production') {
         productionIndexTemplate = fs.readFileSync(indexFilePath, 'utf-8')
       }
 
-      const { seo, statusCode } = await resolveRequestSeo(req)
+      const normalizedPath = normalizePathname(req.path || '/')
+      if (normalizedPath !== (req.path || '/')) {
+        const search = (() => {
+          const index = String(req.originalUrl || '').indexOf('?')
+          return index >= 0 ? String(req.originalUrl || '').slice(index) : ''
+        })()
+        return res.redirect(308, `${normalizedPath}${search}`)
+      }
+
+      const { seo, statusCode, redirectLocation } = await resolveRequestSeoWithRedirects(req)
+      if (redirectLocation) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+        return res.redirect(statusCode || 308, redirectLocation)
+      }
+
       const html = injectSeoIntoHtml(productionIndexTemplate, seo)
 
       res.status(statusCode)
