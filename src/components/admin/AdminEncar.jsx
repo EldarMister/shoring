@@ -707,7 +707,7 @@ export default function AdminEncar() {
           <div style={{ fontSize: '12px', color: '#64748b' }}>
             Retry recovered: <span style={{ color: '#c4b5fd' }}>{sessionSummary.retryRecovered || 0}</span> • Фото: <span style={{ color: '#93c5fd' }}>{sessionSummary.photos || 0}</span>
             <div style={{ marginTop: '6px' }}>
-              Tail stops: <span style={{ color: '#cbd5e1' }}>{optimizationStats.listTailStops || 0}</span> • VIN cache hits: <span style={{ color: '#cbd5e1' }}>{optimizationStats.vinCacheHits || 0}</span>
+              Tail stops: <span style={{ color: '#cbd5e1' }}>{optimizationStats.listTailStops || 0}</span> • Cached skip hits: <span style={{ color: '#cbd5e1' }}>{optimizationStats.skipCacheHits || 0}</span> • VIN cache hits: <span style={{ color: '#cbd5e1' }}>{optimizationStats.vinCacheHits || 0}</span>
             </div>
           </div>
         </div>

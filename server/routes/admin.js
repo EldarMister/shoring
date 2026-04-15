@@ -90,6 +90,7 @@ const enrichState = {
   report: [],
   scope: ENRICH_SCOPE_ALL,
   latest_limit: DEFAULT_LATEST_ENRICH_LIMIT,
+  concurrency: Math.min(Math.max(Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '8', 10) || 8, 1), 10),
 }
 const normalizeCarsState = createCarTextBackfillState()
 const encarBackfillState = {
@@ -117,10 +118,11 @@ const encarBackfillState = {
   signal: null,
   process: null,
 }
+const MAX_ENRICH_CONCURRENCY = 10
 const DEFAULT_ENRICH_CONCURRENCY = (() => {
-  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '5', 10)
-  if (!Number.isFinite(raw)) return 5
-  return Math.min(Math.max(raw, 1), 6)
+  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '8', 10)
+  if (!Number.isFinite(raw)) return 8
+  return Math.min(Math.max(raw, 1), MAX_ENRICH_CONCURRENCY)
 })()
 const ENRICH_SUCCESS_COOLDOWN_HOURS = (() => {
   const raw = Number.parseInt(globalThis.process?.env?.ENRICH_SUCCESS_COOLDOWN_HOURS || '24', 10)
@@ -471,8 +473,12 @@ function normalizeEnrichOptions(value = {}) {
   const latestLimit = Number.isFinite(latestLimitRaw)
     ? Math.min(Math.max(latestLimitRaw, 1), MAX_LATEST_ENRICH_LIMIT)
     : DEFAULT_LATEST_ENRICH_LIMIT
+  const concurrencyRaw = Number.parseInt(String(value?.concurrency ?? DEFAULT_ENRICH_CONCURRENCY), 10)
+  const concurrency = Number.isFinite(concurrencyRaw)
+    ? Math.min(Math.max(concurrencyRaw, 1), MAX_ENRICH_CONCURRENCY)
+    : DEFAULT_ENRICH_CONCURRENCY
 
-  return { scope, latestLimit }
+  return { scope, latestLimit, concurrency }
 }
 
 function normalizeBackfillTarget(value) {
@@ -1063,7 +1069,7 @@ async function enrichCar(car, context = {}) {
 }
 
 export async function runEmptyFieldEnrichment(options = {}) {
-  const { scope, latestLimit } = normalizeEnrichOptions(options)
+  const { scope, latestLimit, concurrency } = normalizeEnrichOptions(options)
   enrichState.running = true
   enrichState.stop_requested = false
   enrichState.stopped = false
@@ -1080,6 +1086,7 @@ export async function runEmptyFieldEnrichment(options = {}) {
   enrichState.report = []
   enrichState.scope = scope
   enrichState.latest_limit = latestLimit
+  enrichState.concurrency = concurrency
 
   try {
     const candidateWhereSql = getEnrichCandidateWhereSql()
@@ -1117,7 +1124,7 @@ export async function runEmptyFieldEnrichment(options = {}) {
     enrichState.total = candidates.length
 
     let nextIndex = 0
-    const workerCount = Math.min(DEFAULT_ENRICH_CONCURRENCY, candidates.length || 1)
+    const workerCount = Math.min(concurrency, candidates.length || 1)
     const enrichContext = {
       vinLookupCache: new Map(),
     }
@@ -1743,6 +1750,7 @@ router.post('/enrich-empty-fields/start', adminRouteProtection, async (_req, res
     message: 'Enrichment started',
     scope: options.scope,
     latest_limit: options.latestLimit,
+    concurrency: options.concurrency,
   })
 })
 

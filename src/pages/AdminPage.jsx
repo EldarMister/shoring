@@ -44,6 +44,8 @@ const ENRICH_SCOPE_ALL = 'all'
 const ENRICH_SCOPE_LATEST = 'latest'
 const DEFAULT_LATEST_ENRICH_LIMIT = 50
 const MAX_LATEST_ENRICH_LIMIT = 50000
+const DEFAULT_ENRICH_CONCURRENCY = 8
+const MAX_ENRICH_CONCURRENCY = 10
 const DEFAULT_BACKFILL_TARGET = 'interior'
 const DEFAULT_BACKFILL_MODE = 'missing'
 const DEFAULT_BACKFILL_LIMIT = 300
@@ -151,6 +153,12 @@ function normalizeLatestEnrichLimit(value) {
     const parsed = Number.parseInt(String(value || DEFAULT_LATEST_ENRICH_LIMIT), 10)
     if (!Number.isFinite(parsed)) return DEFAULT_LATEST_ENRICH_LIMIT
     return Math.min(Math.max(parsed, 1), MAX_LATEST_ENRICH_LIMIT)
+}
+
+function normalizeEnrichConcurrency(value) {
+    const parsed = Number.parseInt(String(value || DEFAULT_ENRICH_CONCURRENCY), 10)
+    if (!Number.isFinite(parsed)) return DEFAULT_ENRICH_CONCURRENCY
+    return Math.min(Math.max(parsed, 1), MAX_ENRICH_CONCURRENCY)
 }
 
 function normalizeBackfillLimit(value) {
@@ -1532,6 +1540,7 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
     const [stoppingEnrich, setStoppingEnrich] = useState(false)
     const [enrichScope, setEnrichScope] = useState(ENRICH_SCOPE_ALL)
     const [latestEnrichLimit, setLatestEnrichLimit] = useState(String(DEFAULT_LATEST_ENRICH_LIMIT))
+    const [enrichConcurrency, setEnrichConcurrency] = useState(String(DEFAULT_ENRICH_CONCURRENCY))
     const [normalizingCars, setNormalizingCars] = useState(false)
     const [stoppingNormalizeCars, setStoppingNormalizeCars] = useState(false)
     const [backfilling, setBackfilling] = useState(false)
@@ -1557,6 +1566,7 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
         report: [],
         scope: ENRICH_SCOPE_ALL,
         latest_limit: DEFAULT_LATEST_ENRICH_LIMIT,
+        concurrency: DEFAULT_ENRICH_CONCURRENCY,
     })
     const [normalizeCarsStatus, setNormalizeCarsStatus] = useState({
         running: false,
@@ -1641,6 +1651,9 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
         try {
             const data = await api.getEnrichStatus()
             setEnrichStatus(data)
+            if (data && !data.running && data.concurrency) {
+                setEnrichConcurrency(String(normalizeEnrichConcurrency(data.concurrency)))
+            }
         } catch {
             /* ignore status polling errors */
         }
@@ -1853,10 +1866,11 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
             const payload = {
                 scope: enrichScope,
                 latest_limit: normalizeLatestEnrichLimit(latestEnrichLimit),
+                concurrency: normalizeEnrichConcurrency(enrichConcurrency),
             }
             await api.startEnrichEmptyFields(payload)
             await loadEnrichStatus()
-            toast(`Обогащение запущено: ${formatEnrichScopeLabel(payload.scope, payload.latest_limit)}`, 'success')
+            toast(`Обогащение запущено: ${formatEnrichScopeLabel(payload.scope, payload.latest_limit)}, ${payload.concurrency} потоков`, 'success')
         } catch (e) {
             toast(e.message || 'Ошибка запуска обогащения', 'error')
         }
@@ -2066,8 +2080,8 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
                     {!isPartsSection && (enrichStatus.running || enrichStatus.finished_at) && (
                         <div className="adm-meta" style={{ marginTop: 4 }}>
                             {enrichStatus.running
-                                ? `Обогащение (${formatEnrichScopeLabel(enrichStatus.scope, enrichStatus.latest_limit)}): ${enrichStatus.processed}/${enrichStatus.total} - обновлено ${enrichStatus.updated} - удалено ${enrichStatus.removed || 0} - ошибок ${enrichStatus.errors}`
-                                : `${enrichStatus.stopped ? 'Последнее обогащение остановлено' : 'Последнее обогащение'} (${formatEnrichScopeLabel(enrichStatus.scope, enrichStatus.latest_limit)}): обновлено ${enrichStatus.updated} - удалено ${enrichStatus.removed || 0} - пропущено ${enrichStatus.skipped} - ошибок ${enrichStatus.errors}`}
+                                ? `Обогащение (${formatEnrichScopeLabel(enrichStatus.scope, enrichStatus.latest_limit)}, ${enrichStatus.concurrency || DEFAULT_ENRICH_CONCURRENCY} потоков): ${enrichStatus.processed}/${enrichStatus.total} - обновлено ${enrichStatus.updated} - удалено ${enrichStatus.removed || 0} - ошибок ${enrichStatus.errors}`
+                                : `${enrichStatus.stopped ? 'Последнее обогащение остановлено' : 'Последнее обогащение'} (${formatEnrichScopeLabel(enrichStatus.scope, enrichStatus.latest_limit)}, ${enrichStatus.concurrency || DEFAULT_ENRICH_CONCURRENCY} потоков): обновлено ${enrichStatus.updated} - удалено ${enrichStatus.removed || 0} - пропущено ${enrichStatus.skipped} - ошибок ${enrichStatus.errors}`}
                         </div>
                     )}
                     {!isPartsSection && (normalizeCarsStatus.running || normalizeCarsStatus.finished_at) && (
@@ -2120,6 +2134,21 @@ function Cars({ toast, initAdd, pricingSettings, pricingRevision }) {
                                         style={{ width: 96 }}
                                     />
                                 )}
+                                <span className="adm-meta" style={{ whiteSpace: 'nowrap' }}>Потоки</span>
+                                <input
+                                    className="adm-input"
+                                    type="number"
+                                    min="1"
+                                    max={MAX_ENRICH_CONCURRENCY}
+                                    step="1"
+                                    value={enrichConcurrency}
+                                    onChange={e => setEnrichConcurrency(e.target.value)}
+                                    disabled={enriching || hasBackgroundTaskRunning}
+                                    style={{ width: 88 }}
+                                    aria-label="Потоки обогащения"
+                                    placeholder="Потоки"
+                                    title="Количество параллельных потоков обогащения"
+                                />
                             </div>
                             <button className="adm-btn adm-btn-sm" onClick={startEnrichEmptyFields} disabled={enriching || hasBackgroundTaskRunning}>
                                 <Ic d={IC.bolt} s={14} /> {enrichStatus.running ? 'Обогащение...' : (enriching ? 'Запуск...' : 'Обогатить пустые поля')}

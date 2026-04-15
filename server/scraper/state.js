@@ -48,6 +48,7 @@ function createSessionSummary() {
     },
     optimizationStats: {
       listTailStops: 0,
+      skipCacheHits: 0,
       vinCacheHits: 0,
     },
   }

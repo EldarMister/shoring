@@ -37,9 +37,12 @@ import {
   retryOperation,
 } from './diagnostics.js'
 import {
+  clearSkipDecision,
   getListPageSnapshot,
+  getSkipDecisionSnapshot,
   loadScraperRuntimeCache,
   rememberListPageSnapshot,
+  rememberSkipDecision,
 } from './runtimeCache.js'
 import {
   MANUFACTURER_MAP,
@@ -76,6 +79,10 @@ const LOW_YIELD_PAGE_LIMIT = 10
 const LOW_YIELD_MAX_FRESH = 1
 const STABLE_KNOWN_PAGE_LIMIT = 3
 const STABLE_LOW_YIELD_PAGE_LIMIT = 5
+const REUSABLE_SKIP_CACHE_REASONS = new Set([
+  'duplicate_vin',
+  'filtered_commercial_use',
+])
 const JAPANESE_BRAND_ALIASES = [
   'toyota',
   'lexus',
@@ -330,6 +337,64 @@ function buildListPageFingerprint(cars = [], scanned = 0) {
     .slice(0, PAGE_SIZE)
 
   return `${Number(scanned) || 0}|${ids.join(',')}`
+}
+
+function getListCarModifiedToken(raw) {
+  return cleanText(raw?.ModifiedDate || raw?.modifiedDate || '')
+}
+
+async function getExistingCarIdsByIds(ids = []) {
+  const normalized = [...new Set(
+    ids
+      .map((value) => Number.parseInt(String(value || ''), 10))
+      .filter((value) => Number.isFinite(value) && value > 0),
+  )]
+
+  if (!normalized.length) return new Set()
+
+  const result = await pool.query(
+    'SELECT id FROM cars WHERE id = ANY($1::int[])',
+    [normalized],
+  )
+
+  return new Set(result.rows.map((row) => Number(row.id)))
+}
+
+async function getCachedSkipDecisionMap(cars = []) {
+  const pendingEntries = cars
+    .map((raw) => {
+      const encarId = cleanText(raw?.Id)
+      const modifiedDate = getListCarModifiedToken(raw)
+      if (!encarId || !modifiedDate) return null
+
+      const entry = getSkipDecisionSnapshot(encarId, modifiedDate)
+      if (!entry) return null
+
+      return { encarId, entry }
+    })
+    .filter(Boolean)
+
+  if (!pendingEntries.length) return new Map()
+
+  const duplicateIds = pendingEntries
+    .filter(({ entry }) => entry.reason === 'duplicate_vin')
+    .map(({ entry }) => entry.duplicateId)
+  const existingDuplicateIds = await getExistingCarIdsByIds(duplicateIds)
+  const resolved = new Map()
+
+  for (const { encarId, entry } of pendingEntries) {
+    if (
+      entry.reason === 'duplicate_vin'
+      && (!Number.isFinite(Number(entry.duplicateId)) || !existingDuplicateIds.has(Number(entry.duplicateId)))
+    ) {
+      clearSkipDecision(encarId)
+      continue
+    }
+
+    resolved.set(encarId, entry)
+  }
+
+  return resolved
 }
 
 function escapeRegex(value) {
@@ -1040,6 +1105,50 @@ function buildFilterDiagnostic({ stage, reason, details, car, raw }) {
   })
 }
 
+function buildCachedSkipDiagnostic(entry, car, raw) {
+  if (!entry || typeof entry !== 'object') return null
+
+  if (entry.reason === 'duplicate_vin') {
+    return buildDuplicateDiagnostic(
+      'duplicate_vin',
+      cleanText(entry.details) || `cached duplicate VIN match${entry.duplicateId ? ` at ID ${entry.duplicateId}` : ''}`,
+      car,
+      raw,
+      entry.duplicateId || null,
+    )
+  }
+
+  if (entry.reason === 'filtered_commercial_use') {
+    return buildFilterDiagnostic({
+      stage: 'post_detail_filter_cache',
+      reason: 'filtered_commercial_use',
+      details: cleanText(entry.details) || 'cached commercial-use filter',
+      car,
+      raw,
+    })
+  }
+
+  return null
+}
+
+function rememberReusableSkipDecision(raw, diagnostic) {
+  const reason = String(diagnostic?.reason || '').trim()
+  if (!REUSABLE_SKIP_CACHE_REASONS.has(reason)) return
+
+  const encarId = cleanText(raw?.Id)
+  const modifiedDate = getListCarModifiedToken(raw)
+  if (!encarId || !modifiedDate) return
+
+  const duplicateId = Number(diagnostic?.technical?.duplicateId)
+  if (reason === 'duplicate_vin' && !Number.isFinite(duplicateId)) return
+
+  rememberSkipDecision(encarId, modifiedDate, {
+    reason,
+    details: cleanText(diagnostic?.details),
+    duplicateId: Number.isFinite(duplicateId) ? duplicateId : null,
+  })
+}
+
 function hasMinimumCarFields(car) {
   return Boolean(
     cleanText(car?.encar_id)
@@ -1210,11 +1319,18 @@ export async function runScrapeJob(limit = 100, options = {}) {
       state.info(`📦 Получено ${cars.length} машин из ${scanned} просмотренных (Encar всего: ${Number(total || 0).toLocaleString()})`)
       state.info(`LIST_FETCH_OK | cars=${cars.length} | scanned=${scanned} | total=${Number(total || 0).toLocaleString()} | scope=${parseScope} | source=${listResult.listSource || 'unknown'}`)
       const existingEncarIds = await getExistingEncarIdMap(cars.map((raw) => raw?.Id))
+      const cachedSkipDecisions = await getCachedSkipDecisionMap(cars)
+      const pageCachedKnownCars = cars.reduce((count, raw) => {
+        const rawId = cleanText(raw?.Id)
+        return cachedSkipDecisions.get(rawId)?.reason === 'duplicate_vin' ? count + 1 : count
+      }, 0)
       const pageFingerprint = buildListPageFingerprint(cars, scanned)
       const cachedPage = getListPageSnapshot(parseScope, offset)
       const pageKnownCars = cars.reduce((count, raw) => {
         const rawId = cleanText(raw?.Id)
-        return existingEncarIds.has(rawId) || seenEncarIds.has(rawId) ? count + 1 : count
+        return existingEncarIds.has(rawId) || seenEncarIds.has(rawId) || cachedSkipDecisions.get(rawId)?.reason === 'duplicate_vin'
+          ? count + 1
+          : count
       }, 0)
       const pageFreshCars = Math.max(cars.length - pageKnownCars, 0)
       const isStableKnownOnlyPage = Boolean(
@@ -1244,6 +1360,9 @@ export async function runScrapeJob(limit = 100, options = {}) {
         state.setProgress({
           alreadyKnown: state.progress.alreadyKnown + pageKnownCars,
         })
+        if (pageCachedKnownCars > 0) {
+          state.recordOptimizationHit('skipCacheHits', pageCachedKnownCars)
+        }
         rememberListPageSnapshot(parseScope, offset, {
           fingerprint: pageFingerprint,
           knownOnly: true,
@@ -1401,6 +1520,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
             raw,
             duplicateId,
           ))
+          clearSkipDecision(currentEncarId)
           continue
         }
 
@@ -1413,6 +1533,16 @@ export async function runScrapeJob(limit = 100, options = {}) {
             raw,
           }))
           continue
+        }
+
+        const cachedSkip = cachedSkipDecisions.get(currentEncarId)
+        if (cachedSkip) {
+          const cachedDiagnostic = buildCachedSkipDiagnostic(cachedSkip, car, raw)
+          if (cachedDiagnostic) {
+            recordSkip(cachedDiagnostic)
+            state.recordOptimizationHit('skipCacheHits')
+            continue
+          }
         }
 
         seenEncarIds.add(currentEncarId)
@@ -1503,13 +1633,15 @@ export async function runScrapeJob(limit = 100, options = {}) {
           car: preparedCar,
         })
         if (commercialUseReason) {
-          recordSkip(buildFilterDiagnostic({
+          const diagnostic = buildFilterDiagnostic({
             stage: 'post_detail_filter',
             reason: 'filtered_commercial_use',
             details: commercialUseReason,
             car: preparedCar,
             raw,
-          }))
+          })
+          recordSkip(diagnostic)
+          rememberReusableSkipDecision(raw, diagnostic)
           await paceAfterDetailFlow()
           continue
         }
@@ -1548,13 +1680,15 @@ export async function runScrapeJob(limit = 100, options = {}) {
         }
         const duplicateVinId = vinLookup?.id || null
         if (duplicateVinId) {
-          recordSkip(buildDuplicateDiagnostic(
+          const diagnostic = buildDuplicateDiagnostic(
             'duplicate_vin',
             `VIN already exists at ID ${duplicateVinId}`,
             preparedCar,
             raw,
             duplicateVinId,
-          ))
+          )
+          recordSkip(diagnostic)
+          rememberReusableSkipDecision(raw, diagnostic)
           await paceAfterDetailFlow()
           continue
         }
@@ -1613,6 +1747,7 @@ export async function runScrapeJob(limit = 100, options = {}) {
         try {
           const newId = await insertCar(preparedCar, photoUrls)
           seenEncarIds.add(preparedCar.encar_id)
+          clearSkipDecision(preparedCar.encar_id)
           if (preparedCar.vin && isStandardVin(preparedCar.vin)) {
             vinLookupCache.set(normalizeVin(preparedCar.vin), newId)
           }
@@ -1628,25 +1763,29 @@ export async function runScrapeJob(limit = 100, options = {}) {
           })
         } catch (dbErr) {
           if (dbErr?.code === 'DUPLICATE_ENCAR') {
-            recordSkip(buildDuplicateDiagnostic(
+            const diagnostic = buildDuplicateDiagnostic(
               'duplicate_encar_id',
               `late duplicate by encar_id, existing ID ${dbErr.duplicateId || '-'}`,
               preparedCar,
               raw,
               dbErr.duplicateId,
-            ))
+            )
+            recordSkip(diagnostic)
+            clearSkipDecision(currentEncarId)
             await paceAfterDetailFlow()
             continue
           }
 
           if (dbErr?.code === 'DUPLICATE_VIN') {
-            recordSkip(buildDuplicateDiagnostic(
+            const diagnostic = buildDuplicateDiagnostic(
               'duplicate_vin',
               `late duplicate by VIN, existing ID ${dbErr.duplicateId || '-'}`,
               preparedCar,
               raw,
               dbErr.duplicateId,
-            ))
+            )
+            recordSkip(diagnostic)
+            rememberReusableSkipDecision(raw, diagnostic)
             await paceAfterDetailFlow()
             continue
           }
