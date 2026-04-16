@@ -460,6 +460,12 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
         </div>
 
         <div className="car-price-col">
+          {car.priceKRWPrevious > 0 && car.priceKRWPrevious > car.priceKRW && (
+            <div className="car-price-previous">
+              <span className="car-price-krw-old">{Number(car.priceKRWPrevious).toLocaleString()} ₩</span>
+              <span className="car-price-drop-badge">↓ снижена</span>
+            </div>
+          )}
           <div className="car-price-krw">{Number(car.priceKRW || 0).toLocaleString()} ₩</div>
           <div className="car-price-usd">${Number(car.priceUSD || 0).toLocaleString()}</div>
 

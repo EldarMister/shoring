@@ -699,7 +699,11 @@ function buildPriceRefreshPatch(existingCar, nextPriceKrw, exchangeSnapshot) {
   }, exchangeSnapshot)
 
   const patch = {}
-  if (hasPriceChanged) patch.price_krw = normalizedNextPriceKrw
+  if (hasPriceChanged) {
+    patch.price_krw_previous = currentPriceKrw
+    patch.price_changed_at = new Date()
+    patch.price_krw = normalizedNextPriceKrw
+  }
   if (hasPriceChanged || Number(existingCar?.price_usd) !== Number(pricing.price_usd)) {
     patch.price_usd = pricing.price_usd
   }

@@ -11,6 +11,8 @@ export async function ensureCarListingMetadataColumns() {
       await pool.query(`ALTER TABLE cars ADD COLUMN IF NOT EXISTS encar_subscribe_count INTEGER DEFAULT 0`)
       await pool.query(`ALTER TABLE cars ADD COLUMN IF NOT EXISTS encar_first_advertised_at TIMESTAMPTZ`)
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_cars_encar_first_advertised ON cars(encar_first_advertised_at DESC NULLS LAST, encar_view_count ASC, encar_subscribe_count ASC)`)
+      await pool.query(`ALTER TABLE cars ADD COLUMN IF NOT EXISTS price_krw_previous BIGINT DEFAULT NULL`)
+      await pool.query(`ALTER TABLE cars ADD COLUMN IF NOT EXISTS price_changed_at TIMESTAMPTZ DEFAULT NULL`)
     })().catch((error) => {
       ensureCarListingMetadataColumnsPromise = null
       throw error

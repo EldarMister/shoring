@@ -2930,6 +2930,32 @@ body {
   }
 }
 
+.car-price-previous {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.car-price-krw-old {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-decoration: line-through;
+  letter-spacing: -0.3px;
+}
+
+.car-price-drop-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  border-radius: 999px;
+  padding: 1px 7px;
+  letter-spacing: 0.01em;
+}
+
 .car-price-krw {
   font-size: 18px;
   font-weight: 800;
@@ -6514,6 +6540,16 @@ body {
 
 [data-theme="dark"] .car-price-krw {
   color: #7a96b0;
+}
+
+[data-theme="dark"] .car-price-krw-old {
+  color: #4a5568;
+}
+
+[data-theme="dark"] .car-price-drop-badge {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+  border-color: rgba(74, 222, 128, 0.2);
 }
 
 [data-theme="dark"] .car-price-usd {

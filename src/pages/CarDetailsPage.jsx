@@ -1755,6 +1755,8 @@ function mapCar(c) {
     tags,
     fuelType: normalizeTagLabel(c.fuel_type || ''),
     priceKRW: Number(c.price_krw) || 0,
+    priceKRWPrevious: Number(c.price_krw_previous) || null,
+    priceChangedAt: c.price_changed_at || null,
     priceUSD,
     commission,
     delivery,
@@ -2385,6 +2387,12 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 <div className="car-details-price-icon">$</div>
                 <div className="car-details-price-heading">Цена</div>
               </div>
+              {car.priceKRWPrevious > 0 && car.priceKRWPrevious > car.priceKRW && (
+                <div className="car-price-previous">
+                  <span className="car-price-krw-old">{Number(car.priceKRWPrevious).toLocaleString()} ₩</span>
+                  <span className="car-price-drop-badge">↓ снижена</span>
+                </div>
+              )}
               <div className="car-details-price-krw">{car.priceKRW.toLocaleString()} ₩</div>
               <div className="car-details-price-usd">${car.priceUSD.toLocaleString()}</div>
               <p className="car-details-price-note">

@@ -966,6 +966,8 @@ function mapCar(c) {
     encarUrl: c.encar_url,
     encarId: c.encar_id || '-',
     canNegotiate: c.can_negotiate,
+    priceKRWPrevious: Number(c.price_krw_previous) || null,
+    priceChangedAt: c.price_changed_at || null,
     imageCount: images.length || 1,
     images,
     detailFlags: c.detail_flags || c.flags || {},
