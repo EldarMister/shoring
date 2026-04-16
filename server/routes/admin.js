@@ -450,6 +450,7 @@ function getEnrichCandidateWhereSql() {
       AND enrich_checked_at IS NOT NULL
       AND enrich_checked_at > NOW() - INTERVAL '${ENRICH_SUCCESS_COOLDOWN_HOURS} hours'
       AND COALESCE(NULLIF(BTRIM(enrich_last_encar_id), ''), '') = COALESCE(NULLIF(BTRIM(encar_id), ''), '')
+      AND COALESCE(encar_view_count, 0) > 0
     )
     AND NOT (
       enrich_last_status = 'error'
