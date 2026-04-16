@@ -74,11 +74,11 @@ const DETAIL_SOFT_RECHECK_ATTEMPTS = 2
 const PHOTO_LIMIT = 8
 const DETAIL_SUCCESS_PACING_MIN_MS = 300
 const DETAIL_SUCCESS_PACING_MAX_MS = 900
-const STALE_KNOWN_PAGE_LIMIT = 5
-const LOW_YIELD_PAGE_LIMIT = 10
+const STALE_KNOWN_PAGE_LIMIT = 3
+const LOW_YIELD_PAGE_LIMIT = 5
 const LOW_YIELD_MAX_FRESH = 1
-const STABLE_KNOWN_PAGE_LIMIT = 3
-const STABLE_LOW_YIELD_PAGE_LIMIT = 5
+const STABLE_KNOWN_PAGE_LIMIT = 2
+const STABLE_LOW_YIELD_PAGE_LIMIT = 3
 const REUSABLE_SKIP_CACHE_REASONS = new Set([
   'duplicate_vin',
   'filtered_commercial_use',
@@ -878,6 +878,9 @@ function mergeCarEnrichment(car, enrichment, exchangeSnapshot, pricingSettings) 
         : (car.detail_flags?.galleryReady === true),
     }),
     inspection_formats: normalizeInspectionFormats(enrichment.condition?.inspectionFormats || car.inspection_formats),
+    encar_view_count: Number(enrichment.manage?.viewCount) || car.encar_view_count || 0,
+    encar_subscribe_count: Number(enrichment.manage?.subscribeCount) || car.encar_subscribe_count || 0,
+    encar_first_advertised_at: enrichment.manage?.firstAdvertisedDateTime || car.encar_first_advertised_at || null,
   })
 
   return applyPricingToCar(merged, exchangeSnapshot, pricingSettings)
@@ -920,8 +923,9 @@ async function insertCar(car, photoUrls) {
           body_type, vehicle_class, trim_level, key_info, body_color, interior_color, interior_color_source, interior_color_diagnostics, warranty_company, warranty_body_months, warranty_body_km,
          warranty_transmission_months, warranty_transmission_km, option_features, location, vin, encar_url, encar_id,
           tags, can_negotiate, commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total,
-          detail_flags, inspection_formats)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
+          detail_flags, inspection_formats,
+          encar_view_count, encar_subscribe_count, encar_first_advertised_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)
        RETURNING id`,
       [
         car.name, car.model, car.year, car.mileage,
@@ -934,6 +938,7 @@ async function insertCar(car, photoUrls) {
         car.encar_url, car.encar_id, car.tags, car.can_negotiate, car.commission, car.delivery, car.delivery_profile_code || null,
         car.loading, car.unloading, car.storage, car.pricing_locked || false, car.vat_refund, car.total,
         buildStoredDetailFlags(car.detail_flags), normalizeInspectionFormats(car.inspection_formats),
+        car.encar_view_count || 0, car.encar_subscribe_count || 0, car.encar_first_advertised_at || null,
       ],
     )
     const carId = res.rows[0].id

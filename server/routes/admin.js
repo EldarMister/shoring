@@ -118,15 +118,15 @@ const encarBackfillState = {
   signal: null,
   process: null,
 }
-const MAX_ENRICH_CONCURRENCY = 10
+const MAX_ENRICH_CONCURRENCY = 15
 const DEFAULT_ENRICH_CONCURRENCY = (() => {
-  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '8', 10)
-  if (!Number.isFinite(raw)) return 8
+  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '10', 10)
+  if (!Number.isFinite(raw)) return 10
   return Math.min(Math.max(raw, 1), MAX_ENRICH_CONCURRENCY)
 })()
 const ENRICH_SUCCESS_COOLDOWN_HOURS = (() => {
-  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_SUCCESS_COOLDOWN_HOURS || '24', 10)
-  if (!Number.isFinite(raw)) return 24
+  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_SUCCESS_COOLDOWN_HOURS || '12', 10)
+  if (!Number.isFinite(raw)) return 12
   return Math.min(Math.max(raw, 1), 720)
 })()
 const ENRICH_ERROR_RETRY_HOURS = (() => {
@@ -922,6 +922,16 @@ async function enrichCar(car, context = {}) {
       patch.trim_level = normalizedDetail.trim_level
     }
 
+    // Always update Encar view/subscribe counts and first advertised date
+    if (detail.manage) {
+      const nextViewCount = Number(detail.manage.viewCount) || 0
+      const nextSubscribeCount = Number(detail.manage.subscribeCount) || 0
+      const nextFirstAdvertised = detail.manage.firstAdvertisedDateTime || null
+      if (nextViewCount > 0) patch.encar_view_count = nextViewCount
+      if (nextSubscribeCount > 0) patch.encar_subscribe_count = nextSubscribeCount
+      if (nextFirstAdvertised) patch.encar_first_advertised_at = nextFirstAdvertised
+    }
+
     const sanitizedDetailVin = sanitizeVin(detail.vin)
     if (shouldRefreshVin(car.vin) && sanitizedDetailVin) {
       patch.vin = sanitizedDetailVin
@@ -1094,7 +1104,8 @@ export async function runEmptyFieldEnrichment(options = {}) {
       ? await pool.query(`
         SELECT id, encar_id, name, model, year, vin, body_type, vehicle_class, trim_level, body_color, interior_color,
                warranty_company, warranty_body_months, warranty_body_km, warranty_transmission_months, warranty_transmission_km, option_features,
-               enrich_checked_at, enrich_last_status, enrich_last_error, enrich_last_encar_id
+               enrich_checked_at, enrich_last_status, enrich_last_error, enrich_last_encar_id,
+               fuel_type, drive_type, key_info, tags, location
         FROM cars
         WHERE ${candidateWhereSql}
         ORDER BY created_at DESC NULLS LAST, id DESC
@@ -1103,7 +1114,8 @@ export async function runEmptyFieldEnrichment(options = {}) {
       : await pool.query(`
         SELECT id, encar_id, name, model, year, vin, body_type, vehicle_class, trim_level, body_color, interior_color,
                warranty_company, warranty_body_months, warranty_body_km, warranty_transmission_months, warranty_transmission_km, option_features,
-               enrich_checked_at, enrich_last_status, enrich_last_error, enrich_last_encar_id
+               enrich_checked_at, enrich_last_status, enrich_last_error, enrich_last_encar_id,
+               fuel_type, drive_type, key_info, tags, location
         FROM cars
         WHERE ${candidateWhereSql}
         ORDER BY enrich_checked_at ASC NULLS FIRST, updated_at ASC NULLS FIRST, id ASC

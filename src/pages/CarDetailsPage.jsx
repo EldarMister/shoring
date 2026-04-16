@@ -1027,10 +1027,10 @@ function buildRegistrationHistoryEntries(car) {
     { label: 'Дата отчета', value: getInspectionReportDate(inspection) },
     { label: 'Перерегистрация', value: getReregistrationLabel(manage) },
       { label: 'Диагностика Encar', value: getDiagnosisLabel(car?.detailFlags) },
-      { label: 'На Encar с', value: formatDate(manage.firstAdvertisedDateTime || car?.createdAt) },
+      { label: 'На Encar с', value: formatDate(manage.firstAdvertisedDateTime || car?.encarFirstAdvertisedAt || car?.createdAt) },
       { label: 'Обновлено на Encar', value: formatDate(manage.modifyDateTime || car?.updatedAt) },
-      { label: 'Просмотры', value: Number.isFinite(Number(manage.viewCount)) ? String(Number(manage.viewCount)) : '-' },
-      { label: 'Подписчики', value: Number.isFinite(Number(manage.subscribeCount)) ? String(Number(manage.subscribeCount)) : '-' },
+      { label: 'Просмотры на Encar', value: Number.isFinite(Number(manage.viewCount ?? car?.encarViewCount)) ? String(Number(manage.viewCount ?? car?.encarViewCount)) : '-' },
+      { label: 'Звонки на Encar', value: Number.isFinite(Number(manage.subscribeCount ?? car?.encarSubscribeCount)) ? String(Number(manage.subscribeCount ?? car?.encarSubscribeCount)) : '-' },
   ]
 
   return entries.filter((entry) => hasHistoryDisplayValue(entry.value))
@@ -1794,6 +1794,9 @@ function mapCar(c) {
     detailCondition: {},
     detailManage: {},
     inspection: null,
+    encarViewCount: Number(c.encar_view_count) || 0,
+    encarSubscribeCount: Number(c.encar_subscribe_count) || 0,
+    encarFirstAdvertisedAt: c.encar_first_advertised_at || null,
   }
 }
 
@@ -2585,8 +2588,10 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 <div className="car-details-spec-item"><span>Количество мест</span><strong>{car.seatCount || '-'}</strong></div>
                 <div className="car-details-spec-item"><span>Объем двигателя</span><strong>{car.displacement ? `${car.displacement} cc` : '-'}</strong></div>
                 <div className="car-details-spec-item"><span>Encar ID</span><strong>{car.encarId || '-'}</strong></div>
-                <div className="car-details-spec-item"><span>На Encar с</span><strong>{formatDate(car.detailManage?.firstAdvertisedDateTime || car.createdAt)}</strong></div>
+                <div className="car-details-spec-item"><span>На Encar с</span><strong>{formatDate(car.detailManage?.firstAdvertisedDateTime || car.encarFirstAdvertisedAt || car.createdAt)}</strong></div>
                 <div className="car-details-spec-item"><span>Обновлено на Encar</span><strong>{formatDate(car.detailManage?.modifyDateTime || car.updatedAt)}</strong></div>
+                <div className="car-details-spec-item"><span>Просмотры на Encar</span><strong>{Number(car.detailManage?.viewCount ?? car.encarViewCount) >= 0 ? String(Number(car.detailManage?.viewCount ?? car.encarViewCount)) : '-'}</strong></div>
+                <div className="car-details-spec-item"><span>Звонки на Encar</span><strong>{Number(car.detailManage?.subscribeCount ?? car.encarSubscribeCount) >= 0 ? String(Number(car.detailManage?.subscribeCount ?? car.encarSubscribeCount)) : '-'}</strong></div>
               </div>
             </div>
 

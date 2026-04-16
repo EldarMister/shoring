@@ -116,6 +116,9 @@ ALTER TABLE cars ADD COLUMN IF NOT EXISTS enrich_last_encar_id VARCHAR(50);
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS listing_type VARCHAR(20) NOT NULL DEFAULT 'main';
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS detail_flags JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE cars ADD COLUMN IF NOT EXISTS inspection_formats TEXT[] DEFAULT '{}';
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS encar_view_count INTEGER DEFAULT 0;
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS encar_subscribe_count INTEGER DEFAULT 0;
+ALTER TABLE cars ADD COLUMN IF NOT EXISTS encar_first_advertised_at TIMESTAMPTZ;
 
 -- Индексы для быстрых фильтров
 CREATE INDEX IF NOT EXISTS idx_cars_price_usd  ON cars(price_usd);
@@ -125,6 +128,8 @@ CREATE INDEX IF NOT EXISTS idx_cars_encar_id   ON cars(encar_id);
 CREATE INDEX IF NOT EXISTS idx_cars_listing_type ON cars(listing_type);
 CREATE INDEX IF NOT EXISTS idx_cars_listing_type_created_at_id
   ON cars(listing_type, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_cars_encar_first_advertised
+  ON cars(encar_first_advertised_at DESC NULLS LAST, encar_view_count ASC, encar_subscribe_count ASC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cars_vin_unique
   ON cars (UPPER(BTRIM(vin)))
   WHERE vin IS NOT NULL

@@ -530,6 +530,16 @@ async function main() {
           }
         }
 
+        // Always update Encar view/subscribe counts and first advertised date
+        if (detail.manage) {
+          const nextViewCount = Number(detail.manage.viewCount) || 0
+          const nextSubscribeCount = Number(detail.manage.subscribeCount) || 0
+          const nextFirstAdvertised = detail.manage.firstAdvertisedDateTime || null
+          if (nextViewCount > 0) patch.encar_view_count = nextViewCount
+          if (nextSubscribeCount > 0) patch.encar_subscribe_count = nextSubscribeCount
+          if (nextFirstAdvertised) patch.encar_first_advertised_at = nextFirstAdvertised
+        }
+
         let appliedPatch = { ...patch }
         try {
           if (await updateCar(row.id, appliedPatch)) {

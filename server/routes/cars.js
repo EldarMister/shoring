@@ -629,7 +629,7 @@ router.get('/', async (req, res) => {
     const filterParams = [...params]
 
     const sortMap = {
-      newest: 'c.created_at DESC, c.id DESC',
+      newest: 'COALESCE(c.encar_first_advertised_at, c.created_at) DESC, c.encar_view_count ASC, c.encar_subscribe_count ASC, c.id DESC',
       oldest: 'c.created_at ASC, c.id ASC',
       price_asc: `${priceUsdSql} ASC, c.created_at DESC, c.id DESC`,
       price_desc: `${priceUsdSql} DESC, c.created_at DESC, c.id DESC`,
@@ -799,6 +799,7 @@ router.post('/', adminMutationProtection, async (req, res) => {
       price_krw, price_usd,
       commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total,
       encar_url, encar_id, can_negotiate, tags, detail_flags, inspection_formats,
+      encar_view_count, encar_subscribe_count, encar_first_advertised_at,
     } = req.body
     const normalizedVin = sanitizeVin(vin)
     const normalizedListingType = resolveRequestedListingType(listing_type)
@@ -840,8 +841,9 @@ router.post('/', adminMutationProtection, async (req, res) => {
          warranty_company, warranty_body_months, warranty_body_km, warranty_transmission_months, warranty_transmission_km, option_features,
          location, vin, price_krw, price_usd,
          commission, delivery, delivery_profile_code, loading, unloading, storage, pricing_locked, vat_refund, total,
-         encar_url, encar_id, can_negotiate, tags, detail_flags, inspection_formats)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
+         encar_url, encar_id, can_negotiate, tags, detail_flags, inspection_formats,
+         encar_view_count, encar_subscribe_count, encar_first_advertised_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)
        RETURNING *`,
       [
         normalizedListingType,
@@ -854,6 +856,7 @@ router.post('/', adminMutationProtection, async (req, res) => {
         commission ?? DEFAULT_FEES.commission, delivery ?? 0, delivery_profile_code || null, loading ?? DEFAULT_FEES.loading,
         unloading ?? DEFAULT_FEES.unloading, storage ?? DEFAULT_FEES.storage, pricing_locked || false, vat_refund || 0, total || 0,
         encar_url, encar_id, can_negotiate || false, normalizedText.tags ?? tags ?? [], buildStoredDetailFlags(detail_flags), normalizeInspectionFormats(inspection_formats),
+        encar_view_count || 0, encar_subscribe_count || 0, encar_first_advertised_at || null,
       ]
     )
     const exchangeSnapshot = await getExchangeRateSnapshot()
@@ -913,6 +916,7 @@ router.put('/:id', adminMutationProtection, async (req, res) => {
       'location', 'vin', 'price_krw', 'price_usd',
       'commission', 'delivery', 'delivery_profile_code', 'loading', 'unloading', 'storage', 'pricing_locked', 'vat_refund', 'total',
       'encar_url', 'encar_id', 'can_negotiate', 'tags', 'detail_flags', 'inspection_formats',
+      'encar_view_count', 'encar_subscribe_count', 'encar_first_advertised_at',
     ]
 
     const updates = []
