@@ -58,8 +58,8 @@ const DEFAULT_BACKFILL_TARGET = 'interior'
 const DEFAULT_BACKFILL_INTERIOR_MODE = 'missing'
 const DEFAULT_BACKFILL_LIMIT = 300
 const MAX_BACKFILL_LIMIT = 50000
-const DEFAULT_BACKFILL_CONCURRENCY = 3
-const MAX_BACKFILL_CONCURRENCY = 8
+const DEFAULT_BACKFILL_CONCURRENCY = 10
+const MAX_BACKFILL_CONCURRENCY = 30
 const DEFAULT_CATALOG_EXPORT_LIMIT = 5000
 const MAX_CATALOG_EXPORT_LIMIT = 50000
 const DEFAULT_CATALOG_EXPORT_START = 1
@@ -125,8 +125,8 @@ const DEFAULT_ENRICH_CONCURRENCY = (() => {
   return Math.min(Math.max(raw, 1), MAX_ENRICH_CONCURRENCY)
 })()
 const ENRICH_SUCCESS_COOLDOWN_HOURS = (() => {
-  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_SUCCESS_COOLDOWN_HOURS || '12', 10)
-  if (!Number.isFinite(raw)) return 12
+  const raw = Number.parseInt(globalThis.process?.env?.ENRICH_SUCCESS_COOLDOWN_HOURS || '24', 10)
+  if (!Number.isFinite(raw)) return 24
   return Math.min(Math.max(raw, 1), 720)
 })()
 const ENRICH_ERROR_RETRY_HOURS = (() => {

@@ -50,8 +50,8 @@ const DEFAULT_BACKFILL_TARGET = 'interior'
 const DEFAULT_BACKFILL_MODE = 'missing'
 const DEFAULT_BACKFILL_LIMIT = 300
 const MAX_BACKFILL_LIMIT = 50000
-const DEFAULT_BACKFILL_CONCURRENCY = 3
-const MAX_BACKFILL_CONCURRENCY = 8
+const DEFAULT_BACKFILL_CONCURRENCY = 10
+const MAX_BACKFILL_CONCURRENCY = 30
 const BACKFILL_TARGET_OPTIONS = [
     { value: 'interior', label: 'Цвет салона' },
     { value: 'drive', label: 'Привод' },
