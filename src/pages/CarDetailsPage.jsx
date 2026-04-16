@@ -27,7 +27,7 @@ import {
   resolveCustomsCalculationUa,
   resolveUtilFeeCalculation,
 } from '../lib/customsTariffs.js'
-import { CAR_SECTION_CONFIG } from '../lib/catalogSections.js'
+import { CAR_SECTION_CONFIG, buildCarDetailsPath } from '../lib/catalogSections.js'
 import DeliveryCountrySelect from '../components/shared/DeliveryCountrySelect.jsx'
 import Seo from '../components/seo/Seo.jsx'
 import { useDeliveryContext } from '../hooks/useDeliveryContext.js'
@@ -141,6 +141,63 @@ const ShareSmallIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.5 10.5l4-2.5m-4 5l4 2.5" />
   </svg>
 )
+
+function extractBrandFromName(name) {
+  const text = String(name || '').trim()
+  if (!text) return ''
+  const lower = text.toLowerCase()
+  if (lower.startsWith('kg mobility')) return 'KG Mobility'
+  if (lower.startsWith('land rover')) return 'Land Rover'
+  if (lower.startsWith('rolls royce') || lower.startsWith('rolls-royce')) return 'Rolls-Royce'
+  if (lower.startsWith('aston martin')) return 'Aston Martin'
+  if (lower.startsWith('alfa romeo')) return 'Alfa Romeo'
+  return text.split(' ')[0]
+}
+
+function CollapsibleSection({ title, subtitle = null, headerRight = null, children, as: Tag = 'section', cardClassName = 'car-details-card car-details-bottom-card' }) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+  )
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const h = (e) => setIsMobile(e.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, [])
+
+  const showContent = !isMobile || open
+
+  return (
+    <Tag className={`${cardClassName}${isMobile && !open ? ' is-mobile-collapsed' : ''}`}>
+      <div
+        className={`car-section-hd${isMobile ? ' car-section-hd--clickable' : ''}`}
+        onClick={isMobile ? () => setOpen((p) => !p) : undefined}
+        role={isMobile ? 'button' : undefined}
+        tabIndex={isMobile ? 0 : undefined}
+        onKeyDown={isMobile ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((p) => !p) } } : undefined}
+        aria-expanded={isMobile ? open : undefined}
+      >
+        <div className="car-section-hd-text">
+          <h3 className="car-details-card-title">{title}</h3>
+          {subtitle && !isMobile && <p className="car-details-muted">{subtitle}</p>}
+        </div>
+        {isMobile
+          ? <span className={`car-section-chevron${open ? ' is-open' : ''}`}><ChevronDownSmallIcon /></span>
+          : (headerRight || null)
+        }
+      </div>
+      {showContent && (
+        <div className="car-section-body">
+          {isMobile && subtitle && <p className="car-details-muted">{subtitle}</p>}
+          {isMobile && headerRight && <div className="car-section-body-extra">{headerRight}</div>}
+          {children}
+        </div>
+      )}
+    </Tag>
+  )
+}
 
 function CustomsDropdown({ label, ariaLabel, value, options, onChange }) {
   const [open, setOpen] = useState(false)
@@ -1924,6 +1981,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const [imgIdx, setImgIdx] = useState(0)
   const [inspectionOpen, setInspectionOpen] = useState(false)
   const [shareState, setShareState] = useState('idle')
+  const [similarCars, setSimilarCars] = useState([])
   const [retryNonce, setRetryNonce] = useState(0)
   const [calc, setCalc] = useState({
     year: String(DEFAULT_CALC_YEAR),
@@ -2125,6 +2183,29 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     run()
     return () => { active = false }
   }, [id, previewCar, retryNonce, section.listingType])
+
+  useEffect(() => {
+    if (!car?.name || !car?.id) return
+    let active = true
+    const brand = extractBrandFromName(car.name)
+    if (!brand) return
+    const run = async () => {
+      try {
+        const params = new URLSearchParams({ brand, sort: 'newest', limit: 21, listingType: section.listingType })
+        const res = await fetch(`/api/cars?${params}`)
+        if (!res.ok || !active) return
+        const data = await res.json()
+        if (!active) return
+        const mapped = (data.cars || [])
+          .filter((c) => Number(c.id) !== Number(car.id))
+          .slice(0, 20)
+          .map(mapCar)
+        setSimilarCars(mapped)
+      } catch { /* ignore */ }
+    }
+    run()
+    return () => { active = false }
+  }, [car?.id, section.listingType])
 
   const imageCount = car?.images?.length || 1
   const boundedIdx = Math.min(imgIdx, imageCount - 1)
@@ -2626,39 +2707,33 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
             )}
 
             {!!car.optionFeatures?.length && (
-              <div className="car-details-card">
-                <h3 className="car-details-card-title">Опции и оснащение</h3>
+              <CollapsibleSection as="div" title="Опции и оснащение" cardClassName="car-details-card">
                 <div className="car-feature-row car-details-option-row">
                   {car.optionFeatures.map((item) => (
                     <span key={item} className="car-feature-pill">{item}</span>
                   ))}
                 </div>
-              </div>
+              </CollapsibleSection>
             )}
 
           </aside>
         </div>
 
-        <section className="car-details-card car-details-bottom-card">
-          <div className="car-inspection-header">
-            <div>
-              <h3 className="car-details-card-title">{translateInspectionText('Inspection and diagnostics')}</h3>
-              <p className="car-details-muted">
-                {translateInspectionText(`Diagnosis Encar: ${car.detailFlags?.diagnosis ? 'available' : 'limited'}.`)}
-              </p>
-            </div>
-            {car.inspection && (
-              <button
-                type="button"
-                className={`car-inspection-toggle${inspectionOpen ? ' is-open' : ''}`}
-                onClick={() => setInspectionOpen((prev) => !prev)}
-                aria-expanded={inspectionOpen}
-              >
-                <span>{inspectionOpen ? 'Скрыть детали' : 'Показать все'}</span>
-                <ChevronRightIcon />
-              </button>
-            )}
-          </div>
+        <CollapsibleSection
+          title={translateInspectionText('Inspection and diagnostics')}
+          subtitle={translateInspectionText(`Diagnosis Encar: ${car.detailFlags?.diagnosis ? 'available' : 'limited'}.`)}
+          headerRight={car.inspection ? (
+            <button
+              type="button"
+              className={`car-inspection-toggle${inspectionOpen ? ' is-open' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setInspectionOpen((prev) => !prev) }}
+              aria-expanded={inspectionOpen}
+            >
+              <span>{inspectionOpen ? 'Скрыть детали' : 'Показать все'}</span>
+              <ChevronRightIcon />
+            </button>
+          ) : null}
+        >
           <div className="car-details-actions">
             {car.encarUrl ? (
               <a href={car.encarUrl} target="_blank" rel="noreferrer" className="btn-car-primary">{translateInspectionText('Open in Encar')}</a>
@@ -2851,10 +2926,9 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
           ) : (
             <div className="car-inspection-empty">{translateInspectionText('Full Encar inspection report is not available for this car right now.')}</div>
           )}
-        </section>
+        </CollapsibleSection>
 
-        <section className="car-details-card car-details-bottom-card">
-          <h3 className="car-details-card-title">История и регистрация Encar</h3>
+        <CollapsibleSection title="История и регистрация Encar">
           <p className="car-details-history-note">
             Показываем только подтвержденные данные Encar. Полная страховая история и смены владельцев доступны не для всех объявлений.
           </p>
@@ -2949,10 +3023,9 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
               </div>
             </div>
           )}
-        </section>
+        </CollapsibleSection>
 
-        <section className="car-details-card car-details-bottom-card">
-          <h3 className="car-details-card-title">Аварийная история Encar</h3>
+        <CollapsibleSection title="Аварийная история Encar">
           <p className="car-details-history-note">
             Блок собран из официальных статусов объявления Encar и inspection-отчета. Запись в истории Encar не всегда означает сильное ДТП: это может быть страховая, ремонтная или другая подтвержденная отметка по машине.
           </p>
@@ -3002,7 +3075,38 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
             </div>
           )}
 
-        </section>
+        </CollapsibleSection>
+
+        {similarCars.length > 0 && (
+          <section className="car-details-similar-section">
+            <h3 className="car-details-similar-title">Похожие автомобили</h3>
+            <div className="car-details-similar-scroll">
+              {similarCars.map((c) => (
+                <Link
+                  key={c.id}
+                  to={buildCarDetailsPath(section, c.id)}
+                  state={{ carPreview: c }}
+                  className="car-details-similar-card"
+                >
+                  <div className="car-details-similar-img">
+                    {c.images?.[0]?.url
+                      ? <img src={c.images[0].url} alt={c.name} loading="lazy" />
+                      : <div className="car-img-placeholder">Нет фото</div>
+                    }
+                  </div>
+                  <div className="car-details-similar-info">
+                    <span className="car-details-similar-name">{c.name}</span>
+                    <div className="car-details-similar-meta">
+                      <span>{c.year}</span>
+                      <span>{Number(c.mileage).toLocaleString()} км</span>
+                    </div>
+                    <span className="car-details-similar-price">{Number(c.priceKRW).toLocaleString()} ₩</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )
