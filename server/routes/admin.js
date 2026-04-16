@@ -118,7 +118,7 @@ const encarBackfillState = {
   signal: null,
   process: null,
 }
-const MAX_ENRICH_CONCURRENCY = 20
+const MAX_ENRICH_CONCURRENCY = 30
 const DEFAULT_ENRICH_CONCURRENCY = (() => {
   const raw = Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '15', 10)
   if (!Number.isFinite(raw)) return 15
