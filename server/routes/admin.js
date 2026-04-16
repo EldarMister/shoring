@@ -90,7 +90,7 @@ const enrichState = {
   report: [],
   scope: ENRICH_SCOPE_ALL,
   latest_limit: DEFAULT_LATEST_ENRICH_LIMIT,
-  concurrency: Math.min(Math.max(Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '15', 10) || 15, 1), 15),
+  concurrency: Math.min(Math.max(Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '15', 10) || 15, 1), 20),
 }
 const normalizeCarsState = createCarTextBackfillState()
 const encarBackfillState = {
@@ -118,7 +118,7 @@ const encarBackfillState = {
   signal: null,
   process: null,
 }
-const MAX_ENRICH_CONCURRENCY = 15
+const MAX_ENRICH_CONCURRENCY = 20
 const DEFAULT_ENRICH_CONCURRENCY = (() => {
   const raw = Number.parseInt(globalThis.process?.env?.ENRICH_CONCURRENCY || '15', 10)
   if (!Number.isFinite(raw)) return 15
