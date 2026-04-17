@@ -534,6 +534,10 @@ async function main() {
           }
         }
 
+        if (Number(detail.displacement) > 0 && !Number(row.displacement)) {
+          patch.displacement = Number(detail.displacement)
+        }
+
         // Always update Encar view/subscribe counts and first advertised date
         if (detail.manage) {
           const nextViewCount = Number(detail.manage.viewCount) || 0

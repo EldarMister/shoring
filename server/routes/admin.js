@@ -933,6 +933,10 @@ async function enrichCar(car, context = {}) {
       if (nextFirstAdvertised) patch.encar_first_advertised_at = nextFirstAdvertised
     }
 
+    if (Number(detail.displacement) > 0 && !Number(car.displacement)) {
+      patch.displacement = Number(detail.displacement)
+    }
+
     const sanitizedDetailVin = sanitizeVin(detail.vin)
     if (shouldRefreshVin(car.vin) && sanitizedDetailVin) {
       patch.vin = sanitizedDetailVin
