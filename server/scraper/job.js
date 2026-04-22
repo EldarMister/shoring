@@ -20,6 +20,7 @@ import {
   normalizeColorName,
   normalizeFuel,
   normalizeInteriorColorName,
+  inferInteriorColorFromBody,
   resolveManufacturerDisplayName,
   normalizeManufacturer,
   resolveBodyType,
@@ -526,7 +527,17 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     raw.SeatColor ||
     raw.SeatColorName ||
     ''
-  const interior_color = normalizeInteriorColorName(interior_raw, raw.Color || '')
+  const explicit_interior_color = normalizeInteriorColorName(interior_raw, raw.Color || '')
+  // When the catalog feed exposes no interior colour (the common case), fall back to a
+  // body-colour-based statistical guess so every new listing ships with a value. The
+  // per-car enrichment pipeline will later replace this with better evidence when found.
+  const interior_color_inferred = explicit_interior_color
+    ? ''
+    : inferInteriorColorFromBody(raw.Color || '', { name: raw.Name || '', trimLevel: raw.BadgeDetail || raw.GradeDetail || '' })
+  const interior_color = explicit_interior_color || interior_color_inferred
+  const interior_color_source = explicit_interior_color
+    ? ''
+    : (interior_color_inferred ? 'body-color-inference' : '')
   const encar_id = String(raw.Id || '')
   const encar_url = `https://www.encar.com/dc/dc_cardetailview.do?carid=${raw.Id}`
   const translatedManufacturer = tr(MANUFACTURER_MAP, rawManufacturer)
@@ -614,6 +625,7 @@ function mapCar(raw, exchangeSnapshot, pricingSettings) {
     key_info: '',
     body_color,
     interior_color,
+    interior_color_source,
     option_features: [],
     location: rawLocation || extractShortLocation(rawLocation) || 'Корея',
     encar_url,
