@@ -141,12 +141,21 @@ const INTERIOR_COLOR_EXPLICIT_LABEL_MARKERS = '(?:\\uB0B4\\uC7A5(?:\\s*\\uC0C9\\
 const INTERIOR_COLOR_LABEL_RE = /(?:\uB0B4\uC7A5(?:\s*\uC0AC\uC591|\s*\uC0C9\uC0C1)?|\uC2E4\uB0B4(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|\uC2DC\uD2B8(?:\s*\uC0C9\uC0C1|\s*\uCEEC\uB7EC)?|\uAC00\uC8FD(?:\s*\uC0C9\uC0C1)?|\uB098\uD30C(?:\s*\uAC00\uC8FD)?|interior(?:\s*(?:color|trim|material))?|seat(?:s)?(?:\s*(?:color|trim|upholstery))?|trim\s*color|upholstery(?:\s*color)?|material(?:\s*color)?|headliner|door\s*trim)/i
 const INTERIOR_COLOR_REJECT_RE = /(?:body\s*color|exterior|paint|outer\s*color|\uC678\uC7A5|\uC678\uC7A5\s*\uC0C9\uC0C1|\uCC28\uCCB4\s*\uC0C9\uC0C1)/i
 const INTERIOR_COLOR_SEGMENT_SPLIT_RE = /(?:\r?\n|[|,;]|\/|▶|★|◈|▪|•|\u2022)+/g
+// Marks a paragraph as a factory-catalog / option-list / sales-pitch rather than a
+// concrete statement of the car's actual interior color. Example real text:
+//   "내장 : 블랙, 그레이, 브라운 또는 딥 그린 인테리어 선택 가능"  (Kia EV6 brochure copy)
+//   "블랙/베이지 中 선택"  "컬러 옵션: 블랙, 베이지"
+// If a segment matches this plus mentions >= 2 colors, we refuse to extract an interior color.
+const INTERIOR_OPTION_CATALOG_RE = /(?:\uC120\uD0DD(?:\s*\uAC00\uB2A5|\s*\uD558)|\uC120\uD0DD\uC801|\uC635\uC158\s*\uC120\uD0DD|\uCEEC\uB7EC\s*\uC120\uD0DD|\uC911\s*\uC120\uD0DD|\uC911(?:\uC5D0\uC11C)?\s*\uC120\uD0DD|\uAC00\uB2A5\uD558\uC2DC\uBA74|\uB610\uB294|\uD639\uC740|\bor\b|\boption(?:s|al)?\b|\bchoose\b|\bselect(?:\s*a|\s*the|\s*your|ion)?\b|\bavailable\s+in\b|\bavailable\s+color|\bcolor\s+options?\b|\bchoice\s+of\b)/i
+// Two-tone / tone-combo markers in real listings:
+// "투톤인테리어", "컨트라스트 시트", "블랙/베이지 투톤", etc.
+const INTERIOR_REAL_TWO_TONE_MARKER_RE = /(?:\uD22C\s*\uD1A4|\uD22C\uD1A4|\uC774\uC911\s*\uD1A4|\uC774\uC911\uD1A4|\uCEE8\uD2B8\uB77C\uC2A4\uD2B8|two[-\s]*tone|bi[-\s]*tone|dual[-\s]*tone|contrast)/i
 const INTERIOR_COLOR_TEXT_PATTERNS = Object.freeze([
   { color: 'Двухцветный', source: '(?:\\uD22C\\s*\\uD1A4|\\uD22C\\uD1A4|\\uCEE8\\uD2B8\\uB77C\\uC2A4\\uD2B8|two[-\\s]*tone|bi[-\\s]*tone|dual[-\\s]*tone|contrast)' },
   { color: 'Кремовый', source: '(?:\\uC544\\uC774\\uBCF4\\uB9AC|\\uD06C\\uB9BC|\\uC624\\uD504\\s*\\uD654\\uC774\\uD2B8|ivory|cream|oyster|porcelain|parchment|off\\s*white|bone|vanilla|macchiato|magnolia|cashmere\\s*beige|silk\\s*beige|aibori|keurim|opeu\\s*hwaiteu)' },
   { color: 'Светло-серый', source: '(?:light\\s*(?:gray|grey)|silverstone|ash\\s*(?:gray|grey)|platinum\\s*(?:gray|grey)|\\uB77C\\uC774\\uD2B8\\s*\\uADF8\\uB808\\uC774)' },
   { color: 'Темно-серый', source: '(?:dark\\s*(?:gray|grey)|deep\\s*(?:gray|grey)|charcoal|anthracite|graphite|slate|basalt|space\\s*(?:gray|grey)|\\uCC28\\uCF5C|\\uADF8\\uB798\\uD53C\\uD2B8)' },
-  { color: 'Рыжий / карамельный', source: '(?:\\uCE74\\uBA5C|\\uCE90\\uB7EC\\uBA5C|\\uCF54\\uB0D1|tan|camel|caramel|cognac|saddle|chestnut|nougat|whisk(?:e)?y|tobacco|ginger|peanut\\s*butter|brandy|toffee|cohiba|kamel|konyak|kkonyak|konnyak)' },
+  { color: 'Рыжий / карамельный', source: '(?:\\uCE74\\uBA5C|\\uCE90\\uB7EC\\uBA5C|\\uCF54\\uB0D1|\\uAF2C\\uB0D1|\\uCE90\\uB77C\\uBA5C|\\uD0A4\\uCE74\\uB77C|\\uC0E4\\uB514|tan|camel|caramel|cognac|saddle|chestnut|nougat|whisk(?:e)?y|tobacco|ginger|peanut\\s*butter|brandy|toffee|cohiba|kamel|konyak|kkonyak|konnyak|cognaque|sahara)' },
   { color: 'Бордовый', source: '(?:\\uBC84\\uAC74\\uB514|\\uC640\\uC778|burgundy|bordeaux|wine|merlot|claret|oxblood|maroon|sakhir)' },
   { color: 'Черный', source: '(?:\\uBE14\\uB799|\\uAC80\\uC815|\\uD751\\uC0C9|black|jet\\s*black|obsidian|onyx|ebony|beullaek|geomjeong|heuksaek)' },
   { color: 'Белый', source: '(?:\\uD654\\uC774\\uD2B8|\\uD770\\uC0C9|\\uBC31\\uC0C9|white|pure\\s*white|snow\\s*white|polar\\s*white|hwaiteu|huinsaek|baegsaek)' },
@@ -964,15 +973,53 @@ export function normalizeColorName(value) {
   const direct = COLOR_EXACT.get(raw) || COLOR_EXACT.get(raw.toLowerCase())
   if (direct) return finalizeColorLabel(direct)
 
-  if (/은회색/.test(raw)) return finalizeColorLabel('Серебристо-серый')
   if (/쥐색/.test(raw)) return 'Мокрый асфальт'
   if (/진주/.test(raw) && /(흰|백)/.test(raw)) return 'Жемчужно-белый'
   if (/진주/.test(raw) && /검|흑/.test(raw)) return 'Жемчужно-черный'
   if (/진주/.test(raw)) return 'Жемчужный'
   if (/아이보리/.test(raw)) return 'Айвори'
   if (/와인/.test(raw)) return 'Винный'
-  if (/은/.test(raw) && /회/.test(raw)) return finalizeColorLabel('Серебристо-серый')
-  if (/회/.test(raw) && /(짙|진|다크)/.test(raw)) return 'Темно-серый'
+  // Darker/lighter gray modifiers MUST be checked before the 은회색 silver-gray
+  // rule, because Korean writes 짙은 (dark), 연한 (light) etc., and the 은 in
+  // those compounds can be mistaken for the silver marker 은. Handle both 회
+  // (회색) and 그레이 (katakana gray) here.
+  if (/(짙|진|다크|dark|deep)/i.test(raw) && /(회|그레이|gray|grey)/i.test(raw)) return 'Темно-серый'
+  if (/(연|라이트|light)/i.test(raw) && /(회|그레이|gray|grey)/i.test(raw)) return 'Светло-серый'
+  if (/은회색/.test(raw) && !/(짙|진|다크|연|라이트)/.test(raw)) return finalizeColorLabel('Серебристо-серый')
+  if (/은/.test(raw) && /회/.test(raw) && !/(짙|진|다크|연|라이트)/.test(raw)) return finalizeColorLabel('Серебристо-серый')
+  // Light/dark shade modifiers for common Korean colors. Only map when the
+  // base color hit is clearly unambiguous — otherwise fall through to the
+  // English/Hangul pipeline below.
+  if (/연(?:한\s*)?(?:녹|초록|그린)/.test(raw) || /라이트\s*그린/.test(raw)) return 'Светло-зеленый'
+  if (/(짙|진|다크)\s*(?:녹|초록|그린)/.test(raw) || /다크\s*그린/.test(raw)) return 'Темно-зеленый'
+  if (/연(?:한\s*)?(?:파랑|파란|블루)/.test(raw) || /라이트\s*블루/.test(raw)) return 'Светло-синий'
+  if (/(짙|진|다크)\s*(?:파랑|파란|블루)/.test(raw) || /다크\s*블루/.test(raw)) return 'Темно-синий'
+  if (/하늘/.test(raw)) return 'Небесно-голубой'
+  if (/연(?:한\s*)?(?:베이지|bej)/.test(raw)) return 'Бежевый'
+  if (/(짙|진|다크)\s*베이지/.test(raw)) return 'Бежевый'
+  if (/연(?:한\s*)?(?:브라운|갈색|갈|커피|카페)/.test(raw) || /라이트\s*브라운/.test(raw)) return 'Коричневый'
+  if (/(짙|진|다크)\s*(?:브라운|갈색|갈|커피|카페)/.test(raw) || /다크\s*브라운/.test(raw)) return 'Коричневый'
+  // Standalone katakana/Hangul color names (one-word Encar labels that rarely
+  // appear in the romanized pipeline below).
+  if (/^\s*그레이\s*$/.test(raw) || /^\s*gray\s*$/i.test(raw) || /^\s*grey\s*$/i.test(raw)) return 'Серый'
+  if (/^\s*실버\s*$/.test(raw) || /^\s*silver\s*$/i.test(raw)) return 'Серебристый'
+  if (/^\s*화이트\s*$/.test(raw) || /^\s*white\s*$/i.test(raw)) return 'Белый'
+  if (/^\s*블랙\s*$/.test(raw) || /^\s*black\s*$/i.test(raw)) return 'Черный'
+  if (/^\s*블루\s*$/.test(raw) || /^\s*blue\s*$/i.test(raw)) return 'Синий'
+  if (/^\s*레드\s*$/.test(raw) || /^\s*red\s*$/i.test(raw)) return 'Красный'
+  if (/^\s*그린\s*$/.test(raw) || /^\s*green\s*$/i.test(raw)) return 'Зеленый'
+  if (/^\s*옐로우?\s*$/.test(raw) || /^\s*yellow\s*$/i.test(raw)) return 'Желтый'
+  if (/^\s*오렌지\s*$/.test(raw) || /^\s*orange\s*$/i.test(raw)) return 'Оранжевый'
+  if (/^\s*퍼플\s*$/.test(raw) || /^\s*purple\s*$/i.test(raw)) return 'Фиолетовый'
+  if (/^\s*바이올렛\s*$/.test(raw) || /^\s*violet\s*$/i.test(raw)) return 'Фиолетовый'
+  if (/^\s*핑크\s*$/.test(raw) || /^\s*pink\s*$/i.test(raw)) return 'Розовый'
+  if (/^\s*민트\s*$/.test(raw) || /^\s*mint\s*$/i.test(raw)) return 'Мятный'
+  if (/^\s*카키\s*$/.test(raw) || /^\s*khaki\s*$/i.test(raw)) return 'Хаки'
+  if (/^\s*라벤더\s*$/.test(raw) || /^\s*lavender\s*$/i.test(raw)) return 'Лавандовый'
+  if (/^\s*브론즈\s*$/.test(raw) || /^\s*bronze\s*$/i.test(raw)) return 'Бронзовый'
+  if (/^\s*티타늄\s*$/.test(raw) || /^\s*titanium\s*$/i.test(raw)) return 'Титановый'
+  if (/^\s*코퍼\s*$/.test(raw) || /^\s*copper\s*$/i.test(raw)) return 'Медный'
+  if (/^\s*옐로우?\s*그린\s*$/.test(raw) || /^\s*lime\s*(?:green)?\s*$/i.test(raw)) return 'Лаймовый'
 
   const low = raw.toLowerCase()
   if (/^(geomeunsaek|geomjeongsaek|heugsaek)$/.test(low)) return 'Черный'
@@ -999,6 +1046,15 @@ export function normalizeColorName(value) {
   if (/green/.test(low) && /silver/.test(low)) return 'Серебристо-зеленый'
   if (/(dark|deep)/.test(low) && /(gray|grey)/.test(low)) return 'Темно-серый'
   if (/(light)/.test(low) && /(gray|grey)/.test(low)) return 'Светло-серый'
+  if (/(dark|deep|midnight)/.test(low) && /blue/.test(low)) return 'Темно-синий'
+  if (/(light|sky)/.test(low) && /blue/.test(low)) return 'Светло-синий'
+  if (/navy/.test(low)) return 'Темно-синий'
+  if (/(dark|deep|forest)/.test(low) && /green/.test(low)) return 'Темно-зеленый'
+  if (/(light|lime)/.test(low) && /green/.test(low)) return 'Светло-зеленый'
+  if (/(dark|deep)/.test(low) && /brown/.test(low)) return 'Коричневый'
+  if (/(light)/.test(low) && /brown/.test(low)) return 'Коричневый'
+  if (/(dark|deep)/.test(low) && /red/.test(low)) return 'Темно-красный'
+  if (/(light)/.test(low) && /red/.test(low)) return 'Красный'
   if (/snow/.test(low) && /white/.test(low)) return 'Снежный белый'
   if (/ivory/.test(low)) return 'Айвори'
   if (/wine/.test(low)) return 'Винный'
@@ -1238,6 +1294,16 @@ function splitInteriorTextSegments(value) {
     .filter(Boolean)
 }
 
+function isInteriorOptionCatalogSegment(text) {
+  if (!text) return false
+  if (!INTERIOR_OPTION_CATALOG_RE.test(text)) return false
+  // A genuine two-tone statement ("블랙/베이지 투톤") mentions real tone markers —
+  // don't treat those as catalog copy.
+  if (INTERIOR_REAL_TWO_TONE_MARKER_RE.test(text)) return false
+  const distinctColors = collectDirectInteriorColorMatches(text)
+  return distinctColors.length >= 2
+}
+
 function extractInteriorColorFromSegment(value, bodyValue = '') {
   const text = normalizeInteriorSourceText(value)
   if (!text) return ''
@@ -1245,17 +1311,33 @@ function extractInteriorColorFromSegment(value, bodyValue = '') {
   for (const pattern of INTERIOR_EXPLICIT_VALUE_RES) {
     const explicitMatch = text.match(pattern)
     const explicitValue = cleanText(explicitMatch?.[1] || '')
+    if (!explicitValue) continue
+    if (isInteriorOptionCatalogSegment(explicitValue) || isInteriorOptionCatalogSegment(text)) continue
     const normalizedExplicit = normalizeInteriorColorName(explicitValue, bodyValue, { allowBodyDuplicate: true })
     if (normalizedExplicit) return normalizedExplicit
   }
 
   if (!INTERIOR_COLOR_CONTEXT_RE.test(text) || INTERIOR_COLOR_REJECT_RE.test(text)) return ''
+  if (isInteriorOptionCatalogSegment(text)) return ''
   return normalizeInteriorColorName(text, bodyValue, { allowBodyDuplicate: true })
+}
+
+// Detect factory-catalog copy that lists multiple color options for the same car slot
+// and would otherwise leak false positives. Looks at the *original* (pre-split) text so the
+// "선택 가능" / "또는" marker isn't severed from the color list by the segment splitter.
+function isWholeTextInteriorOptionCatalog(text) {
+  if (!text) return false
+  if (!INTERIOR_OPTION_CATALOG_RE.test(text)) return false
+  if (INTERIOR_REAL_TWO_TONE_MARKER_RE.test(text)) return false
+  const colorHits = collectDirectInteriorColorMatches(text)
+  return colorHits.length >= 2
 }
 
 export function extractInteriorColorFromText(value, bodyValue = '') {
   const text = normalizeInteriorSourceText(value)
   if (!text) return ''
+
+  if (isWholeTextInteriorOptionCatalog(text)) return ''
 
   const segmentMatches = []
   for (const segment of splitInteriorTextSegments(text)) {

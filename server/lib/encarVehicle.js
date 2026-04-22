@@ -1569,9 +1569,13 @@ function buildInteriorTextCandidate(textSources = [], options = {}) {
       const pathHasContext =
         (!!source.pathSignal && INTERIOR_KEY_CONTEXT_RE.test(source.pathSignal))
         || isInteriorColorLabel(source.path_or_label)
+      // Reject only on path/label signals. Free-form text from sellers often discusses both
+      // exterior and interior in the same blob ("화이트 외장 / 블랙 인테리어") — we let the
+      // downstream segment-aware extractor handle those cases. Applying the reject regex to the
+      // whole text body would discard valid interior mentions whenever the body also references
+      // exterior/paint/body color, which is extremely common in real listings.
       const hasReject =
-        isInteriorColorRejectLabel(source.text)
-        || (!!source.pathSignal && INTERIOR_KEY_REJECT_RE.test(source.pathSignal))
+        (!!source.pathSignal && INTERIOR_KEY_REJECT_RE.test(source.pathSignal))
         || isInteriorColorRejectLabel(source.path_or_label)
 
       return {
