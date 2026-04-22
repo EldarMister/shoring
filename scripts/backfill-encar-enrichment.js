@@ -167,8 +167,6 @@ function isInteriorCandidate(row) {
 
   const currentInterior = cleanText(row?.interior_color)
   if (!currentInterior) return wantsMissingInterior()
-  // Treat inferred-only values as still-missing — we want a real evidence source to replace them.
-  if (cleanText(row?.interior_color_source) === 'body-color-inference') return wantsMissingInterior()
   if (!wantsInvalidInterior()) return false
 
   return !getNormalizedStoredInterior(row)
@@ -300,7 +298,7 @@ async function fetchCandidates() {
   const whereChecks = []
   if (hasTarget('interior')) {
     if (INTERIOR_BACKFILL_MODE === 'missing') {
-      whereChecks.push(`(COALESCE(BTRIM(interior_color), '') = '' OR COALESCE(BTRIM(interior_color_source), '') = 'body-color-inference')`)
+      whereChecks.push(`COALESCE(BTRIM(interior_color), '') = ''`)
     } else if (INTERIOR_BACKFILL_MODE === 'invalid') {
       whereChecks.push(`COALESCE(BTRIM(interior_color), '') <> ''`)
     } else {
@@ -331,7 +329,7 @@ async function fetchCandidates() {
   if (!whereChecks.length) return []
 
   let sql = `
-    SELECT id, encar_id, name, model, year, body_color, interior_color, interior_color_source, drive_type, key_info, vin, trim_level, option_features,
+    SELECT id, encar_id, name, model, year, body_color, interior_color, drive_type, key_info, vin, trim_level, option_features,
            warranty_company, warranty_body_months, warranty_body_km, warranty_transmission_months, warranty_transmission_km,
            price_krw, price_usd, commission, delivery, loading, unloading, storage, vat_refund, total, detail_flags, inspection_formats
     FROM cars

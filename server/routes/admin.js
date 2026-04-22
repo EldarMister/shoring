@@ -389,7 +389,7 @@ function buildEnrichParseNotes(detail, car) {
     notes.push(`key_info:${getResolverReason(detail?.key_info_diagnostics) || 'value_not_found'}`)
   }
 
-  if (shouldRefreshInteriorColor(car?.interior_color, car?.body_color, car?.interior_color_source) && !cleanText(detail?.interior_color)) {
+  if (shouldRefreshInteriorColor(car?.interior_color, car?.body_color) && !cleanText(detail?.interior_color)) {
     notes.push(`interior_color:${getResolverReason(detail?.interior_color_diagnostics) || 'value_not_found'}`)
   }
 
@@ -714,12 +714,9 @@ function shouldRefreshBodyColor(value) {
   return Boolean(normalized && normalized !== raw)
 }
 
-function shouldRefreshInteriorColor(interiorValue, bodyValue = '', source = '') {
+function shouldRefreshInteriorColor(interiorValue, bodyValue = '') {
   const raw = cleanText(interiorValue)
   if (!raw) return true
-  // Keep looking for real evidence when the current value is only a statistical
-  // inference — real data from inspection / spec / options should replace it.
-  if (cleanText(source) === 'body-color-inference') return true
   const normalized = normalizeInteriorColorName(raw, bodyValue)
   return !normalized || normalized !== raw
 }
@@ -772,7 +769,7 @@ function shouldEnrichCar(car) {
     shouldRefreshDriveType(car.drive_type) ||
     shouldRefreshKeyInfo(car.key_info) ||
     shouldRefreshBodyColor(car.body_color) ||
-    shouldRefreshInteriorColor(car.interior_color, car.body_color, car.interior_color_source) ||
+    shouldRefreshInteriorColor(car.interior_color, car.body_color) ||
     shouldRefreshWarranty(car) ||
     shouldRefreshOptionFeatures(car.option_features) ||
     isWeakBodyTypeForEnrichment(car.body_type) ||
@@ -789,14 +786,14 @@ function getEnrichCandidatePriority(car) {
   if (shouldRefreshBodyColor(car.body_color)) return 5
   if (shouldRefreshWarranty(car)) return 6
   if (shouldRefreshOptionFeatures(car.option_features)) return 7
-  if (shouldRefreshInteriorColor(car.interior_color, car.body_color, car.interior_color_source)) return 8
+  if (shouldRefreshInteriorColor(car.interior_color, car.body_color)) return 8
   return 9
 }
 
 function buildEnrichFetchTargets(car = {}) {
   return {
     vin: shouldRefreshVin(car.vin),
-    interiorColor: shouldRefreshInteriorColor(car.interior_color, car.body_color, car.interior_color_source),
+    interiorColor: shouldRefreshInteriorColor(car.interior_color, car.body_color),
     keyInfo: shouldRefreshKeyInfo(car.key_info),
     driveType: shouldRefreshDriveType(car.drive_type),
     optionFeatures: shouldRefreshOptionFeatures(car.option_features),
@@ -887,7 +884,7 @@ async function enrichCar(car, context = {}) {
       patch.body_color = normalizedDetail.body_color
     }
 
-    if (shouldRefreshInteriorColor(car.interior_color, patch.body_color || car.body_color, car.interior_color_source)) {
+    if (shouldRefreshInteriorColor(car.interior_color, patch.body_color || car.body_color)) {
       patch.interior_color_source = normalizeEvidenceSource(detail.interior_color_source)
       patch.interior_color_diagnostics = serializeEvidenceDiagnostics(detail.interior_color_diagnostics)
       if (cleanText(normalizedDetail.interior_color)) {

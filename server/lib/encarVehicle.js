@@ -34,7 +34,6 @@ import {
   extractOptionFeatures,
   extractTrimLevelFromTitle,
   inferDrive,
-  inferInteriorColorFromBody,
   normalizeColorName,
   normalizeDrive,
   normalizeFuel,
@@ -1936,33 +1935,6 @@ export function resolveInteriorColorEvidence(context = {}) {
     },
   )
   if (textCandidate.value || textCandidate.reject_reason) candidates.push(textCandidate)
-
-  // Last-resort statistical fallback: derive a likely interior colour from body colour + brand
-  // signals. Korean-market norms make this accurate enough to display, and we give it the
-  // lowest priority so any real evidence overrides it.
-  const inferredInterior = inferInteriorColorFromBody(bodyColor, {
-    name: context?.primaryPayload?.ad?.title
-      || context?.supplementalPayload?.ad?.title
-      || '',
-    trimLevel: context?.primaryPayload?.category?.gradeDetailName
-      || context?.supplementalPayload?.category?.gradeDetailName
-      || '',
-    vehicleClass: context?.primaryPayload?.category?.vehicleClass
-      || context?.supplementalPayload?.category?.vehicleClass
-      || '',
-  })
-  if (inferredInterior) {
-    candidates.push(buildEvidenceCandidate({
-      field: 'interior_color',
-      source: 'body-color-inference',
-      priority: 20,
-      confidence: 0.32,
-      value: inferredInterior,
-      rawValue: bodyColor,
-      path_or_label: 'spec.colorName',
-      normalization_notes: ['korean_market_default_from_body_color'],
-    }))
-  }
 
   return finalizeEvidenceResolution('interior_color', candidates, diagnostics, {
     allowTwoToneMerge: true,

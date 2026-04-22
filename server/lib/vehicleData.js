@@ -1217,43 +1217,6 @@ export function normalizeInteriorColorName(value, bodyValue = '') {
   return normalizedInterior
 }
 
-// Premium / luxury manufacturers whose interiors in Korea trend toward beige/tan more often
-// than the mainstream default of black.
-const LUXURY_BEIGE_BRAND_RE = /\b(?:rolls[-\s]?royce|bentley|maybach|lexus(?:\s+(?:ls|es|es300|rx|lx|gx))?|land\s?rover|range\s?rover|jaguar)\b/i
-
-// Korean-market interior color prior. Statistically, ~80%+ of cars sold in Korea ship with
-// black interiors regardless of exterior color. Luxury marques and certain premium trims
-// bias toward beige/tan. We use this only as a last-resort fallback when every other evidence
-// source returns nothing — the result gets tagged with source='body-color-inference' so a
-// later enrichment pass can still overwrite it with a better value.
-export function inferInteriorColorFromBody(bodyValue = '', context = {}) {
-  const body = normalizeColorName(bodyValue)
-  if (!body) return ''
-
-  const name = cleanText(context?.name || context?.carName || '')
-  const trimLevel = cleanText(context?.trimLevel || '')
-  const vehicleClass = cleanText(context?.vehicleClass || '')
-  const combined = `${name} ${trimLevel} ${vehicleClass}`.toLowerCase()
-
-  const beigeHints = /\b(prestige|signature|calligraphy|noblesse|platinum|flagship|limousine|exclusive|nappa|luxury)\b/i
-  const isLuxuryBrand = LUXURY_BEIGE_BRAND_RE.test(combined)
-  const hasBeigeTrim = beigeHints.test(combined)
-
-  // White / cream / ivory bodies on luxury cars frequently have beige interiors.
-  if ((isLuxuryBrand || hasBeigeTrim) && /Белый|Айвори|Кремовый|Жемчужн/i.test(body)) {
-    return 'Бежевый'
-  }
-
-  // Brown / wine / gold bodies often pair with beige or brown interiors — not safe to
-  // default; let the value stay empty rather than guess wrong.
-  if (/Коричневый|Винный|Бордовый|Рыжий|Золот|Оранжевый|Желтый/i.test(body)) {
-    return ''
-  }
-
-  // Mainstream Korean market default — overwhelmingly black interior.
-  return 'Черный'
-}
-
 export function isInteriorColorLabel(value) {
   const text = cleanText(value)
   if (!text) return false
