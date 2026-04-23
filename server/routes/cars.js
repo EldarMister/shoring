@@ -629,7 +629,7 @@ router.get('/', async (req, res) => {
     const filterParams = [...params]
 
     const sortMap = {
-      newest: 'COALESCE(c.encar_first_advertised_at, c.created_at) DESC, c.encar_view_count ASC, c.encar_subscribe_count ASC, c.id DESC',
+      newest: 'COALESCE(c.encar_view_count, 0) ASC, COALESCE(c.encar_first_advertised_at, c.created_at) DESC, COALESCE(c.encar_subscribe_count, 0) ASC, c.id DESC',
       oldest: 'c.created_at ASC, c.id ASC',
       price_asc: `${priceUsdSql} ASC, c.created_at DESC, c.id DESC`,
       price_desc: `${priceUsdSql} DESC, c.created_at DESC, c.id DESC`,

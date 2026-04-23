@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { VAT_REFUND_RATE, getColorSwatch, normalizeKeyInfoLabel, normalizeTrimLabel } from '../../lib/vehicleDisplay'
 import { useDeliveryContext } from '../../hooks/useDeliveryContext.js'
 import { resolveDeliveryForCar } from '../../lib/delivery.js'
@@ -174,6 +174,8 @@ function buildServiceBadges(car) {
 
 export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, listingBadgeLabel = '' }) {
   const navigate = useNavigate()
+  const cardLocation = useLocation()
+  const cardFromPath = `${cardLocation.pathname}${cardLocation.search || ''}`
   const deliveryContext = useDeliveryContext()
   const deliverySettings = deliveryContext?.settings
   const selectedCountryCode = deliveryContext?.countryCode
@@ -251,7 +253,7 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
     setImgIdx(0)
   }
 
-  const openDetails = () => navigate(detailsHref, { state: { carPreview: car } })
+  const openDetails = () => navigate(detailsHref, { state: { carPreview: car, from: cardFromPath } })
 
   const buildShareUrl = () => {
     if (typeof window === 'undefined') return detailsHref
@@ -504,7 +506,7 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
       </div>
 
       <div className="car-card-actions">
-        <Link to={detailsHref} state={{ carPreview: car }} className="btn-car-primary">Открыть детали</Link>
+        <Link to={detailsHref} state={{ carPreview: car, from: cardFromPath }} className="btn-car-primary">Открыть детали</Link>
         <button type="button" onClick={onShare} className="btn-car-outline">
           <ShareIcon /> {shareButtonLabel}
         </button>

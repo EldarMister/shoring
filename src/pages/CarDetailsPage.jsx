@@ -1975,6 +1975,19 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
     const candidate = location.state?.carPreview
     return candidate && Number(candidate.id) === Number(id) ? candidate : null
   }, [id, location.state])
+  const backHref = useMemo(() => {
+    const fromState = typeof location.state?.from === 'string' ? location.state.from : ''
+    if (fromState && fromState.startsWith('/')) return fromState
+    return section.path || '/catalog'
+  }, [location.state, section.path])
+  const handleBack = () => {
+    const fromState = typeof location.state?.from === 'string' ? location.state.from : ''
+    if (fromState && fromState.startsWith('/')) {
+      navigate(-1)
+      return
+    }
+    navigate(section.path || '/catalog')
+  }
   const [loading, setLoading] = useState(() => !previewCar)
   const [error, setError] = useState('')
   const [car, setCar] = useState(() => previewCar)
@@ -2399,14 +2412,14 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
         <div className="cat-breadcrumb-inner">
           <Link to="/" className="cat-bc-link"><HomeIcon /> Главная</Link>
           <span className="cat-bc-sep"><ChevronRightIcon /></span>
-          <Link to={section.path} className="cat-bc-link">{section.breadcrumbLabel}</Link>
+          <Link to={backHref} className="cat-bc-link">{section.breadcrumbLabel}</Link>
           <span className="cat-bc-sep"><ChevronRightIcon /></span>
           <span className="cat-bc-current">{car.name}</span>
         </div>
       </div>
 
       <div className="car-details-wrap">
-        <button className="car-details-back" onClick={() => navigate(section.path)}><BackIcon /> Назад</button>
+        <button className="car-details-back" onClick={handleBack}><BackIcon /> Назад</button>
 
         <div className="car-details-grid">
           <section className="car-details-left">
