@@ -226,6 +226,15 @@ function inferVehicleClassFromContext(bodyType, ...values) {
   if (MEDIUM_CLASS_HINT_RE.test(text)) return VEHICLE_CLASS_LABELS.medium
   if (COMPACT_CLASS_HINT_RE.test(text)) return VEHICLE_CLASS_LABELS.compact
 
+  // Final fallback by body type so filter facets stop showing blank "Класс"
+  // for the 16k+ cars whose model name isn't in the hint dictionaries.
+  // Conservative: only backfill classes whose mapping from body-type is
+  // unambiguous (SUV, minivan, business/executive sedan).
+  if (normalizedBody === BODY_TYPE_LABELS.suv) return VEHICLE_CLASS_LABELS.crossover
+  if (normalizedBody === BODY_TYPE_LABELS.minivan) return VEHICLE_CLASS_LABELS.minivan
+  if (normalizedBody === BODY_TYPE_LABELS.businessSedan) return VEHICLE_CLASS_LABELS.business
+  if (normalizedBody === BODY_TYPE_LABELS.executiveSedan) return VEHICLE_CLASS_LABELS.executive
+
   return ''
 }
 
