@@ -2223,6 +2223,14 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
   const imageCount = car?.images?.length || 1
   const boundedIdx = Math.min(imgIdx, imageCount - 1)
   const imageSrc = car?.images?.[boundedIdx]?.url || ''
+  // SEO-friendly alt text for the gallery: include year + body color so the
+  // photos can surface in Google Images for "<model> <year> <color>" queries.
+  const imageAltBase = useMemo(() => {
+    const parts = [car?.name, car?.year, car?.bodyColor && car.bodyColor !== '-' ? `цвет ${car.bodyColor}` : '']
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+    return parts.length ? `${parts.join(' ')} — авто из Кореи` : 'Автомобиль из Кореи'
+  }, [car?.bodyColor, car?.name, car?.year])
   const inspectionGroups = useMemo(() => groupInspectionRows(car?.inspection?.detailStatus || []), [car?.inspection])
   const filteredInspectionGroups = useMemo(() => filterDetailedInspectionGroups(inspectionGroups), [inspectionGroups])
   const registrationHistoryHighlights = useMemo(() => buildVehicleHistoryHighlightCards(car), [car])
@@ -2426,7 +2434,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
             <div className="car-details-media-card">
               <div className="car-details-main-image-wrap">
                 {imageSrc ? (
-                  <img src={imageSrc} alt={car.name} className="car-details-main-image" loading="lazy" />
+                  <img src={imageSrc} alt={imageAltBase} className="car-details-main-image" loading="lazy" />
                 ) : (
                   <div className="car-img-placeholder">Нет фото</div>
                 )}
@@ -2444,7 +2452,7 @@ export default function CarDetailsPage({ section = CAR_SECTION_CONFIG.main }) {
                 <div className="car-details-thumbs">
                   {car.images.map((img, i) => (
                     <button key={img.id || `${img.url}-${i}`} className={`car-details-thumb${i === boundedIdx ? ' car-details-thumb-active' : ''}`} onClick={() => setImgIdx(i)}>
-                      <img src={img.url} alt={`${car.name} ${i + 1}`} loading="lazy" />
+                      <img src={img.url} alt={`${imageAltBase} — фото ${i + 1}`} loading="lazy" />
                     </button>
                   ))}
                 </div>

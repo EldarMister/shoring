@@ -9,6 +9,19 @@
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Performance hints: preconnect to the Encar CDN that serves car photos
+         (LCP element on every detail page) plus dns-prefetch fallback for
+         older browsers. Saves 100-300ms of TCP+TLS on the first image. -->
+    <link rel="preconnect" href="https://ci.encar.com" crossorigin />
+    <link rel="dns-prefetch" href="https://ci.encar.com" />
+    <link rel="preconnect" href="https://img1.encar.com" crossorigin />
+    <link rel="dns-prefetch" href="https://img1.encar.com" />
+    <link rel="preconnect" href="https://img2.encar.com" crossorigin />
+    <link rel="dns-prefetch" href="https://img2.encar.com" />
+    <!-- hreflang: single Russian implementation but serve x-default so Google
+         doesn't synthesize alternate language URLs on its own. -->
+    <link rel="alternate" hreflang="ru" href="https://avt-autovtrade.com/" />
+    <link rel="alternate" hreflang="x-default" href="https://avt-autovtrade.com/" />
     <title>AVT Auto V Korea | Автомобили из Кореи с доставкой</title>
     <meta
       name="description"

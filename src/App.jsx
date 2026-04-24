@@ -15,6 +15,7 @@ const AdminPage = lazy(() => import('./pages/AdminPage'))
 const PartsCatalogPage = lazy(() => import('./pages/PartsCatalogPage'))
 const PartDetailsPage = lazy(() => import('./pages/PartDetailsPage'))
 const DeliveryPriceListPage = lazy(() => import('./pages/DeliveryPriceListPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 function LazyRoute({ children }) {
   return (
@@ -108,6 +109,10 @@ function App() {
         <Route
           path="/contacts"
           element={<Layout><LazyRoute><ContactsPage /></LazyRoute></Layout>}
+        />
+        <Route
+          path="*"
+          element={<Layout><LazyRoute><NotFoundPage /></LazyRoute></Layout>}
         />
       </Routes>
     </BrowserRouter>

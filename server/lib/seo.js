@@ -4,6 +4,7 @@ import { buildBlockedGenericVehicleSql, getBlockedGenericVehicleReason } from '.
 import {
   buildAbsoluteUrl,
   buildCarSeo,
+  buildItemListSchema,
   buildNotFoundSeo,
   buildPartSeo,
   buildStaticRouteSeo,
@@ -14,12 +15,19 @@ import {
 } from '../../shared/seo.js'
 
 const SITEMAP_CACHE_TTL_MS = 15 * 60 * 1000
+const ITEM_LIST_CACHE_TTL_MS = 10 * 60 * 1000
+const ITEM_LIST_MAX_ITEMS = 20
 
 let sitemapCache = {
   origin: '',
   xml: '',
   expiresAt: 0,
 }
+
+// Per-collection cache of generated ItemList schemas. Keyed by `${pathname}|${origin}`.
+// The catalog/urgent/damaged pages change a few times an hour at most so we can
+// safely serve a 10-minute snapshot without hitting the DB on every request.
+const itemListCache = new Map()
 
 function escapeHtml(value) {
   return String(value || '')
@@ -244,6 +252,51 @@ function buildUrlEntry(loc, lastmod = '', priority = '') {
   ].filter(Boolean).join('\n')
 }
 
+const COLLECTION_PATH_CONFIG = {
+  '/catalog': { listingType: 'main', name: 'Каталог авто из Кореи' },
+  '/urgent-sale': { listingType: 'urgent', name: 'Срочная продажа авто из Кореи' },
+  '/damaged-stock': { listingType: 'damaged', name: 'Битые авто из Кореи' },
+}
+
+async function fetchCollectionItemListSchema(pathname, canonical, origin) {
+  const config = COLLECTION_PATH_CONFIG[pathname]
+  if (!config) return null
+
+  const cacheKey = `${pathname}|${origin}`
+  const cached = itemListCache.get(cacheKey)
+  const now = Date.now()
+  if (cached && cached.expiresAt > now) return cached.schema
+
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.name, c.year, c.listing_type
+         FROM cars c
+        WHERE c.listing_type = $1
+          AND NOT ${buildBlockedCatalogPriceSql('c')}
+          AND NOT ${buildBlockedGenericVehicleSql('c')}
+        ORDER BY COALESCE(c.encar_view_count, 0) ASC,
+                 COALESCE(c.encar_first_advertised_at, c.created_at) DESC,
+                 c.id DESC
+        LIMIT $2`,
+      [config.listingType, ITEM_LIST_MAX_ITEMS]
+    )
+
+    const items = result.rows.map((row) => ({
+      url: buildAbsoluteUrl(buildCarDetailPath(row.listing_type, row.id), origin),
+      name: [row.name, row.year].filter(Boolean).join(' '),
+    }))
+
+    const schema = buildItemListSchema({ name: config.name, url: canonical, items })
+    itemListCache.set(cacheKey, { schema, expiresAt: now + ITEM_LIST_CACHE_TTL_MS })
+    return schema
+  } catch (error) {
+    // Don't break page rendering on a DB hiccup — the collection still has
+    // CollectionPage + Breadcrumb schemas from buildStaticRouteSeo.
+    globalThis.console?.warn?.('[SEO] Failed to build ItemList schema:', error?.message || error)
+    return null
+  }
+}
+
 export function injectSeoIntoHtml(template, seo) {
   let html = String(template || '')
   const resolvedSeo = seo || buildStaticRouteSeo({ pathname: '/', origin: SITE_URL })
@@ -252,6 +305,9 @@ export function injectSeoIntoHtml(template, seo) {
   html = replaceMetaTag(html, 'name', 'description', resolvedSeo.description)
   html = replaceMetaTag(html, 'name', 'robots', resolvedSeo.robots)
   html = replaceMetaTag(html, 'name', 'theme-color', '#f5f8fc')
+  if (resolvedSeo.keywords) {
+    html = replaceMetaTag(html, 'name', 'keywords', resolvedSeo.keywords)
+  }
   html = replaceLinkTag(html, 'canonical', resolvedSeo.canonical)
 
   html = replaceMetaTag(html, 'property', 'og:type', resolvedSeo.type || 'website')
@@ -261,11 +317,32 @@ export function injectSeoIntoHtml(template, seo) {
   html = replaceMetaTag(html, 'property', 'og:description', resolvedSeo.description)
   html = replaceMetaTag(html, 'property', 'og:url', resolvedSeo.canonical)
   html = replaceMetaTag(html, 'property', 'og:image', resolvedSeo.image)
+  html = replaceMetaTag(html, 'property', 'og:image:alt', resolvedSeo.title)
+
+  // Product Open Graph tags (price + availability). Rendered only when the
+  // SEO payload declares product metadata so non-product pages stay clean.
+  if (resolvedSeo.productMeta && Number(resolvedSeo.productMeta.price) > 0) {
+    const { price, currency, availability, condition, brand, category } = resolvedSeo.productMeta
+    const priceAmount = String(Math.round(Number(price)))
+    const priceCurrency = String(currency || 'USD')
+    html = replaceMetaTag(html, 'property', 'product:price:amount', priceAmount)
+    html = replaceMetaTag(html, 'property', 'product:price:currency', priceCurrency)
+    html = replaceMetaTag(html, 'property', 'og:price:amount', priceAmount)
+    html = replaceMetaTag(html, 'property', 'og:price:currency', priceCurrency)
+    if (availability) {
+      html = replaceMetaTag(html, 'property', 'product:availability', availability)
+      html = replaceMetaTag(html, 'property', 'og:availability', availability)
+    }
+    if (condition) html = replaceMetaTag(html, 'property', 'product:condition', condition)
+    if (brand) html = replaceMetaTag(html, 'property', 'product:brand', brand)
+    if (category) html = replaceMetaTag(html, 'property', 'product:category', category)
+  }
 
   html = replaceMetaTag(html, 'name', 'twitter:card', 'summary_large_image')
   html = replaceMetaTag(html, 'name', 'twitter:title', resolvedSeo.title)
   html = replaceMetaTag(html, 'name', 'twitter:description', resolvedSeo.description)
   html = replaceMetaTag(html, 'name', 'twitter:image', resolvedSeo.image)
+  html = replaceMetaTag(html, 'name', 'twitter:image:alt', resolvedSeo.title)
   html = replaceMetaTag(html, 'name', 'twitter:site', '@avt_shoring')
 
   html = replaceJsonLd(html, resolvedSeo.schema)
@@ -316,10 +393,17 @@ export async function resolveRequestSeo(req) {
   }
 
   if (matchStaticSeoRoute(pathname)) {
-    return {
-      seo: buildStaticRouteSeo({ pathname, search, origin }),
-      statusCode: 200,
+    const seo = buildStaticRouteSeo({ pathname, search, origin })
+    // Enrich clean collection canonicals (no query string = not noindex) with
+    // an ItemList schema listing the top cars. Helps Google understand that
+    // `/catalog` is a hub page and eligible for carousels / rich listings.
+    if (!search && COLLECTION_PATH_CONFIG[pathname]) {
+      const itemList = await fetchCollectionItemListSchema(pathname, seo.canonical, origin)
+      if (itemList) {
+        seo.schema = Array.isArray(seo.schema) ? [...seo.schema, itemList] : [itemList]
+      }
     }
+    return { seo, statusCode: 200 }
   }
 
   return {
@@ -461,10 +545,14 @@ export async function resolveRequestSeoWithRedirects(req) {
   }
 
   if (matchStaticSeoRoute(pathname)) {
-    return {
-      seo: buildStaticRouteSeo({ pathname, search, origin }),
-      statusCode: 200,
+    const seo = buildStaticRouteSeo({ pathname, search, origin })
+    if (!search && COLLECTION_PATH_CONFIG[pathname]) {
+      const itemList = await fetchCollectionItemListSchema(pathname, seo.canonical, origin)
+      if (itemList) {
+        seo.schema = Array.isArray(seo.schema) ? [...seo.schema, itemList] : [itemList]
+      }
     }
+    return { seo, statusCode: 200 }
   }
 
   return {

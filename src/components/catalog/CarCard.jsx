@@ -195,6 +195,14 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
   const boundedIdx = Math.min(imgIdx, imageCount - 1)
   const imageSrc = images[boundedIdx]?.url || ''
   const hasImage = Boolean(imageSrc)
+  // Alt text doubles as image SEO anchor — pack year + model + body color so
+  // Google Images / Bing Images surface the card for long-tail queries.
+  const imageAlt = useMemo(() => {
+    const parts = [car?.name, car?.year, car?.bodyColor && car.bodyColor !== '-' ? `цвет ${car.bodyColor}` : '']
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+    return parts.length ? `${parts.join(' ')} — авто из Кореи` : 'Автомобиль из Кореи'
+  }, [car?.bodyColor, car?.name, car?.year])
   const featureItems = useMemo(() => buildFeatureItems(car), [car])
   const serviceBadges = useMemo(() => buildServiceBadges(car), [car])
   const visibleTags = useMemo(
@@ -339,7 +347,7 @@ export default function CarCard({ car, detailsHref = `/catalog/${car?.id}`, list
           {hasImage ? (
             <img
               src={imageSrc}
-              alt={car.name}
+              alt={imageAlt}
               className="car-img"
               loading="lazy"
               decoding="async"

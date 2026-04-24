@@ -227,6 +227,89 @@ export function buildCollectionPageSchema({ name, description, url }) {
   }
 }
 
+export function buildItemListSchema({ name, url, items = [] } = {}) {
+  const normalized = Array.isArray(items)
+    ? items
+        .map((item, index) => {
+          const itemUrl = cleanText(item?.url)
+          if (!itemUrl) return null
+          return {
+            '@type': 'ListItem',
+            position: index + 1,
+            url: itemUrl,
+            name: cleanText(item?.name) || undefined,
+          }
+        })
+        .filter(Boolean)
+    : []
+
+  if (!normalized.length) return null
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: cleanText(name) || undefined,
+    url: cleanText(url) || undefined,
+    numberOfItems: normalized.length,
+    itemListElement: normalized,
+  }
+}
+
+export function buildFaqSchema(items = []) {
+  const normalized = Array.isArray(items)
+    ? items
+        .map((item) => {
+          const question = cleanText(item?.question)
+          const answer = cleanText(item?.answer)
+          if (!question || !answer) return null
+          return {
+            '@type': 'Question',
+            name: question,
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: answer,
+            },
+          }
+        })
+        .filter(Boolean)
+    : []
+
+  if (!normalized.length) return null
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: normalized,
+  }
+}
+
+const HOME_FAQ_ITEMS = [
+  {
+    question: 'Сколько занимает доставка авто из Кореи?',
+    answer: 'В среднем 25–45 дней с момента покупки на Encar до получения в стране назначения. Точный срок зависит от страны доставки, способа (контейнер или Ro-Ro) и порта выгрузки.',
+  },
+  {
+    question: 'Как происходит оплата автомобиля из Кореи?',
+    answer: 'После подбора и проверки авто на Encar вы переводите задаток, мы выкупаем машину в Корее, отправляем фото и видео. Остаток оплачивается по согласованному графику: перед отправкой либо после прибытия в ваш порт.',
+  },
+  {
+    question: 'Можно ли заказать авто под ключ с растаможкой?',
+    answer: 'Да. Мы рассчитываем итоговую стоимость под ключ с учётом пошлин, утильсбора и доставки до вашего города. Расчёт доступен сразу в карточке авто и на странице прайса доставки.',
+  },
+  {
+    question: 'Какие гарантии и проверки предоставляются?',
+    answer: 'Каждое авто проходит инспекцию Encar, предоставляем VIN, историю ДТП, отчёт о пробеге и реальные фото осмотра. При необходимости — дополнительная проверка нашим специалистом в Корее.',
+  },
+  {
+    question: 'В какие страны осуществляется доставка?',
+    answer: 'Доставляем автомобили из Кореи в Кыргызстан, Казахстан, Россию, Узбекистан, Таджикистан, Беларусь, Азербайджан и Украину. Маршрут и стоимость подбираются индивидуально.',
+  },
+]
+
+export function buildHomeFaqSchema() {
+  return buildFaqSchema(HOME_FAQ_ITEMS)
+}
+
 export function buildServiceSchema({ name, description, url }) {
   return {
     '@context': 'https://schema.org',
@@ -268,7 +351,8 @@ function buildStaticRouteSchemas(route, origin, canonical) {
       buildOrganizationSchema(origin),
       buildWebsiteSchema(origin),
       buildWebPageSchema({ name: route.title, description: route.description, url: canonical }),
-    ]
+      buildHomeFaqSchema(),
+    ].filter(Boolean)
   }
 
   return [pageSchema, breadcrumb].filter(Boolean)
@@ -331,24 +415,67 @@ export function buildCarSeo({ car, pathname, origin = SITE_URL, sectionName = '�
   const bodyType = pickFirstValue(car?.vehicleClass, car?.bodyType, car?.body_type)
   const driveType = pickFirstValue(car?.driveType, car?.drive_type)
   const trimLevel = pickFirstValue(car?.trimLevel, car?.trim_level)
+  const transmission = pickFirstValue(car?.transmission)
+  const bodyColor = pickFirstValue(car?.bodyColor, car?.body_color)
+  const interiorColor = pickFirstValue(car?.interiorColor, car?.interior_color)
   const location = pickFirstValue(car?.location, car?.location_short)
   const canonical = buildAbsoluteUrl(pathname, resolvedOrigin)
   const priceUsd = Number(car?.priceUSD ?? car?.price_usd ?? 0)
+  const priceTotal = Number(car?.total ?? 0)
   const images = normalizeImageList(car?.images, resolvedOrigin)
+  const vin = pickFirstValue(car?.vin)
+  const brandName = extractCarBrand(name)
+  const model = pickFirstValue(car?.model, car?.trimLevel, car?.trim_level)
 
+  const priceLabel = priceUsd > 0 ? `${formatInteger(priceUsd)} $` : ''
+  const totalLabel = priceTotal > 0 ? `под ключ ${formatInteger(priceTotal)} $` : ''
+
+  // Title carries the highest SEO weight — pack make/model + year + price + section
+  // so searchers landing from Google see the relevant car matchup instantly.
+  const titleBits = [
+    name,
+    year ? year : '',
+    priceLabel,
+  ].filter(Boolean).join(' ')
+  const title = `${titleBits} — купить из Кореи | ${sectionName} | ${SITE_NAME}`
+
+  // Description follows Google's 155-char sweet spot and adds commercial intent
+  // keywords ("купить", "из Кореи", "доставка") alongside every technical fact
+  // we know — so long-tail searches (brand + body type + fuel + year + location)
+  // all hit the same detail page.
   const detailParts = [
     year ? `${year} год` : '',
-    mileage ? `${mileage} км` : '',
+    mileage ? `пробег ${mileage} км` : '',
     bodyType,
     fuelType,
     driveType,
+    transmission,
     trimLevel ? `комплектация ${trimLevel}` : '',
-    location ? `локация ${location}` : '',
+    bodyColor ? `цвет ${bodyColor}` : '',
+    location ? location : '',
   ].filter(Boolean)
-
+  const priceSentence = priceLabel
+    ? ` Цена ${priceLabel}${totalLabel ? `, ${totalLabel}` : ''}.`
+    : ''
   const description = truncateText(
-    `${name}${detailParts.length ? `, ${detailParts.join(', ')}` : ''}. Купить автомобиль из Кореи с доставкой через ${SITE_NAME}.`
+    `Купить ${name}${year ? ` ${year}` : ''} из Кореи с доставкой.${priceSentence}${detailParts.length ? ` ${detailParts.join(', ')}.` : ''} Прозрачный расчет через ${SITE_NAME} (Encar).`
   )
+
+  const keywords = [
+    name,
+    brandName,
+    model,
+    year ? `${name} ${year}` : '',
+    year ? `${brandName || ''} ${year}`.trim() : '',
+    bodyType,
+    fuelType,
+    trimLevel,
+    `${name} из Кореи`,
+    `купить ${brandName || name}`,
+    `${brandName || name} Encar`,
+    'авто из Кореи',
+    'доставка авто из Кореи',
+  ].filter(Boolean).filter((item, index, arr) => arr.indexOf(item) === index).join(', ')
 
   const schema = {
     '@context': 'https://schema.org',
@@ -357,13 +484,19 @@ export function buildCarSeo({ car, pathname, origin = SITE_URL, sectionName = '�
     description,
     url: canonical,
     image: images,
-    brand: extractCarBrand(name) ? { '@type': 'Brand', name: extractCarBrand(name) } : undefined,
-    model: pickFirstValue(car?.model, car?.trimLevel, car?.trim_level) || undefined,
-    color: pickFirstValue(car?.bodyColor, car?.body_color) || undefined,
-    vehicleTransmission: pickFirstValue(car?.transmission, car?.transmission) || undefined,
+    brand: brandName ? { '@type': 'Brand', name: brandName } : undefined,
+    manufacturer: brandName ? { '@type': 'Organization', name: brandName } : undefined,
+    model: model || undefined,
+    color: bodyColor || undefined,
+    vehicleInteriorColor: interiorColor || undefined,
+    vehicleTransmission: transmission || undefined,
+    driveWheelConfiguration: driveType || undefined,
     fuelType: fuelType || undefined,
+    bodyType: bodyType || undefined,
     productionDate: year ? String(year) : undefined,
+    vehicleModelDate: year ? String(year) : undefined,
     sku: pickFirstValue(car?.encarId, car?.encar_id, car?.id) || undefined,
+    vehicleIdentificationNumber: vin && /^[A-HJ-NPR-Z0-9]{17}$/i.test(vin) ? vin.toUpperCase() : undefined,
     mileageFromOdometer: Number(car?.mileage) > 0
       ? {
           '@type': 'QuantitativeValue',
@@ -379,17 +512,33 @@ export function buildCarSeo({ car, pathname, origin = SITE_URL, sectionName = '�
           availability: 'https://schema.org/InStock',
           itemCondition: 'https://schema.org/UsedCondition',
           url: canonical,
+          seller: {
+            '@type': 'AutoDealer',
+            name: SITE_NAME,
+            url: resolvedOrigin,
+          },
         }
       : undefined,
   }
 
   return {
-    title: `${name}${year ? ` (${year})` : ''} | ${sectionName} | ${SITE_NAME}`,
+    title,
     description,
+    keywords,
     canonical,
     robots: DEFAULT_ROBOTS,
     image: images[0] || DEFAULT_OG_IMAGE,
     type: 'product',
+    productMeta: priceUsd > 0
+      ? {
+          price: Math.round(priceUsd),
+          currency: 'USD',
+          availability: 'instock',
+          condition: 'used',
+          brand: brandName || undefined,
+          category: bodyType || 'Vehicles',
+        }
+      : undefined,
     schema: [
       buildBreadcrumbSchema([
         { name: 'Главная', path: '/' },
